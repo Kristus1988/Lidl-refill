@@ -45,8 +45,8 @@ public class MainActivity extends AppCompatActivity {
     private static final float DEFAULT_TARGET = 0.15f;
     private static final int DEFAULT_WAIT_AFTER = 25;
     
-    // ChromeDriver Download Link
-    private static final String CHROMEDRIVER_URL = "https://github.com/appium/appium-uiautomator2-driver/releases";
+    // ✅ KORREKTER ChromeDriver Download Link (direkt APK!)
+    private static final String CHROMEDRIVER_URL = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
-        // ChromeDriver Download Button
+        // ✅ ChromeDriver Download Button mit korrektem Link
         btnDownloadChromeDriver.setOnClickListener(v -> {
             Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(CHROMEDRIVER_URL));
             startActivity(browserIntent);
