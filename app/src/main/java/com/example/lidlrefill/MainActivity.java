@@ -23,6 +23,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
@@ -30,7 +31,6 @@ import androidx.security.crypto.MasterKeys;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
@@ -61,8 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int DEFAULT_WAIT_AFTER = 25;
     
     // Berechtigungen
-    private static final int REQUEST_WRITE_STORAGE = 1;
-    private static final int REQUEST_INSTALL_UNKNOWN = 2;
+    private static final int REQUEST_WRITE_STORAGE = 1001;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,7 +103,16 @@ public class MainActivity extends AppCompatActivity {
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
         // ChromeDriver Download Button
-        btnDownloadChromeDriver.setOnClickListener(v -> downloadChromeDriver());
+        btnDownloadChromeDriver.setOnClickListener(v -> {
+            // Prüfe Speicherberechtigung
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
+                    return;
+                }
+            }
+            downloadChromeDriver();
+        });
         
         // Akku-Optimierung: Klick öffnet Einstellungen
         layoutBattery.setOnClickListener(v -> openBatterySettings());
@@ -347,8 +355,23 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
     
     private void checkChromeDriver() {
-        File chromedriver = new File("/data/local/tmp/chromedriver");
-        if (chromedriver.exists() && chromedriver.canExecute()) {
+        // Prüfe verschiedene mögliche Speicherorte
+        String[] possiblePaths = {
+            "/data/local/tmp/chromedriver",
+            context.getFilesDir().getAbsolutePath() + "/chromedriver",
+            Environment.getExternalStorageDirectory().getAbsolutePath() + "/chromedriver"
+        };
+        
+        boolean found = false;
+        for (String path : possiblePaths) {
+            File file = new File(path);
+            if (file.exists() && file.canExecute()) {
+                found = true;
+                break;
+            }
+        }
+        
+        if (found) {
             btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
             btnDownloadChromeDriver.setEnabled(false);
             tvChromeDriverStatus.setText("✅ ChromeDriver ist installiert und bereit!");
@@ -364,14 +387,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void downloadChromeDriver() {
-        // Prüfe Speicherberechtigung
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
-                return;
-            }
-        }
-        
         // UI aktualisieren
         btnDownloadChromeDriver.setEnabled(false);
         btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
@@ -382,18 +397,19 @@ public class MainActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
-                // Lade ChromeDriver von einer vertrauenswürdigen Quelle
-                String url = "https://github.com/GoogleChromeLabs/chrome-for-testing/raw/main/chromedriver-android.zip";
+                // Verwende einen zuverlässigen Download-Link
+                String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
                 URL downloadUrl = new URL(url);
                 URLConnection connection = downloadUrl.openConnection();
                 connection.connect();
                 
                 int fileSize = connection.getContentLength();
-                File downloadFile = new File(Environment.getExternalStorageDirectory(), "chromedriver.zip");
+                File downloadFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "chromedriver.apk");
+                
                 InputStream inputStream = new BufferedInputStream(connection.getInputStream());
                 OutputStream outputStream = new FileOutputStream(downloadFile);
                 
-                byte[] buffer = new byte[1024];
+                byte[] buffer = new byte[4096];
                 int length;
                 long totalDownloaded = 0;
                 
@@ -401,13 +417,11 @@ public class MainActivity extends AppCompatActivity {
                     outputStream.write(buffer, 0, length);
                     totalDownloaded += length;
                     
-                    if (fileSize > 0) {
-                        final int progress = (int) ((totalDownloaded * 100) / fileSize);
-                        mainHandler.post(() -> {
-                            progressChromeDriver.setProgress(progress);
-                            tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
-                        });
-                    }
+                    final int progress = fileSize > 0 ? (int) ((totalDownloaded * 100) / fileSize) : 0;
+                    mainHandler.post(() -> {
+                        progressChromeDriver.setProgress(progress);
+                        tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
+                    });
                 }
                 outputStream.close();
                 inputStream.close();
@@ -416,11 +430,12 @@ public class MainActivity extends AppCompatActivity {
                     tvChromeDriverStatus.setText("✅ Download abgeschlossen! Bitte installiere die APK.");
                     tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
                     progressChromeDriver.setProgress(100);
-                    btnDownloadChromeDriver.setText("📂 APK öffnen");
+                    btnDownloadChromeDriver.setText("📂 APK installieren");
                     btnDownloadChromeDriver.setEnabled(true);
                     btnDownloadChromeDriver.setOnClickListener(v -> {
                         Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setDataAndType(Uri.fromFile(downloadFile), "application/zip");
+                        intent.setDataAndType(Uri.fromFile(downloadFile), "application/vnd.android.package-archive");
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(intent);
                     });
                     Toast.makeText(this, "✅ ChromeDriver heruntergeladen! Bitte installiere die APK.", Toast.LENGTH_LONG).show();
@@ -437,6 +452,20 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         }).start();
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_WRITE_STORAGE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                downloadChromeDriver();
+            } else {
+                Toast.makeText(this, "❌ Speicherberechtigung benötigt für den Download!", Toast.LENGTH_LONG).show();
+                tvChromeDriverStatus.setText("❌ Speicherberechtigung verweigert!");
+                tvChromeDriverStatus.setTextColor(Color.parseColor("#F44336"));
+            }
+        }
     }
     
     @Override
