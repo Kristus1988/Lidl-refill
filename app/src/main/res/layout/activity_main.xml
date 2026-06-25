@@ -211,7 +211,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- CHROMEDRIVER HINWEIS (KEIN BUTTON MEHR) -->
+        <!-- CHROMEDRIVER HINWEIS (KEIN BUTTON) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
