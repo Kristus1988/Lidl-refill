@@ -107,7 +107,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ZUGANGSDATEN (HERVORGEHOBEN) -->
+        <!-- ZUGANGSDATEN -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -180,7 +180,7 @@
                         android:inputType="textPassword" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- START / STOP BUTTONS -->
+                <!-- BUTTONS -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -189,29 +189,81 @@
                     <Button
                         android:id="@+id/btn_start"
                         android:layout_width="0dp"
-                        android:layout_height="52dp"
+                        android:layout_height="48dp"
                         android:layout_weight="1"
                         android:text="▶️ Start"
                         android:backgroundTint="#4CAF50"
                         android:layout_marginEnd="8dp"
-                        android:textSize="15sp"
+                        android:textSize="14sp"
                         android:textColor="#FFFFFF" />
 
                     <Button
                         android:id="@+id/btn_stop"
                         android:layout_width="0dp"
-                        android:layout_height="52dp"
+                        android:layout_height="48dp"
                         android:layout_weight="1"
                         android:text="⏹️ Stop"
                         android:backgroundTint="#F44336"
                         android:layout_marginStart="8dp"
-                        android:textSize="15sp"
+                        android:textSize="14sp"
                         android:textColor="#FFFFFF" />
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- BEREITIGUNGEN (KOMPAKT) -->
+        <!-- CHROMEDRIVER DOWNLOAD -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="#1E1E1E">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⬇️ ChromeDriver installieren"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#E0E0E0"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Die App benötigt ChromeDriver, um die Lidl-Seite zu steuern. Klicke zum Herunterladen:"
+                    android:textSize="11sp"
+                    android:textColor="#B0BEC5"
+                    android:layout_marginBottom="8dp" />
+
+                <Button
+                    android:id="@+id/btn_download_chromedriver"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="📥 ChromeDriver APK herunterladen"
+                    android:backgroundTint="#2196F3"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ℹ️ Nach der Installation: App neu starten"
+                    android:textSize="10sp"
+                    android:textColor="#78909C"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- BEREITIGUNGEN -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -267,11 +319,16 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/layout_battery"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginTop="2dp">
+                    android:layout_marginTop="4dp"
+                    android:padding="4dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true">
 
                     <TextView
                         android:layout_width="0dp"
@@ -358,7 +415,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- KLEINE INFO-LEISTE -->
+        <!-- INFO -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
