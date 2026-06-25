@@ -45,9 +45,6 @@ public class MainActivity extends AppCompatActivity {
     private static final float DEFAULT_TARGET = 0.15f;
     private static final int DEFAULT_WAIT_AFTER = 25;
     
-    // ✅ KORREKTER ChromeDriver Download Link (direkt APK!)
-    private static final String CHROMEDRIVER_URL = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
-    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -82,10 +79,11 @@ public class MainActivity extends AppCompatActivity {
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
-        // ✅ ChromeDriver Download Button mit korrektem Link
+        // 🔥 ChromeDriver-Button: Zeige Hinweis, dass der Download automatisch erfolgt
         btnDownloadChromeDriver.setOnClickListener(v -> {
-            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(CHROMEDRIVER_URL));
-            startActivity(browserIntent);
+            Toast.makeText(this, 
+                "ℹ️ ChromeDriver wird beim Klick auf 'Start' automatisch heruntergeladen!", 
+                Toast.LENGTH_LONG).show();
         });
         
         // Akku-Optimierung: Klick öffnet Einstellungen
