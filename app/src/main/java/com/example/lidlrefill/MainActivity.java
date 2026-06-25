@@ -25,17 +25,23 @@ import java.security.GeneralSecurityException;
 
 public class MainActivity extends AppCompatActivity {
     
-    private EditText etUsername, etPassword, etInterval, etTarget, etWaitAfter;
+    // UI-Elemente (NUR die, die auch wirklich in der XML existieren!)
+    private EditText etUsername, etPassword;
     private TextView tvStatus, tvCurrentGb, tvRefillCount, tvDisplayNumber;
     private TextView tvLoginStatus, tvPhaseInfo, tvInklusiv, tvRefill, tvTarifInfo;
     private View vStatusIndicator;
     private Button btnStart, btnStop;
     
-    // Berechtigungs-Anzeigen (nur noch die, die wirklich in der XML existieren)
+    // Berechtigungs-Anzeigen
     private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
+    
+    // Feste Werte (da die Eingabefelder in der XML ausgeblendet wurden)
+    private static final int DEFAULT_INTERVAL = 2;
+    private static final float DEFAULT_TARGET = 0.15f;
+    private static final int DEFAULT_WAIT_AFTER = 25;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,11 +57,9 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void initViews() {
+        // Nur die IDs, die wirklich in der XML existieren!
         etUsername = findViewById(R.id.et_username);
         etPassword = findViewById(R.id.et_password);
-        etInterval = findViewById(R.id.et_interval);
-        etTarget = findViewById(R.id.et_target);
-        etWaitAfter = findViewById(R.id.et_wait_after);
         tvStatus = findViewById(R.id.tv_status);
         tvCurrentGb = findViewById(R.id.tv_status);
         tvRefillCount = findViewById(R.id.tv_refill_count);
@@ -69,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
         
-        // Berechtigungs-TextViews (nur die, die in der XML existieren)
+        // Berechtigungen
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
@@ -172,31 +176,12 @@ public class MainActivity extends AppCompatActivity {
     private void loadSavedData() {
         etUsername.setText(sharedPreferences.getString("username", ""));
         etPassword.setText(sharedPreferences.getString("password", ""));
-        etInterval.setText(String.valueOf(sharedPreferences.getInt("interval", 2)));
-        etTarget.setText(String.valueOf(sharedPreferences.getFloat("target", 0.15f)));
-        etWaitAfter.setText(String.valueOf(sharedPreferences.getInt("wait_after", 25)));
     }
     
     private void saveData() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putString("username", etUsername.getText().toString());
         editor.putString("password", etPassword.getText().toString());
-        
-        try {
-            editor.putInt("interval", Integer.parseInt(etInterval.getText().toString()));
-        } catch (NumberFormatException e) {
-            editor.putInt("interval", 2);
-        }
-        try {
-            editor.putFloat("target", Float.parseFloat(etTarget.getText().toString()));
-        } catch (NumberFormatException e) {
-            editor.putFloat("target", 0.15f);
-        }
-        try {
-            editor.putInt("wait_after", Integer.parseInt(etWaitAfter.getText().toString()));
-        } catch (NumberFormatException e) {
-            editor.putInt("wait_after", 25);
-        }
         editor.apply();
     }
     
@@ -252,17 +237,10 @@ public class MainActivity extends AppCompatActivity {
             
             saveData();
             
-            int interval = 2;
-            float target = 0.15f;
-            int waitAfter = 25;
-            
-            try {
-                interval = Integer.parseInt(etInterval.getText().toString());
-                target = Float.parseFloat(etTarget.getText().toString());
-                waitAfter = Integer.parseInt(etWaitAfter.getText().toString());
-            } catch (NumberFormatException e) {
-                // Use defaults
-            }
+            // Feste Werte verwenden (da die Eingabefelder in der XML ausgeblendet sind)
+            int interval = DEFAULT_INTERVAL;
+            float target = DEFAULT_TARGET;
+            int waitAfter = DEFAULT_WAIT_AFTER;
             
             String loginUsername = cleanPhoneNumber(username);
             tvDisplayNumber.setText("📱 Login mit: " + loginUsername);
@@ -307,15 +285,12 @@ public class MainActivity extends AppCompatActivity {
     private boolean checkAllPermissions() {
         boolean allGranted = true;
         
-        // Internet ist immer aktiviert
         updatePermissionStatus(tvInternetStatus, true);
         
-        // Akku-Optimierung prüfen
         boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
         updatePermissionStatus(tvBatteryStatus, batteryGranted);
         if (!batteryGranted) allGranted = false;
         
-        // Start-Button nur aktivieren, wenn alle Berechtigungen da sind
         btnStart.setEnabled(allGranted);
         return allGranted;
     }
