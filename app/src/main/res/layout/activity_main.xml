@@ -211,7 +211,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- CHROMEDRIVER DOWNLOAD -->
+        <!-- CHROMEDRIVER HINWEIS (KEIN BUTTON MEHR) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -229,7 +229,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⬇️ ChromeDriver installieren"
+                    android:text="⚙️ ChromeDriver"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#E0E0E0"
@@ -238,27 +238,17 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Die App benötigt ChromeDriver, um die Lidl-Seite zu steuern. Klicke zum Herunterladen:"
-                    android:textSize="11sp"
+                    android:text="ℹ️ Der ChromeDriver wird beim Klick auf 'Start' automatisch heruntergeladen und eingerichtet. Du musst nichts weiter tun!"
+                    android:textSize="12sp"
                     android:textColor="#B0BEC5"
-                    android:layout_marginBottom="8dp" />
-
-                <Button
-                    android:id="@+id/btn_download_chromedriver"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="📥 ChromeDriver APK herunterladen"
-                    android:backgroundTint="#2196F3"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="ℹ️ Nach der Installation: App neu starten"
-                    android:textSize="10sp"
-                    android:textColor="#78909C"
-                    android:layout_marginTop="4dp"
+                    android:text="⏳ Der erste Start kann ca. 30-60 Sekunden dauern – bitte gedulden!"
+                    android:textSize="11sp"
+                    android:textColor="#FFA726"
                     android:gravity="center" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
