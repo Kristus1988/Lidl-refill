@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvStatus, tvCurrentGb, tvRefillCount, tvDisplayNumber;
     private TextView tvLoginStatus, tvPhaseInfo, tvInklusiv, tvRefill, tvTarifInfo;
     private View vStatusIndicator;
-    private Button btnStart, btnStop, btnDownloadChromeDriver;
+    private Button btnStart, btnStop;
     private LinearLayout layoutBattery;
     
     private TextView tvInternetStatus, tvBatteryStatus;
@@ -73,18 +73,10 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
-        btnDownloadChromeDriver = findViewById(R.id.btn_download_chromedriver);
         layoutBattery = findViewById(R.id.layout_battery);
         
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        
-        // 🔥 ChromeDriver-Button: Zeige Hinweis, dass der Download automatisch erfolgt
-        btnDownloadChromeDriver.setOnClickListener(v -> {
-            Toast.makeText(this, 
-                "ℹ️ ChromeDriver wird beim Klick auf 'Start' automatisch heruntergeladen!", 
-                Toast.LENGTH_LONG).show();
-        });
         
         // Akku-Optimierung: Klick öffnet Einstellungen
         layoutBattery.setOnClickListener(v -> openBatterySettings());
