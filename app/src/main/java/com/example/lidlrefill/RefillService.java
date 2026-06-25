@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -766,7 +767,8 @@ public class RefillService {
             }
             
             try {
-                Boolean clicked = (Boolean) driver.executeScript(
+                JavascriptExecutor js = (JavascriptExecutor) driver;
+                Boolean clicked = (Boolean) js.executeScript(
                     "var buttons = document.querySelectorAll('button, div, a');" +
                     "for(var i=0; i<buttons.length; i++) {" +
                     "  if(buttons[i].innerText && buttons[i].innerText.includes('Refill aktivieren')) {" +
