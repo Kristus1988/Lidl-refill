@@ -243,7 +243,7 @@
                     android:textColor="#B0BEC5"
                     android:layout_marginBottom="8dp" />
 
-                <!-- 🔥 FORTSCHRITTSANZEIGE -->
+                <!-- FORTSCHRITTSANZEIGE -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
