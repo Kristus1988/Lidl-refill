@@ -31,12 +31,8 @@ public class MainActivity extends AppCompatActivity {
     private View vStatusIndicator;
     private Button btnStart, btnStop;
     
-    private LinearLayout layoutPermissionInternet, layoutPermissionNetwork;
-    private LinearLayout layoutPermissionWakeLock, layoutPermissionForeground;
-    private LinearLayout layoutPermissionBattery, layoutPermissionAutostart;
-    
-    private TextView tvInternetStatus, tvNetworkStatus, tvWakeLockStatus;
-    private TextView tvForegroundStatus, tvBatteryStatus, tvAutostartStatus;
+    // Berechtigungs-Anzeigen (nur noch die, die wirklich in der XML existieren)
+    private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
@@ -47,7 +43,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         
         initViews();
-        initPermissionViews();
         initEncryptedStorage();
         loadSavedData();
         setupButtons();
@@ -73,6 +68,10 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
+        
+        // Berechtigungs-TextViews (nur die, die in der XML existieren)
+        tvInternetStatus = findViewById(R.id.tv_internet_status);
+        tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
         refillService = new RefillService(this);
         refillService.setStatusListener(new RefillService.StatusListener() {
@@ -152,52 +151,6 @@ public class MainActivity extends AppCompatActivity {
         }
         vStatusIndicator.setBackgroundColor(color);
         tvLoginStatus.setTextColor(color);
-    }
-    
-    private void initPermissionViews() {
-        layoutPermissionInternet = findViewById(R.id.layout_permission_internet);
-        layoutPermissionNetwork = findViewById(R.id.layout_permission_network);
-        layoutPermissionWakeLock = findViewById(R.id.layout_permission_wakelock);
-        layoutPermissionForeground = findViewById(R.id.layout_permission_foreground);
-        layoutPermissionBattery = findViewById(R.id.layout_permission_battery);
-        layoutPermissionAutostart = findViewById(R.id.layout_permission_autostart);
-        
-        tvInternetStatus = findViewById(R.id.tv_internet_status);
-        tvNetworkStatus = findViewById(R.id.tv_network_status);
-        tvWakeLockStatus = findViewById(R.id.tv_wakelock_status);
-        tvForegroundStatus = findViewById(R.id.tv_foreground_status);
-        tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        tvAutostartStatus = findViewById(R.id.tv_autostart_status);
-        
-        layoutPermissionInternet.setOnClickListener(v -> openAppSettings());
-        layoutPermissionNetwork.setOnClickListener(v -> openAppSettings());
-        layoutPermissionWakeLock.setOnClickListener(v -> openAppSettings());
-        layoutPermissionForeground.setOnClickListener(v -> openAppSettings());
-        
-        layoutPermissionBattery.setOnClickListener(v -> {
-            Intent intent = PermissionHelper.getBatterySettingsIntent();
-            if (intent != null) {
-                startActivity(intent);
-            } else {
-                openAppSettings();
-            }
-        });
-        
-        layoutPermissionAutostart.setOnClickListener(v -> {
-            Intent intent = PermissionHelper.getAutostartIntent(this);
-            if (intent != null) {
-                try {
-                    startActivity(intent);
-                } catch (Exception e) {
-                    Toast.makeText(this, 
-                        "Bitte manuell in den Einstellungen nach 'Autostart' suchen", 
-                        Toast.LENGTH_LONG).show();
-                    openAppSettings();
-                }
-            } else {
-                openAppSettings();
-            }
-        });
     }
     
     private void initEncryptedStorage() {
@@ -354,23 +307,15 @@ public class MainActivity extends AppCompatActivity {
     private boolean checkAllPermissions() {
         boolean allGranted = true;
         
+        // Internet ist immer aktiviert
         updatePermissionStatus(tvInternetStatus, true);
         
-        boolean networkGranted = ContextCompat.checkSelfPermission(this,
-            android.Manifest.permission.ACCESS_NETWORK_STATE) == PackageManager.PERMISSION_GRANTED;
-        updatePermissionStatus(tvNetworkStatus, networkGranted);
-        if (!networkGranted) allGranted = false;
-        
-        updatePermissionStatus(tvWakeLockStatus, true);
-        updatePermissionStatus(tvForegroundStatus, true);
-        
+        // Akku-Optimierung prüfen
         boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
         updatePermissionStatus(tvBatteryStatus, batteryGranted);
         if (!batteryGranted) allGranted = false;
         
-        boolean autostartGranted = PermissionHelper.isAutostartAvailable();
-        updatePermissionStatus(tvAutostartStatus, autostartGranted);
-        
+        // Start-Button nur aktivieren, wenn alle Berechtigungen da sind
         btnStart.setEnabled(allGranted);
         return allGranted;
     }
@@ -383,11 +328,6 @@ public class MainActivity extends AppCompatActivity {
             tv.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
             tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
         }
-    }
-    
-    private void openAppSettings() {
-        Intent intent = PermissionHelper.getAppSettingsIntent(this);
-        startActivity(intent);
     }
     
     @Override
