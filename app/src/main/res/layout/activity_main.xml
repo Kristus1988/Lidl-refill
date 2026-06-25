@@ -211,7 +211,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- CHROMEDRIVER HINWEIS (KEIN BUTTON) -->
+        <!-- CHROMEDRIVER INSTALLATION (MIT STATUS) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -229,7 +229,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⚙️ ChromeDriver"
+                    android:text="⬇️ ChromeDriver"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#E0E0E0"
@@ -238,17 +238,54 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="ℹ️ Der ChromeDriver wird beim Klick auf 'Start' automatisch heruntergeladen und eingerichtet. Du musst nichts weiter tun!"
-                    android:textSize="12sp"
+                    android:text="Die App benötigt ChromeDriver, um die Lidl-Seite zu steuern."
+                    android:textSize="11sp"
                     android:textColor="#B0BEC5"
-                    android:layout_marginBottom="4dp" />
+                    android:layout_marginBottom="8dp" />
+
+                <!-- 🔥 FORTSCHRITTSANZEIGE -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="8dp">
+
+                    <TextView
+                        android:id="@+id/tv_chromedriver_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="⏳ Bereit zum Download"
+                        android:textSize="12sp"
+                        android:textColor="#FFA726"
+                        android:layout_marginBottom="4dp" />
+
+                    <ProgressBar
+                        android:id="@+id/progress_chromedriver"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:progressTint="#4FC3F7"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_download_chromedriver"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="⬇️ ChromeDriver installieren"
+                    android:backgroundTint="#2196F3"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="⏳ Der erste Start kann ca. 30-60 Sekunden dauern – bitte gedulden!"
-                    android:textSize="11sp"
-                    android:textColor="#FFA726"
+                    android:text="ℹ️ Nach der Installation: App neu starten"
+                    android:textSize="10sp"
+                    android:textColor="#78909C"
+                    android:layout_marginTop="4dp"
                     android:gravity="center" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
