@@ -31,6 +31,7 @@ import androidx.security.crypto.MasterKeys;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;  // 🔥 IMPORTANT: IOException hinzugefügt!
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
@@ -355,10 +356,10 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
     
     private void checkChromeDriver() {
-        // Prüfe verschiedene mögliche Speicherorte
+        // 🔥 HIER: context durch MainActivity.this ersetzen!
         String[] possiblePaths = {
             "/data/local/tmp/chromedriver",
-            context.getFilesDir().getAbsolutePath() + "/chromedriver",
+            MainActivity.this.getFilesDir().getAbsolutePath() + "/chromedriver",
             Environment.getExternalStorageDirectory().getAbsolutePath() + "/chromedriver"
         };
         
@@ -397,7 +398,6 @@ public class MainActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
-                // Verwende einen zuverlässigen Download-Link
                 String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
                 URL downloadUrl = new URL(url);
                 URLConnection connection = downloadUrl.openConnection();
@@ -438,7 +438,7 @@ public class MainActivity extends AppCompatActivity {
                         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(intent);
                     });
-                    Toast.makeText(this, "✅ ChromeDriver heruntergeladen! Bitte installiere die APK.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "✅ ChromeDriver heruntergeladen! Bitte installiere die APK.", Toast.LENGTH_LONG).show();
                 });
                 
             } catch (Exception e) {
@@ -448,7 +448,7 @@ public class MainActivity extends AppCompatActivity {
                     btnDownloadChromeDriver.setEnabled(true);
                     btnDownloadChromeDriver.setText("⬇️ Erneut versuchen");
                     progressChromeDriver.setVisibility(View.GONE);
-                    Toast.makeText(this, "❌ Fehler beim Download: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "❌ Fehler beim Download: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
