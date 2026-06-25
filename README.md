@@ -61,4 +61,4 @@ Eine Android-App, die automatisch den "Refill aktivieren"-Button auf der Lidl Co
 ### Von Quelle bauen
 1. Repository klonen:
    ```bash
-   git clone https://github.com/deinusername/LidlRefillApp.git
+   git clone https://github.com/Kristus1988/LidlRefillApp.git
