@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -25,23 +27,26 @@ import java.security.GeneralSecurityException;
 
 public class MainActivity extends AppCompatActivity {
     
-    // UI-Elemente (NUR die, die auch wirklich in der XML existieren!)
+    // UI-Elemente
     private EditText etUsername, etPassword;
     private TextView tvStatus, tvCurrentGb, tvRefillCount, tvDisplayNumber;
     private TextView tvLoginStatus, tvPhaseInfo, tvInklusiv, tvRefill, tvTarifInfo;
     private View vStatusIndicator;
-    private Button btnStart, btnStop;
+    private Button btnStart, btnStop, btnDownloadChromeDriver;
+    private LinearLayout layoutBattery;
     
-    // Berechtigungs-Anzeigen
     private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
     
-    // Feste Werte (da die Eingabefelder in der XML ausgeblendet wurden)
+    // Feste Werte
     private static final int DEFAULT_INTERVAL = 2;
     private static final float DEFAULT_TARGET = 0.15f;
     private static final int DEFAULT_WAIT_AFTER = 25;
+    
+    // ChromeDriver Download Link
+    private static final String CHROMEDRIVER_URL = "https://github.com/appium/appium-uiautomator2-driver/releases";
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,7 +62,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void initViews() {
-        // Nur die IDs, die wirklich in der XML existieren!
         etUsername = findViewById(R.id.et_username);
         etPassword = findViewById(R.id.et_password);
         tvStatus = findViewById(R.id.tv_status);
@@ -72,10 +76,20 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
+        btnDownloadChromeDriver = findViewById(R.id.btn_download_chromedriver);
+        layoutBattery = findViewById(R.id.layout_battery);
         
-        // Berechtigungen
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
+        
+        // ChromeDriver Download Button
+        btnDownloadChromeDriver.setOnClickListener(v -> {
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(CHROMEDRIVER_URL));
+            startActivity(browserIntent);
+        });
+        
+        // Akku-Optimierung: Klick öffnet Einstellungen
+        layoutBattery.setOnClickListener(v -> openBatterySettings());
         
         refillService = new RefillService(this);
         refillService.setStatusListener(new RefillService.StatusListener() {
@@ -237,7 +251,6 @@ public class MainActivity extends AppCompatActivity {
             
             saveData();
             
-            // Feste Werte verwenden (da die Eingabefelder in der XML ausgeblendet sind)
             int interval = DEFAULT_INTERVAL;
             float target = DEFAULT_TARGET;
             int waitAfter = DEFAULT_WAIT_AFTER;
@@ -303,6 +316,12 @@ public class MainActivity extends AppCompatActivity {
             tv.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
             tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
         }
+    }
+    
+    private void openBatterySettings() {
+        Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+        intent.setData(Uri.parse("package:" + getPackageName()));
+        startActivity(intent);
     }
     
     @Override
