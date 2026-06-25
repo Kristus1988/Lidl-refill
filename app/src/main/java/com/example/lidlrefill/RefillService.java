@@ -24,6 +24,9 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+// 🔥 NEU: WebDriverManager importieren
+import io.github.bonigarcia.wdm.WebDriverManager;
+
 public class RefillService {
     
     private Context context;
@@ -378,6 +381,9 @@ public class RefillService {
         
         String[] languages = {"de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", "de;q=0.9,en;q=0.8"};
         options.addArguments("--lang=" + languages[random.nextInt(languages.length)]);
+        
+        // 🔥 NEU: WebDriverManager lädt ChromeDriver automatisch herunter!
+        WebDriverManager.chromedriver().setup();
         
         driver = new ChromeDriver(options);
         driver.manage().timeouts().implicitlyWait(
