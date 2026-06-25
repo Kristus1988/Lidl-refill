@@ -54,7 +54,7 @@ Eine Android-App, die automatisch den "Refill aktivieren"-Button auf der Lidl Co
 ## 📦 Installation
 
 ### APK herunterladen
-1. Gehe zu [Releases](https://github.com/deinusername/LidlRefillApp/releases)
+1. Gehe zu [Releases](https://github.com/Kristus1988/LidlRefillApp/releases)
 2. Lade die neueste `app-debug.apk` herunter
 3. Installiere die APK auf deinem Android-Gerät
 
