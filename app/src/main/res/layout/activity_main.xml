@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
+    android:background="#121212"
     android:fillViewport="true">
 
     <LinearLayout
@@ -12,7 +12,7 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- 1. HEADER -->
+        <!-- HEADER -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -25,14 +25,14 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="20dp"
-                android:background="#FFFFFF">
+                android:background="#1E1E1E"
+                android:gravity="center">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="🛒"
-                    android:textSize="48sp"
-                    android:layout_gravity="center"/>
+                    android:textSize="48sp" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -40,21 +40,18 @@
                     android:text="Lidl Connect Refill"
                     android:textSize="22sp"
                     android:textStyle="bold"
-                    android:textColor="#005AA9"
-                    android:layout_gravity="center"
-                    android:layout_marginTop="4dp"/>
+                    android:textColor="#4FC3F7" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Automatische Aufladung"
                     android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_gravity="center"/>
+                    android:textColor="#B0BEC5" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 2. STATUS (GANZ OBEN) -->
+        <!-- STATUS -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -66,16 +63,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:padding="16dp"
-                android:background="#FFFFFF"
+                android:padding="12dp"
+                android:background="#1E1E1E"
                 android:gravity="center_vertical">
 
                 <View
                     android:id="@+id/v_status_indicator"
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
                     android:background="@drawable/status_indicator_circle"
-                    android:layout_marginEnd="12dp"/>
+                    android:layout_marginEnd="12dp" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -87,36 +84,35 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🔗 Status"
-                        android:textSize="12sp"
-                        android:textColor="#999999"/>
+                        android:textSize="11sp"
+                        android:textColor="#78909C" />
 
                     <TextView
                         android:id="@+id/tv_login_status"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🔄 Warte auf Verbindung..."
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="bold"
-                        android:textColor="#9E9E9E"/>
-                </LinearLayout>
+                        android:textColor="#E0E0E0" />
 
-                <TextView
-                    android:id="@+id/tv_phase_info"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📍 Bereit"
-                    android:textSize="12sp"
-                    android:textColor="#666666"
-                    android:textAlignment="textEnd"/>
+                    <TextView
+                        android:id="@+id/tv_phase_info"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📍 Bereit"
+                        android:textSize="11sp"
+                        android:textColor="#78909C" />
+                </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 3. ZUGANGSDATEN -->
+        <!-- ZUGANGSDATEN (HERVORGEHOBEN) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
+            app:cardElevation="4dp"
             android:layout_marginBottom="16dp">
 
             <LinearLayout
@@ -124,7 +120,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="16dp"
-                android:background="#FFFFFF">
+                android:background="#1E1E1E">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -132,20 +128,26 @@
                     android:text="🔐 Zugangsdaten"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="12dp"/>
+                    android:textColor="#E0E0E0"
+                    android:layout_marginBottom="12dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    android:layout_marginBottom="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    app:boxStrokeColor="#4FC3F7"
+                    app:boxStrokeWidth="2dp"
+                    app:hintTextColor="#4FC3F7">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_username"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="Telefonnummer (z.B. 01749995818)"
-                        android:inputType="phone"/>
+                        android:textColor="#E0E0E0"
+                        android:textColorHint="#78909C"
+                        android:inputType="phone" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <TextView
@@ -153,27 +155,63 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="📱 Login mit: +491749995818"
-                    android:textSize="12sp"
-                    android:textColor="#005AA9"
-                    android:layout_marginBottom="8dp"/>
+                    android:textSize="11sp"
+                    android:textColor="#4FC3F7"
+                    android:layout_marginBottom="8dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
                     app:passwordToggleEnabled="true"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    app:passwordToggleTint="#4FC3F7"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    app:boxStrokeColor="#4FC3F7"
+                    app:boxStrokeWidth="2dp"
+                    app:hintTextColor="#4FC3F7">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_password"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="Passwort"
-                        android:inputType="textPassword"/>
+                        android:textColor="#E0E0E0"
+                        android:textColorHint="#78909C"
+                        android:inputType="textPassword" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- START / STOP BUTTONS -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_start"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:text="▶️ Start"
+                        android:backgroundTint="#4CAF50"
+                        android:layout_marginEnd="8dp"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_stop"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:text="⏹️ Stop"
+                        android:backgroundTint="#F44336"
+                        android:layout_marginStart="8dp"
+                        android:textSize="15sp"
+                        android:textColor="#FFFFFF" />
+                </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 4. BEREITIGUNGEN -->
+        <!-- BEREITIGUNGEN (KOMPAKT) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -185,248 +223,25 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp"
-                android:background="#FFFFFF">
+                android:padding="12dp"
+                android:background="#1E1E1E">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="🔑 Berechtigungen"
-                    android:textSize="16sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="8dp"/>
+                    android:textColor="#E0E0E0"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Zum Aktivieren auf den Eintrag klicken"
-                    android:textSize="12sp"
-                    android:textColor="#999999"
-                    android:layout_marginBottom="12dp"/>
-
-                <!-- Internet -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_internet"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📶 Internet"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_internet_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_green_dark"/>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#E0E0E0"
-                    android:layout_marginVertical="4dp"/>
-
-                <!-- Netzwerkstatus -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_network"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📡 Netzwerkstatus"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_network_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_green_dark"/>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#E0E0E0"
-                    android:layout_marginVertical="4dp"/>
-
-                <!-- Wake Lock -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_wakelock"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🔋 Wake Lock"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_wakelock_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_green_dark"/>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#E0E0E0"
-                    android:layout_marginVertical="4dp"/>
-
-                <!-- Foreground Service -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_foreground"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🔄 Hintergrunddienst"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_foreground_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_green_dark"/>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#E0E0E0"
-                    android:layout_marginVertical="4dp"/>
-
-                <!-- Akku-Optimierung -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_battery"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🔋 Akku-Optimierung deaktiviert"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_battery_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="❌ Nicht aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_red_dark"/>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#E0E0E0"
-                    android:layout_marginVertical="4dp"/>
-
-                <!-- Autostart -->
-                <LinearLayout
-                    android:id="@+id/layout_permission_autostart"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="8dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🚀 Autostart erlauben"
-                        android:textSize="14sp"/>
-
-                    <TextView
-                        android:id="@+id/tv_autostart_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="❌ Nicht aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_red_dark"/>
-                </LinearLayout>
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 5. EINSTELLUNGEN -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="#FFFFFF">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="⚙️ Einstellungen"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="12dp"/>
+                    android:text="(Zum Aktivieren auf roten Eintrag klicken)"
+                    android:textSize="11sp"
+                    android:textColor="#78909C"
+                    android:layout_marginBottom="8dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -438,16 +253,17 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Prüf-Intervall (Minuten)"/>
+                        android:text="📶 Internet"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
 
-                    <EditText
-                        android:id="@+id/et_interval"
-                        android:layout_width="80dp"
+                    <TextView
+                        android:id="@+id/tv_internet_status"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="2"
-                        android:inputType="number"
-                        android:gravity="center"
-                        android:background="@android:drawable/editbox_background"/>
+                        android:text="✅ Aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="@android:color/holo_green_dark" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -455,66 +271,28 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginTop="8dp">
+                    android:layout_marginTop="2dp">
 
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Ziel-Volumen (GB)"/>
-
-                    <EditText
-                        android:id="@+id/et_target"
-                        android:layout_width="80dp"
-                        android:layout_height="wrap_content"
-                        android:text="0.15"
-                        android:inputType="numberDecimal"
-                        android:gravity="center"
-                        android:background="@android:drawable/editbox_background"/>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="8dp">
+                        android:text="🔋 Akku-Optimierung"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
 
                     <TextView
-                        android:layout_width="0dp"
+                        android:id="@+id/tv_battery_status"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Wartezeit nach Refill (Minuten)"/>
-
-                    <EditText
-                        android:id="@+id/et_wait_after"
-                        android:layout_width="80dp"
-                        android:layout_height="wrap_content"
-                        android:text="25"
-                        android:inputType="number"
-                        android:gravity="center"
-                        android:background="@android:drawable/editbox_background"/>
+                        android:text="❌ Nicht aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="@android:color/holo_red_dark" />
                 </LinearLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="ℹ️ Telefonnummer wird automatisch ins +49 Format umgewandelt"
-                    android:textSize="11sp"
-                    android:textColor="#999999"
-                    android:layout_marginTop="8dp"/>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🔄 Adaptive Prüf-Intervalle: 2 Tage (voll) → 1 Min. (kritisch)"
-                    android:textSize="11sp"
-                    android:textColor="#005AA9"
-                    android:layout_marginTop="4dp"/>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 6. DETAIL-STATUS -->
+        <!-- DETAIL-STATUS (VOLUMEN) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -526,92 +304,76 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp"
-                android:background="#FFFFFF">
+                android:padding="12dp"
+                android:background="#1E1E1E">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="📊 Status"
-                    android:textSize="16sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="8dp"/>
+                    android:textColor="#E0E0E0"
+                    android:layout_marginBottom="6dp" />
 
                 <TextView
                     android:id="@+id/tv_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Bereit"
-                    android:textSize="14sp"
-                    android:textColor="#666666"/>
+                    android:textSize="13sp"
+                    android:textColor="#B0BEC5" />
 
                 <TextView
                     android:id="@+id/tv_inklusiv"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="📦 Inklusiv: -- GB / 25 GB"
-                    android:textSize="14sp"
-                    android:textColor="#005AA9"
-                    android:layout_marginTop="4dp"/>
+                    android:textSize="13sp"
+                    android:textColor="#4FC3F7" />
 
                 <TextView
                     android:id="@+id/tv_refill"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="🔄 Refill: -- GB"
-                    android:textSize="14sp"
-                    android:textColor="#FF6F00"
-                    android:layout_marginTop="4dp"/>
+                    android:textSize="13sp"
+                    android:textColor="#FFB300" />
 
                 <TextView
                     android:id="@+id/tv_refill_count"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="🔄 Refills: 0"
-                    android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_marginTop="4dp"/>
+                    android:textSize="13sp"
+                    android:textColor="#B0BEC5" />
 
                 <TextView
                     android:id="@+id/tv_tarif_info"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="📶 Tarif: Unlimited on Demand S (25 GB)"
-                    android:textSize="12sp"
-                    android:textColor="#005AA9"
-                    android:layout_marginTop="4dp"/>
+                    android:textSize="11sp"
+                    android:textColor="#4FC3F7" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 7. BUTTONS -->
-        <LinearLayout
+        <!-- KLEINE INFO-LEISTE -->
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            android:text="ℹ️ Telefonnummer wird automatisch ins +49 Format umgewandelt"
+            android:textSize="10sp"
+            android:textColor="#78909C"
+            android:gravity="center" />
 
-            <Button
-                android:id="@+id/btn_start"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_weight="1"
-                android:text="▶️ Start"
-                android:backgroundTint="#4CAF50"
-                android:layout_marginEnd="8dp"
-                android:textSize="16sp"
-                android:textColor="#FFFFFF"/>
-
-            <Button
-                android:id="@+id/btn_stop"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_weight="1"
-                android:text="⏹️ Stop"
-                android:backgroundTint="#F44336"
-                android:layout_marginStart="8dp"
-                android:textSize="16sp"
-                android:textColor="#FFFFFF"/>
-        </LinearLayout>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 Adaptive Intervalle: 2 Tage (voll) → 1 Min. (kritisch)"
+            android:textSize="10sp"
+            android:textColor="#4FC3F7"
+            android:gravity="center" />
 
     </LinearLayout>
 </ScrollView>
