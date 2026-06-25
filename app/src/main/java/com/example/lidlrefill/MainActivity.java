@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
         etTarget = findViewById(R.id.et_target);
         etWaitAfter = findViewById(R.id.et_wait_after);
         tvStatus = findViewById(R.id.tv_status);
-        tvCurrentGb = findViewById(R.id.tv_current_gb);
+        tvCurrentGb = findViewById(R.id.tv_status);
         tvRefillCount = findViewById(R.id.tv_refill_count);
         tvDisplayNumber = findViewById(R.id.tv_display_number);
         tvLoginStatus = findViewById(R.id.tv_login_status);
