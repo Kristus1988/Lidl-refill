@@ -9,15 +9,23 @@ import android.provider.Settings;
 public class PermissionHelper {
     
     public static boolean isBatteryOptimizationDisabled(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return Settings.isIgnoringBatteryOptimizations(context.getPackageName());
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return Settings.isIgnoringBatteryOptimizations(context.getPackageName());
+            }
+        } catch (Exception e) {
+            // Wenn die Methode nicht verfügbar ist, nehmen wir an, dass sie deaktiviert ist
         }
         return true;
     }
     
     public static Intent getBatterySettingsIntent() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            }
+        } catch (Exception e) {
+            // Fallback
         }
         return null;
     }
