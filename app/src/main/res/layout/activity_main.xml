@@ -1,463 +1,162 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212"
-    android:fillViewport="true">
+    android:orientation="vertical"
+    android:background="#121212">
 
+    <!-- Header -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="4dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:background="#1E1E1E"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🛒 Lidl Connect Refill"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#4FC3F7" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Automatische Aufladung"
+                android:textSize="12sp"
+                android:textColor="#B0BEC5" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- WebView für die Lidl-Seite -->
+    <WebView
+        android:id="@+id/webview_lidl"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone" />
+
+    <!-- Statusanzeige -->
     <LinearLayout
+        android:id="@+id/layout_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="16dp"
+        android:background="#1E1E1E"
+        android:visibility="visible">
 
-        <!-- HEADER -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp"
-                android:background="#1E1E1E"
-                android:gravity="center">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🛒"
-                    android:textSize="48sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Lidl Connect Refill"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:textColor="#4FC3F7" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Automatische Aufladung"
-                    android:textSize="14sp"
-                    android:textColor="#B0BEC5" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 1. STATUS -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="12dp"
-                android:background="#1E1E1E"
-                android:gravity="center_vertical">
-
-                <View
-                    android:id="@+id/v_status_indicator"
-                    android:layout_width="14dp"
-                    android:layout_height="14dp"
-                    android:background="@drawable/status_indicator_circle"
-                    android:layout_marginEnd="12dp" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔗 Status"
-                        android:textSize="11sp"
-                        android:textColor="#78909C" />
-
-                    <TextView
-                        android:id="@+id/tv_login_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔄 Warte auf Verbindung..."
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:textColor="#E0E0E0" />
-
-                    <TextView
-                        android:id="@+id/tv_phase_info"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="📍 Bereit"
-                        android:textSize="11sp"
-                        android:textColor="#78909C" />
-                </LinearLayout>
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 2. ZUGANGSDATEN (LIDL) -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp"
-                android:background="#1E1E1E">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🔐 Lidl Connect Zugangsdaten"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="#4FC3F7"
-                    android:layout_marginBottom="12dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    app:boxStrokeColor="#4FC3F7"
-                    app:boxStrokeWidth="2dp"
-                    app:hintTextColor="#4FC3F7">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_username"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="Telefonnummer (z.B. 01749995818)"
-                        android:textColor="#E0E0E0"
-                        android:textColorHint="#78909C"
-                        android:inputType="phone" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <TextView
-                    android:id="@+id/tv_display_number"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="📱 Login mit: +491749995818"
-                    android:textSize="11sp"
-                    android:textColor="#4FC3F7"
-                    android:layout_marginBottom="8dp" />
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    app:passwordToggleEnabled="true"
-                    app:passwordToggleTint="#4FC3F7"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                    app:boxStrokeColor="#4FC3F7"
-                    app:boxStrokeWidth="2dp"
-                    app:hintTextColor="#4FC3F7">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/et_password"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="Passwort"
-                        android:textColor="#E0E0E0"
-                        android:textColorHint="#78909C"
-                        android:inputType="textPassword" />
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <!-- START / STOP -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <Button
-                        android:id="@+id/btn_start"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:text="▶️ Start"
-                        android:backgroundTint="#4CAF50"
-                        android:layout_marginEnd="8dp"
-                        android:textSize="14sp"
-                        android:textColor="#FFFFFF" />
-
-                    <Button
-                        android:id="@+id/btn_stop"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:text="⏹️ Stop"
-                        android:backgroundTint="#F44336"
-                        android:layout_marginStart="8dp"
-                        android:textSize="14sp"
-                        android:textColor="#FFFFFF" />
-                </LinearLayout>
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 3. CHROMEDRIVER (EIGENER BEREICH) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/layout_chromedriver"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp"
-                android:background="#1E1E1E">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="⬇️ ChromeDriver"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="#E0E0E0"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Wird beim Start automatisch heruntergeladen und eingerichtet."
-                    android:textSize="11sp"
-                    android:textColor="#B0BEC5"
-                    android:layout_marginBottom="8dp" />
-
-                <!-- FORTSCHRITTSANZEIGE -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:layout_marginBottom="4dp">
-
-                    <TextView
-                        android:id="@+id/tv_chromedriver_status"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="⏳ Bereit zum Download"
-                        android:textSize="12sp"
-                        android:textColor="#FFA726"
-                        android:layout_marginBottom="4dp" />
-
-                    <ProgressBar
-                        android:id="@+id/progress_chromedriver"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="10dp"
-                        android:max="100"
-                        android:progress="0"
-                        android:progressTint="#4FC3F7"
-                        android:visibility="gone" />
-                </LinearLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="ℹ️ Der Download kann je nach Verbindung 30-60 Sekunden dauern."
-                    android:textSize="10sp"
-                    android:textColor="#78909C"
-                    android:gravity="center"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 4. BEREITIGUNGEN -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp"
-                android:background="#1E1E1E">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🔑 Berechtigungen"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="#E0E0E0"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="(Zum Aktivieren auf roten Eintrag klicken)"
-                    android:textSize="11sp"
-                    android:textColor="#78909C"
-                    android:layout_marginBottom="8dp" />
-
-                <!-- Internet -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📶 Internet"
-                        android:textSize="13sp"
-                        android:textColor="#E0E0E0" />
-
-                    <TextView
-                        android:id="@+id/tv_internet_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="#4CAF50" />
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#333333"
-                    android:layout_marginVertical="4dp" />
-
-                <!-- Akku-Optimierung -->
-                <LinearLayout
-                    android:id="@+id/layout_battery"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="4dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🔋 Akku-Optimierung"
-                        android:textSize="13sp"
-                        android:textColor="#E0E0E0" />
-
-                    <TextView
-                        android:id="@+id/tv_battery_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="❌ Nicht aktiviert (Zum Aktivieren klicken)"
-                        android:textSize="12sp"
-                        android:textColor="#F44336" />
-                </LinearLayout>
-
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 5. DETAIL-STATUS (VOLUMEN) -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp"
-                android:background="#1E1E1E">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📊 Lidl Connect Status"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="#E0E0E0"
-                    android:layout_marginBottom="6dp" />
-
-                <TextView
-                    android:id="@+id/tv_status"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Bereit"
-                    android:textSize="13sp"
-                    android:textColor="#B0BEC5" />
-
-                <TextView
-                    android:id="@+id/tv_inklusiv"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="📦 Inklusiv: -- GB / 25 GB"
-                    android:textSize="13sp"
-                    android:textColor="#4FC3F7" />
-
-                <TextView
-                    android:id="@+id/tv_refill"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🔄 Refill: -- GB"
-                    android:textSize="13sp"
-                    android:textColor="#FFB300" />
-
-                <TextView
-                    android:id="@+id/tv_refill_count"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🔄 Refills: 0"
-                    android:textSize="13sp"
-                    android:textColor="#B0BEC5" />
-
-                <TextView
-                    android:id="@+id/tv_tarif_info"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="📶 Tarif: Unlimited on Demand S (25 GB)"
-                    android:textSize="11sp"
-                    android:textColor="#4FC3F7" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- INFO -->
         <TextView
+            android:id="@+id/tv_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ℹ️ Telefonnummer wird automatisch ins +49 Format umgewandelt"
-            android:textSize="10sp"
-            android:textColor="#78909C"
+            android:text="🔄 Bereit"
+            android:textSize="14sp"
+            android:textColor="#B0BEC5"
             android:gravity="center" />
 
+        <ProgressBar
+            android:id="@+id/progress_status"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#4FC3F7"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
         <TextView
+            android:id="@+id/tv_volume"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🔄 Adaptive Intervalle: 2 Tage (voll) → 1 Min. (kritisch)"
-            android:textSize="10sp"
+            android:text="📦 Inklusiv: -- GB / 25 GB"
+            android:textSize="13sp"
             android:textColor="#4FC3F7"
-            android:gravity="center" />
+            android:layout_marginTop="4dp" />
 
+        <TextView
+            android:id="@+id/tv_refill"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 Refill: -- GB"
+            android:textSize="13sp"
+            android:textColor="#FFB300"
+            android:layout_marginTop="2dp" />
+
+        <TextView
+            android:id="@+id/tv_refill_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 Refills: 0"
+            android:textSize="13sp"
+            android:textColor="#B0BEC5"
+            android:layout_marginTop="2dp" />
     </LinearLayout>
-</ScrollView>
+
+    <!-- Steuerung -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#1E1E1E">
+
+        <EditText
+            android:id="@+id/et_username"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:hint="Telefonnummer"
+            android:textColor="#E0E0E0"
+            android:textColorHint="#78909C"
+            android:background="@android:drawable/editbox_background"
+            android:padding="8dp"
+            android:layout_marginEnd="8dp"
+            android:inputType="phone" />
+
+        <EditText
+            android:id="@+id/et_password"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:hint="Passwort"
+            android:textColor="#E0E0E0"
+            android:textColorHint="#78909C"
+            android:background="@android:drawable/editbox_background"
+            android:padding="8dp"
+            android:inputType="textPassword" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:text="▶️"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp" />
+
+        <Button
+            android:id="@+id/btn_stop"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:text="⏹️"
+            android:backgroundTint="#F44336"
+            android:textColor="#FFFFFF"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+</LinearLayout>
