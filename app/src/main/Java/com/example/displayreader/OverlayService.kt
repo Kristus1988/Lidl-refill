@@ -23,6 +23,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.example.displayreader.MainActivity.AreaData
+import kotlin.random.Random
 
 class OverlayService : Service() {
 
@@ -34,6 +35,7 @@ class OverlayService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var isDragging = false
     private var areaData: AreaData? = null
+    private val random = Random
 
     companion object {
         private var instance: OverlayService? = null
@@ -83,7 +85,7 @@ class OverlayService : Service() {
         }
 
         val tvStatus = overlayView.findViewById<TextView>(R.id.tv_overlay_status)
-        tvStatus.text = if (shapeType == "circle") "🔵 KREIS" else "🟩 RECHTECK"
+        tvStatus.text = if (shapeType == "circle") "🔵 REFILL" else "🟩 VOLUMEN"
         tvStatus.setTextColor(Color.WHITE)
 
         val params = WindowManager.LayoutParams(
@@ -99,8 +101,8 @@ class OverlayService : Service() {
         )
 
         params.gravity = Gravity.TOP or Gravity.START
-        params.x = 100
-        params.y = 100
+        params.x = 100 + random.nextInt(50)
+        params.y = 100 + random.nextInt(50)
         params.width = WindowManager.LayoutParams.WRAP_CONTENT
         params.height = WindowManager.LayoutParams.WRAP_CONTENT
 
@@ -165,14 +167,15 @@ class OverlayService : Service() {
                     
                     Toast.makeText(
                         this,
-                        "✅ Bereich ausgewählt: X=${params.x}, Y=${params.y}",
+                        "✅ ${if (shapeType == "circle") "Refill Button" else "Volumen-Bereich"} ausgewählt!",
                         Toast.LENGTH_SHORT
                     ).show()
                     
+                    // Menschliche Verzögerung vor dem Schließen: 2-4 Sekunden
                     handler.postDelayed({
                         if (isDragging) return@postDelayed
                         stopSelf()
-                    }, 2000)
+                    }, (2000 + random.nextInt(2000)).toLong())
                     
                     true
                 }
@@ -210,7 +213,7 @@ class OverlayService : Service() {
 
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Display Reader")
+            .setContentTitle("Lidl Refill")
             .setContentText("Overlay ist aktiv...")
             .setSmallIcon(android.R.drawable.ic_menu_crop)
             .setPriority(NotificationCompat.PRIORITY_LOW)
