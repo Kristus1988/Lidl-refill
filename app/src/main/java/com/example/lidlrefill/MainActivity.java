@@ -44,6 +44,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean isFirstCheck = true;
     private float consumptionRate = 0.05f;
 
+    private boolean isWaitingForRefill = false; // 🔥 NEU: Warten auf Refill-Bestätigung
+
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
     // ==========================================
@@ -75,21 +77,22 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void onRefillClicked() {
             runOnUiThread(() -> {
-                refillCount++;
-                tvRefillCount.setText("🔄 Refills: " + refillCount);
-                tvStatus.setText("✅ Refill #" + refillCount + " aktiviert!");
-                tvStatus.setTextColor(Color.parseColor("#4CAF50"));
-                Toast.makeText(MainActivity.this, "✅ Refill #" + refillCount + " aktiviert!", Toast.LENGTH_SHORT).show();
+                // 🔥 Refill wurde geklickt – jetzt warten wir 2-3 Sekunden
+                isWaitingForRefill = true;
+                tvStatus.setText("⏳ Refill geklickt! Warte 2-3 Sekunden...");
+                tvStatus.setTextColor(Color.parseColor("#FF9800"));
 
-                currentRefillGb = 1.00f;
-                lastRefillGb = 1.00f;
-                consecutiveNoChange = 0;
-                tvRefill.setText("🔄 Refill: 1.00 GB");
-                lastVolumeForRate = 1.00f;
-                isFirstCheck = true;
+                // 🔥 Nach 2-3 Sekunden Seite neu laden und Volumen prüfen
+                int delay = random.nextInt(1000) + 2000; // 2000-3000 ms
+                mainHandler.postDelayed(() -> {
+                    if (webView != null) {
+                        webView.reload();
+                        tvStatus.setText("🔄 Seite wird neu geladen...");
+                        isWaitingForRefill = false;
 
-                // Wartezeit nach Refill automatisch anpassen
-                updateNextCheckTime();
+                        // Nach dem Neuladen wird onPageFinished aufgerufen und prüft das Volumen
+                    }
+                }, delay);
             });
         }
 
@@ -99,6 +102,7 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setText("⚠️ Refill-Button nicht gefunden!");
                 tvStatus.setTextColor(Color.parseColor("#FF5722"));
                 Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
+                isWaitingForRefill = false;
             });
         }
 
@@ -234,7 +238,7 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url.contains("lidl-connect.de")) {
                     checkLoginStatus();
-                    if (isRunning && isLoggedIn) {
+                    if (isLoggedIn && isRunning && !isWaitingForRefill) {
                         checkAndClickRefill();
                     }
                 }
@@ -265,15 +269,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG
+    // REFILL ÜBERWACHUNG (mit blauem Button)
     // ==========================================
 
     private void checkAndClickRefill() {
-        if (!isLoggedIn) return;
+        if (!isLoggedIn || isWaitingForRefill) return;
 
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
 
+        // 🔥 Jetzt mit genauer Erkennung des blauen Buttons
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var pageText = document.body.innerText;" +
@@ -292,7 +297,7 @@ public class MainActivity extends AppCompatActivity {
                 "        var elements = document.querySelectorAll('button, div, a, span');" +
                 "        for(var i=0; i<elements.length; i++) {" +
                 "          var text = elements[i].innerText || elements[i].textContent || '';" +
-                "          if(text.includes('Refill aktivieren')) {" +
+                "          if(text && text.includes('Refill aktivieren')) {" +
                 "            elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
                 "            setTimeout(function(el) { el.click(); }, 500);" +
                 "            Android.onRefillClicked();" +
@@ -325,6 +330,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (isWaitingForRefill) {
+            Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         tvStatus.setText("🧪 Refill-Test wird ausgeführt...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
@@ -334,7 +344,7 @@ public class MainActivity extends AppCompatActivity {
                 "  var elements = document.querySelectorAll('button, div, a, span');" +
                 "  for(var i=0; i<elements.length; i++) {" +
                 "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                "    if(text.includes('Refill aktivieren')) {" +
+                "    if(text && text.includes('Refill aktivieren')) {" +
                 "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
                 "      setTimeout(function(el) { el.click(); }, 500);" +
                 "      Android.onRefillClicked();" +
@@ -424,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkRefillDelayed() {
-        if (!isRunning || !isLoggedIn) return;
+        if (!isRunning || !isLoggedIn || isWaitingForRefill) return;
 
         int delay = calculateAdaptiveDelay() * 1000;
 
@@ -443,7 +453,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         mainHandler.postDelayed(() -> {
-            if (isRunning && isLoggedIn) {
+            if (isRunning && isLoggedIn && !isWaitingForRefill) {
                 webView.reload();
                 checkRefillDelayed();
             }
@@ -467,9 +477,11 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "🔄 Seite aktualisiert! Prüfe Refill...", Toast.LENGTH_SHORT).show();
 
                 mainHandler.postDelayed(() -> {
-                    if (isLoggedIn) {
+                    if (isLoggedIn && !isWaitingForRefill) {
                         checkAndClickRefill();
                         tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
+                    } else if (isWaitingForRefill) {
+                        tvStatus.setText("⏳ Refill wird bereits verarbeitet...");
                     } else {
                         tvStatus.setText("⚠️ Bitte zuerst einloggen!");
                     }
@@ -480,6 +492,11 @@ public class MainActivity extends AppCompatActivity {
         btnStart.setOnClickListener(v -> {
             if (!isLoggedIn) {
                 Toast.makeText(this, "⚠️ Bitte zuerst in der WebView einloggen!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (isWaitingForRefill) {
+                Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
                 return;
             }
 
