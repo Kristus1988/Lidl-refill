@@ -282,7 +282,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="ℹ️ Nach der Installation: App neu starten"
+                    android:text="ℹ️ Der Download erfolgt in den App-Ordner – keine Speicherberechtigung nötig!"
                     android:textSize="10sp"
                     android:textColor="#78909C"
                     android:layout_marginTop="4dp"
