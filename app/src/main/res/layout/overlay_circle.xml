@@ -11,7 +11,6 @@
         android:padding="10dp"
         android:background="@android:color/transparent">
 
-        <!-- Shape (Kreis oder Rechteck) -->
         <View
             android:id="@+id/shape_view"
             android:layout_width="160dp"
@@ -19,7 +18,6 @@
             android:background="@drawable/circle_shape"
             android:alpha="0.5"/>
 
-        <!-- Koordinaten-Anzeige -->
         <TextView
             android:id="@+id/tv_coords"
             android:layout_width="wrap_content"
@@ -33,12 +31,11 @@
             android:layout_marginTop="5dp"
             android:layout_below="@id/shape_view"/>
 
-        <!-- Status-Text -->
         <TextView
             android:id="@+id/tv_overlay_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🔵 KREIS"
+            android:text="🔵 REFILL"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
@@ -48,7 +45,6 @@
             android:layout_marginTop="10dp"
             android:layout_marginBottom="10dp"/>
 
-        <!-- Schließen-Button -->
         <Button
             android:id="@+id/btn_close"
             android:layout_width="32dp"
