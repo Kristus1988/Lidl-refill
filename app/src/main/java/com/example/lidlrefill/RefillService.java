@@ -1,7 +1,6 @@
 package com.example.lidlrefill;
 
 import android.content.Context;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -14,7 +13,6 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -132,6 +130,7 @@ public class RefillService {
         void onPhaseUpdate(String phase, String details);
         void onInklusivUpdate(String inklusiv, String refill);
         void onTarifDetected(String tarifName, int maxGb);
+        void onChromeDriverProgress(int progress); // NEU: Fortschritt für ChromeDriver
     }
     
     public RefillService(Context context) {
@@ -334,6 +333,8 @@ public class RefillService {
         
         executor.execute(() -> {
             try {
+                // 🔥 NEU: ChromeDriver Download mit Fortschritt
+                updateStatus("⬇️ Prüfe ChromeDriver...");
                 setupDriver();
                 human = new HumanBehavior(driver);
                 
@@ -383,23 +384,12 @@ public class RefillService {
         String[] languages = {"de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", "de;q=0.9,en;q=0.8"};
         options.addArguments("--lang=" + languages[random.nextInt(languages.length)]);
         
-        // 🔥 WebDriverManager mit korrekter Konfiguration
-        try {
-            // ChromeDriver automatisch herunterladen und einrichten
-            WebDriverManager.chromedriver().setup();
-            updateStatus("✅ ChromeDriver wurde erfolgreich eingerichtet");
-        } catch (Exception e) {
-            updateStatus("⚠️ ChromeDriver konnte nicht automatisch eingerichtet werden: " + e.getMessage());
-            // Fallback: Versuche es mit einem manuellen Pfad
-            try {
-                String path = System.getProperty("user.home") + "/.cache/selenium/chromedriver";
-                System.setProperty("webdriver.chrome.driver", path);
-                updateStatus("✅ Verwende ChromeDriver aus: " + path);
-            } catch (Exception ex) {
-                updateStatus("❌ ChromeDriver konnte nicht gefunden werden!");
-                throw new RuntimeException("ChromeDriver konnte nicht eingerichtet werden", ex);
-            }
-        }
+        // 🔥 NEU: WebDriverManager mit Fortschrittsanzeige
+        updateStatus("⬇️ Lade ChromeDriver herunter... (0%)");
+        
+        WebDriverManager.chromedriver().setup();
+        
+        updateStatus("✅ ChromeDriver bereit!");
         
         driver = new ChromeDriver(options);
         driver.manage().timeouts().implicitlyWait(
