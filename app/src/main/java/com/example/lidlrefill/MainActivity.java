@@ -8,16 +8,12 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,14 +22,7 @@ import androidx.core.content.ContextCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URL;
-import java.net.URLConnection;
 import java.security.GeneralSecurityException;
 
 public class MainActivity extends AppCompatActivity {
@@ -42,17 +31,14 @@ public class MainActivity extends AppCompatActivity {
     private EditText etUsername, etPassword;
     private TextView tvStatus, tvCurrentGb, tvRefillCount, tvDisplayNumber;
     private TextView tvLoginStatus, tvPhaseInfo, tvInklusiv, tvRefill, tvTarifInfo;
-    private TextView tvChromeDriverStatus;
-    private ProgressBar progressChromeDriver;
     private View vStatusIndicator;
-    private Button btnStart, btnStop, btnDownloadChromeDriver;
+    private Button btnStart, btnStop;
     private LinearLayout layoutBattery;
     
     private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
     
     // Feste Werte
     private static final int DEFAULT_INTERVAL = 2;
@@ -70,7 +56,6 @@ public class MainActivity extends AppCompatActivity {
         setupButtons();
         updateDisplayNumber();
         checkAllPermissions();
-        checkChromeDriver();
     }
     
     private void initViews() {
@@ -88,16 +73,10 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
-        btnDownloadChromeDriver = findViewById(R.id.btn_download_chromedriver);
         layoutBattery = findViewById(R.id.layout_battery);
-        tvChromeDriverStatus = findViewById(R.id.tv_chromedriver_status);
-        progressChromeDriver = findViewById(R.id.progress_chromedriver);
         
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        
-        // ChromeDriver Download Button (KEINE Berechtigung nötig!)
-        btnDownloadChromeDriver.setOnClickListener(v -> downloadChromeDriver());
         
         // Akku-Optimierung: Klick öffnet Einstellungen
         layoutBattery.setOnClickListener(v -> openBatterySettings());
@@ -338,100 +317,9 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
     
-    // ==========================================
-    // CHROMEDRIVER PRÜFEN & DOWNLOAD (OHNE SPEICHERBERECHTIGUNG!)
-    // ==========================================
-    
-    private void checkChromeDriver() {
-        // Prüfe im App-eigenen Ordner
-        File chromedriverFile = new File(getExternalFilesDir(null), "chromedriver");
-        if (chromedriverFile.exists() && chromedriverFile.canExecute()) {
-            btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
-            btnDownloadChromeDriver.setEnabled(false);
-            tvChromeDriverStatus.setText("✅ ChromeDriver ist installiert und bereit!");
-            tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-            progressChromeDriver.setVisibility(View.GONE);
-        } else {
-            btnDownloadChromeDriver.setText("⬇️ ChromeDriver installieren");
-            btnDownloadChromeDriver.setEnabled(true);
-            tvChromeDriverStatus.setText("⏳ ChromeDriver wird benötigt. Klicke auf 'Installieren'.");
-            tvChromeDriverStatus.setTextColor(Color.parseColor("#FFA726"));
-            progressChromeDriver.setVisibility(View.GONE);
-        }
-    }
-    
-    private void downloadChromeDriver() {
-        // UI aktualisieren
-        btnDownloadChromeDriver.setEnabled(false);
-        btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
-        progressChromeDriver.setVisibility(View.VISIBLE);
-        progressChromeDriver.setProgress(0);
-        tvChromeDriverStatus.setText("⏳ Starte Download...");
-        tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        
-        new Thread(() -> {
-            try {
-                // Download in den App-eigenen Ordner (KEINE Berechtigung nötig!)
-                File downloadFile = new File(getExternalFilesDir(null), "chromedriver");
-                
-                // Lade ChromeDriver von einer vertrauenswürdigen Quelle
-                // Hier verwenden wir den WebDriverManager, der den ChromeDriver automatisch herunterlädt
-                // Aber da wir auf Android sind, laden wir ihn manuell
-                String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
-                URL downloadUrl = new URL(url);
-                URLConnection connection = downloadUrl.openConnection();
-                connection.connect();
-                
-                int fileSize = connection.getContentLength();
-                InputStream inputStream = new BufferedInputStream(connection.getInputStream());
-                OutputStream outputStream = new FileOutputStream(downloadFile);
-                
-                byte[] buffer = new byte[4096];
-                int length;
-                long totalDownloaded = 0;
-                
-                while ((length = inputStream.read(buffer)) > 0) {
-                    outputStream.write(buffer, 0, length);
-                    totalDownloaded += length;
-                    
-                    final int progress = fileSize > 0 ? (int) ((totalDownloaded * 100) / fileSize) : 0;
-                    mainHandler.post(() -> {
-                        progressChromeDriver.setProgress(progress);
-                        tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
-                    });
-                }
-                outputStream.close();
-                inputStream.close();
-                
-                // Berechtigung zum Ausführen setzen
-                downloadFile.setExecutable(true);
-                
-                mainHandler.post(() -> {
-                    tvChromeDriverStatus.setText("✅ ChromeDriver wurde erfolgreich heruntergeladen!");
-                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-                    progressChromeDriver.setProgress(100);
-                    btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
-                    btnDownloadChromeDriver.setEnabled(false);
-                    Toast.makeText(MainActivity.this, "✅ ChromeDriver erfolgreich installiert!", Toast.LENGTH_LONG).show();
-                });
-                
-            } catch (Exception e) {
-                mainHandler.post(() -> {
-                    tvChromeDriverStatus.setText("❌ Fehler: " + e.getMessage());
-                    tvChromeDriverStatus.setTextColor(Color.parseColor("#F44336"));
-                    btnDownloadChromeDriver.setEnabled(true);
-                    btnDownloadChromeDriver.setText("⬇️ Erneut versuchen");
-                    progressChromeDriver.setVisibility(View.GONE);
-                    Toast.makeText(MainActivity.this, "❌ Fehler beim Download: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
-            }
-        }).start();
-    }
-    
     @Override
     protected void onResume() {
         super.onResume();
         checkAllPermissions();
-        checkChromeDriver();
     }
 }
