@@ -75,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isButtonRecorded = false;
 
     private boolean isRecordingMode = false;
+    private boolean isTouchPending = false;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -260,17 +261,6 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
 
                 btnRecordRefill.setText("📝 Refill-Recorder (gespeichert)");
-            });
-        }
-
-        @JavascriptInterface
-        public void onRefillNotFound() {
-            runOnUiThread(() -> {
-                tvStatus.setText("⚠️ Refill-Button nicht gefunden!");
-                tvStatus.setTextColor(Color.parseColor("#FF5722"));
-                Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
-                isWaitingForRefill = false;
-                updateNextCheckTime();
             });
         }
 
@@ -842,12 +832,6 @@ public class MainActivity extends AppCompatActivity {
 
         btnStop.setEnabled(false);
     }
-
-    // ==========================================
-    // TOUCH-PENDING (für Zugriff von außen)
-    // ==========================================
-
-    private boolean isTouchPending = false;
 
     @Override
     protected void onPause() {
