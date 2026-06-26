@@ -20,12 +20,22 @@ jobs:
     - name: Button-Text in MainActivity ändern
       run: |
         # Suche nach "Kernel" und ersetze mit dem neuen Text
-        sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/java/com/example/displayreader/MainActivity.kt
+        if [ -f "app/src/main/java/com/example/displayreader/MainActivity.kt" ]; then
+          sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/java/com/example/displayreader/MainActivity.kt
+          echo "MainActivity.kt aktualisiert"
+        else
+          echo "MainActivity.kt nicht gefunden"
+        fi
     
     - name: Button-Text in activity_main.xml ändern
       run: |
         # Suche nach "Kernel" und ersetze mit dem neuen Text
-        sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/res/layout/activity_main.xml
+        if [ -f "app/src/main/res/layout/activity_main.xml" ]; then
+          sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/res/layout/activity_main.xml
+          echo "activity_main.xml aktualisiert"
+        else
+          echo "activity_main.xml nicht gefunden"
+        fi
     
     - name: Änderungen committen
       run: |
