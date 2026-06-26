@@ -45,21 +45,26 @@ public class MainActivity extends AppCompatActivity {
     private boolean isLoggedIn = false;
     private Random random = new Random();
 
-    private String lastInklusiv = "--";
-    private String lastRefill = "--";
-
-    // ✅ KORREKTE URL
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
-    // JavaScript-Interface für Kommunikation
     private class LidlJSInterface {
         @JavascriptInterface
         public void onVolumeUpdate(String inklusiv, String refill) {
             runOnUiThread(() -> {
-                lastInklusiv = inklusiv;
-                lastRefill = refill;
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
+
+                // 🔥 AUTOMATISCH REFILL AUSLÖSEN
+                try {
+                    float refillValue = Float.parseFloat(refill.replace(",", "."));
+                    if (refillValue <= 0.15) {
+                        tvStatus.setText("🎯 Ziel erreicht! (" + refillValue + " GB)");
+                        tvStatus.setTextColor(Color.parseColor("#FF9800"));
+                        // Refill wird durch JavaScript ausgelöst
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignorieren
+                }
             });
         }
 
@@ -187,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
                     if (!isLoggedIn) {
                         checkLoginStatus();
                     } else {
-                        checkVolume();
+                        checkAndClickRefill();
                     }
                 }
             }
@@ -224,22 +229,17 @@ public class MainActivity extends AppCompatActivity {
                 "try {" +
                 "  var userField = document.getElementById('username');" +
                 "  var passField = document.getElementById('password');" +
-                "  var loginBtn = document.querySelector('button[type=\"submit\"], button:contains(\"Anmelden\"), .login-button, #login-btn');" +
                 "  if (userField && passField) {" +
                 "    userField.value = '" + username + "';" +
                 "    passField.value = '" + password + "';" +
-                "    if (loginBtn) {" +
-                "      loginBtn.click();" +
-                "    } else {" +
-                "      var btns = document.querySelectorAll('button, input[type=\"submit\"]');" +
-                "      for(var i=0; i<btns.length; i++) {" +
-                "        if(btns[i].innerText && (btns[i].innerText.includes('Anmelden') || btns[i].innerText.includes('Login'))) {" +
-                "          btns[i].click();" +
-                "          break;" +
-                "        }" +
+                "    Android.onStatus('🔐 Login wird ausgeführt...');" +
+                "    var btns = document.querySelectorAll('button, input[type=\"submit\"]');" +
+                "    for(var i=0; i<btns.length; i++) {" +
+                "      if(btns[i].innerText && (btns[i].innerText.includes('Anmelden') || btns[i].innerText.includes('Login'))) {" +
+                "        btns[i].click();" +
+                "        break;" +
                 "      }" +
                 "    }" +
-                "    Android.onStatus('🔐 Login wird ausgeführt...');" +
                 "    setTimeout(function() {" +
                 "      if (document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben')) {" +
                 "        Android.onLoginSuccess();" +
@@ -257,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(js);
     }
 
-    private void checkVolume() {
+    private void checkAndClickRefill() {
         if (!isRunning || !isLoggedIn) return;
 
         String js = "javascript:(function() {" +
@@ -268,19 +268,25 @@ public class MainActivity extends AppCompatActivity {
                 "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
                 "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
                 "  Android.onVolumeUpdate(inklusiv, refill);" +
-                "  if (refillMatch && parseFloat(refill) <= 0.15) {" +
-                "    var found = false;" +
-                "    var elements = document.querySelectorAll('button, div, a, span');" +
-                "    for(var i=0; i<elements.length; i++) {" +
-                "      if(elements[i].innerText && elements[i].innerText.includes('Refill aktivieren')) {" +
-                "        elements[i].click();" +
-                "        Android.onRefillClicked();" +
-                "        found = true;" +
-                "        break;" +
+                "  if (refillMatch) {" +
+                "    var refillValue = parseFloat(refill);" +
+                "    if (refillValue <= 0.15) {" +
+                "      Android.onStatus('🎯 Refill-Volumen: ' + refillValue + ' GB → Klicke Button...');" +
+                "      var found = false;" +
+                "      var elements = document.querySelectorAll('button, div, a, span');" +
+                "      for(var i=0; i<elements.length; i++) {" +
+                "        var text = elements[i].innerText || elements[i].textContent || '';" +
+                "        if(text.includes('Refill aktivieren')) {" +
+                "          elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "          setTimeout(function(el) { el.click(); }, 500);" +
+                "          Android.onRefillClicked();" +
+                "          found = true;" +
+                "          break;" +
+                "        }" +
                 "      }" +
-                "    }" +
-                "    if (!found) {" +
-                "      Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
+                "      if (!found) {" +
+                "        Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
+                "      }" +
                 "    }" +
                 "  }" +
                 "} catch(e) {" +
@@ -293,18 +299,18 @@ public class MainActivity extends AppCompatActivity {
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        checkVolumeDelayed();
+        checkRefillDelayed();
     }
 
-    private void checkVolumeDelayed() {
+    private void checkRefillDelayed() {
         if (!isRunning || !isLoggedIn) return;
 
-        int delay = random.nextInt(25000) + 20000;
+        int delay = random.nextInt(15000) + 15000;
 
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn) {
                 webView.reload();
-                checkVolumeDelayed();
+                checkRefillDelayed();
             }
         }, delay);
     }
