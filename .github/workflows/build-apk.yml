@@ -27,15 +27,30 @@ jobs:
     
     - name: Debug - Zeige Dateien
       run: |
+        echo "=== Verzeichnisstruktur ==="
         ls -la
+        echo "=== Gradle Wrapper ==="
         ls -la gradle/wrapper/
+        echo "=== Gradle Wrapper JAR ==="
         file gradle/wrapper/gradle-wrapper.jar
+        echo "=== Gradle Properties ==="
+        cat gradle/wrapper/gradle-wrapper.properties
     
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+    - name: Build Debug APK mit Details
+      run: |
+        ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log
+        cat build.log | grep -i error || echo "Keine Fehler gefunden"
     
     - name: Upload Debug APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: Lidl-refill-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+    
+    - name: Upload Build Log bei Fehler
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build.log
