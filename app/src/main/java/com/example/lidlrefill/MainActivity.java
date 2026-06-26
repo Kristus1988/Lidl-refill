@@ -212,26 +212,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // ==========================================
-        // 🔥 ULTIMATIVE BUTTON-SUCHE
+        // 🔥 BUTTON-SUCHE (JS-INTERFACE)
         // ==========================================
 
         @JavascriptInterface
-        public void findAndClickRefillButton() {
+        public void executeRefillSearch() {
             runOnUiThread(() -> {
                 tvStatus.setText("🔍 Suche Refill-Button...");
                 String js = "javascript:(function() {" +
                         "try {" +
                         "  var found = false;" +
-                        "  var selectors = [" +
-                        "    'button:contains(\"Refill aktivieren\")'," +
-                        "    'div:contains(\"Refill aktivieren\")'," +
-                        "    'a:contains(\"Refill aktivieren\")'," +
-                        "    'span:contains(\"Refill aktivieren\")'," +
-                        "    '[class*=\"refill\"]'," +
-                        "    '[id*=\"refill\"]'," +
-                        "    '[class*=\"Refill\"]'," +
-                        "    '[id*=\"Refill\"]'" +
-                        "  ];" +
                         "  var elements = document.querySelectorAll('*');" +
                         "  for(var i=0; i<elements.length; i++) {" +
                         "    var el = elements[i];" +
@@ -381,6 +371,62 @@ public class MainActivity extends AppCompatActivity {
         if (webView != null) {
             findAndClickRefillButton();
         }
+    }
+
+    // ==========================================
+    // 🔥 HAUPT-METHODE: REFILL BUTTON FINDEN
+    // ==========================================
+
+    private void findAndClickRefillButton() {
+        if (webView == null) return;
+        
+        tvStatus.setText("🔍 Suche Refill-Button...");
+        
+        // Rufe die JS-Interface-Methode auf
+        String js = "javascript:(function() {" +
+                "try {" +
+                "  var found = false;" +
+                "  var elements = document.querySelectorAll('*');" +
+                "  for(var i=0; i<elements.length; i++) {" +
+                "    var el = elements[i];" +
+                "    var text = el.innerText || el.textContent || '';" +
+                "    var className = el.className || '';" +
+                "    var id = el.id || '';" +
+                "    if(text && text.includes('Refill aktivieren')) {" +
+                "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "      setTimeout(function(e) {" +
+                "        var rect = e.getBoundingClientRect();" +
+                "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      }, 600, el);" +
+                "      found = true;" +
+                "      break;" +
+                "    } else if(className && className.toLowerCase().includes('refill')) {" +
+                "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "      setTimeout(function(e) {" +
+                "        var rect = e.getBoundingClientRect();" +
+                "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      }, 600, el);" +
+                "      found = true;" +
+                "      break;" +
+                "    } else if(id && id.toLowerCase().includes('refill')) {" +
+                "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "      setTimeout(function(e) {" +
+                "        var rect = e.getBoundingClientRect();" +
+                "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      }, 600, el);" +
+                "      found = true;" +
+                "      break;" +
+                "    }" +
+                "  }" +
+                "  if(!found) {" +
+                "    Android.onRefillNotFound();" +
+                "  }" +
+                "} catch(e) {" +
+                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                "}" +
+                "})();";
+        
+        webView.loadUrl(js);
     }
 
     // ==========================================
