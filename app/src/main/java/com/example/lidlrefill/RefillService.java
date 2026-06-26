@@ -334,6 +334,8 @@ public class RefillService {
         executor.execute(() -> {
             try {
                 setupDriver();
+                
+                // WICHTIG: Nach setupDriver() ist der driver bereit!
                 human = new HumanBehavior(driver);
                 
                 updateLoginStatus(LoginStatus.LOGGING_IN, "🔄 Verbinde zu Lidl Connect...");
@@ -398,16 +400,17 @@ public class RefillService {
             }
         }
         
+        // 🔥 Jetzt kommt der echte Download!
         WebDriverManager.chromedriver().setup();
         
         mainHandler.post(() -> {
             if (listener != null) {
                 listener.onChromeDriverProgress(100);
             }
+            updateStatus("✅ ChromeDriver bereit!");
         });
         
-        updateStatus("✅ ChromeDriver bereit!");
-        
+        // 🔥 driver initialisieren (WICHTIG!)
         driver = new ChromeDriver(options);
         driver.manage().timeouts().implicitlyWait(
             Duration.ofSeconds(random.nextInt(7) + 8)
