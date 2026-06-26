@@ -31,7 +31,7 @@ import androidx.security.crypto.MasterKeys;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;  // 🔥 IMPORTANT: IOException hinzugefügt!
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
@@ -50,7 +50,9 @@ public class MainActivity extends AppCompatActivity {
     private Button btnStart, btnStop, btnDownloadChromeDriver;
     private LinearLayout layoutBattery;
     
-    private TextView tvInternetStatus, tvBatteryStatus;
+    // Berechtigungs-Status
+    private TextView tvInternetStatus, tvBatteryStatus, tvStorageStatus, tvInstallStatus;
+    private LinearLayout layoutStorage, layoutInstall;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
@@ -63,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
     
     // Berechtigungen
     private static final int REQUEST_WRITE_STORAGE = 1001;
+    private static final int REQUEST_INSTALL_UNKNOWN = 1002;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,8 +78,6 @@ public class MainActivity extends AppCompatActivity {
         setupButtons();
         updateDisplayNumber();
         checkAllPermissions();
-        
-        // Prüfe ob ChromeDriver bereits installiert ist
         checkChromeDriver();
     }
     
@@ -100,23 +101,28 @@ public class MainActivity extends AppCompatActivity {
         tvChromeDriverStatus = findViewById(R.id.tv_chromedriver_status);
         progressChromeDriver = findViewById(R.id.progress_chromedriver);
         
+        // Berechtigungs-Status
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
+        tvStorageStatus = findViewById(R.id.tv_storage_status);
+        tvInstallStatus = findViewById(R.id.tv_install_status);
+        layoutStorage = findViewById(R.id.layout_storage);
+        layoutInstall = findViewById(R.id.layout_install);
+        
+        // Berechtigungs-Klicks
+        layoutBattery.setOnClickListener(v -> openBatterySettings());
+        layoutStorage.setOnClickListener(v -> requestStoragePermission());
+        layoutInstall.setOnClickListener(v -> openInstallUnknownSettings());
         
         // ChromeDriver Download Button
         btnDownloadChromeDriver.setOnClickListener(v -> {
-            // Prüfe Speicherberechtigung
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
-                    return;
-                }
+            // Prüfe alle Berechtigungen vor dem Download
+            if (!checkAllPermissionsForDownload()) {
+                Toast.makeText(this, "⚠️ Bitte aktiviere alle Berechtigungen zuerst!", Toast.LENGTH_LONG).show();
+                return;
             }
             downloadChromeDriver();
         });
-        
-        // Akku-Optimierung: Klick öffnet Einstellungen
-        layoutBattery.setOnClickListener(v -> openBatterySettings());
         
         refillService = new RefillService(this);
         refillService.setStatusListener(new RefillService.StatusListener() {
@@ -322,26 +328,92 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
     
+    // ==========================================
+    // BEREITIGUNGEN PRÜFEN & ANZEIGEN
+    // ==========================================
+    
     private boolean checkAllPermissions() {
         boolean allGranted = true;
         
+        // Internet (immer grün)
         updatePermissionStatus(tvInternetStatus, true);
         
+        // Akku-Optimierung
         boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
         updatePermissionStatus(tvBatteryStatus, batteryGranted);
         if (!batteryGranted) allGranted = false;
+        
+        // Speicherberechtigung
+        boolean storageGranted = ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        updatePermissionStatus(tvStorageStatus, storageGranted);
+        if (!storageGranted) allGranted = false;
+        
+        // Installation aus unbekannten Quellen (nur Android 8+)
+        boolean installGranted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            installGranted = getPackageManager().canRequestPackageInstalls();
+        }
+        updatePermissionStatus(tvInstallStatus, installGranted);
+        if (!installGranted) allGranted = false;
         
         btnStart.setEnabled(allGranted);
         return allGranted;
     }
     
+    private boolean checkAllPermissionsForDownload() {
+        boolean storageGranted = ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        
+        boolean installGranted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            installGranted = getPackageManager().canRequestPackageInstalls();
+        }
+        
+        if (!storageGranted) {
+            Toast.makeText(this, "⚠️ Bitte Speicherberechtigung aktivieren!", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        
+        if (!installGranted) {
+            Toast.makeText(this, "⚠️ Bitte 'Unbekannte Quellen' erlauben!", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        
+        return true;
+    }
+    
     private void updatePermissionStatus(TextView tv, boolean granted) {
         if (granted) {
             tv.setText("✅ Aktiviert");
-            tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
+            tv.setTextColor(Color.parseColor("#4CAF50"));
         } else {
             tv.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
-            tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+            tv.setTextColor(Color.parseColor("#F44336"));
+        }
+    }
+    
+    // ==========================================
+    // BEREITIGUNGEN ANFORDERN (MIT KLICK)
+    // ==========================================
+    
+    private void requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
+            } else {
+                Toast.makeText(this, "✅ Speicherberechtigung ist bereits aktiviert!", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    
+    private void openInstallUnknownSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivityForResult(intent, REQUEST_INSTALL_UNKNOWN);
+        } else {
+            Toast.makeText(this, "✅ Für ältere Android-Versionen ist dies standardmäßig erlaubt.", Toast.LENGTH_LONG).show();
         }
     }
     
@@ -352,11 +424,10 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // ==========================================
-    // CHROMEDRIVER DOWNLOAD MIT STATUSANZEIGE
+    // CHROMEDRIVER PRÜFEN & DOWNLOAD
     // ==========================================
     
     private void checkChromeDriver() {
-        // 🔥 HIER: context durch MainActivity.this ersetzen!
         String[] possiblePaths = {
             "/data/local/tmp/chromedriver",
             MainActivity.this.getFilesDir().getAbsolutePath() + "/chromedriver",
@@ -388,7 +459,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void downloadChromeDriver() {
-        // UI aktualisieren
         btnDownloadChromeDriver.setEnabled(false);
         btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
         progressChromeDriver.setVisibility(View.VISIBLE);
@@ -459,12 +529,21 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_WRITE_STORAGE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                downloadChromeDriver();
+                Toast.makeText(this, "✅ Speicherberechtigung erteilt!", Toast.LENGTH_SHORT).show();
+                checkAllPermissions();
             } else {
                 Toast.makeText(this, "❌ Speicherberechtigung benötigt für den Download!", Toast.LENGTH_LONG).show();
-                tvChromeDriverStatus.setText("❌ Speicherberechtigung verweigert!");
-                tvChromeDriverStatus.setTextColor(Color.parseColor("#F44336"));
+                checkAllPermissions();
             }
+        }
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_INSTALL_UNKNOWN) {
+            checkAllPermissions();
+            Toast.makeText(this, "✅ Einstellungen aktualisiert!", Toast.LENGTH_SHORT).show();
         }
     }
     
