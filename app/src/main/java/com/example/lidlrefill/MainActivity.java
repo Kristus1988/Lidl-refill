@@ -125,6 +125,17 @@ public class MainActivity extends AppCompatActivity {
             public void onTarifDetected(String tarifName, int maxGb) {
                 runOnUiThread(() -> tvTarifInfo.setText("📶 Tarif: Unlimited on Demand " + tarifName + " (" + maxGb + " GB)"));
             }
+            
+            @Override
+            public void onChromeDriverProgress(int progress) {
+                runOnUiThread(() -> {
+                    if (progress < 100) {
+                        tvStatus.setText("⬇️ Lade ChromeDriver herunter... " + progress + "%");
+                    } else {
+                        tvStatus.setText("✅ ChromeDriver bereit!");
+                    }
+                });
+            }
         });
     }
     
