@@ -1,6 +1,8 @@
 package com.example.lidlrefill;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,8 +25,8 @@ import java.util.Random;
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
-    private Button btnStart, btnStop, btnRefresh, btnRefillTest;
-    private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvLoginHint;
+    private Button btnStart, btnStop, btnRefresh, btnRefillTest, btnRecordRefill;
+    private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvLoginHint, tvRecordStatus;
     private ProgressBar progressStatus;
 
     private Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -53,11 +55,26 @@ public class MainActivity extends AppCompatActivity {
     private int countdownSeconds = 0;
     private Runnable countdownRunnable;
 
-    private float buttonX = 0;
-    private float buttonY = 0;
-    private float buttonWidth = 0;
-    private float buttonHeight = 0;
-    private boolean isTouchPending = false;
+    // ==========================================
+    // 📝 RECORDER VARIABLEN
+    // ==========================================
+
+    private static final String PREFS_NAME = "RefillRecorderPrefs";
+    private static final String KEY_SAVED_X = "saved_x";
+    private static final String KEY_SAVED_Y = "saved_y";
+    private static final String KEY_SAVED_WIDTH = "saved_width";
+    private static final String KEY_SAVED_HEIGHT = "saved_height";
+    private static final String KEY_SAVED_URL = "saved_url";
+    private static final String KEY_IS_RECORDED = "is_recorded";
+
+    private float savedButtonX = 0;
+    private float savedButtonY = 0;
+    private float savedButtonWidth = 0;
+    private float savedButtonHeight = 0;
+    private String savedUrl = "";
+    private boolean isButtonRecorded = false;
+
+    private boolean isRecordingMode = false;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -212,81 +229,76 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // ==========================================
-        // 🔥 BUTTON-SUCHE (JS-INTERFACE)
+        // 📝 RECORDER - BUTTON POSITION SPEICHERN
         // ==========================================
 
         @JavascriptInterface
-        public void executeRefillSearch() {
+        public void onRecordButtonPosition(float x, float y, float width, float height) {
             runOnUiThread(() -> {
-                tvStatus.setText("🔍 Suche Refill-Button...");
-                String js = "javascript:(function() {" +
-                        "try {" +
-                        "  var found = false;" +
-                        "  var elements = document.querySelectorAll('*');" +
-                        "  for(var i=0; i<elements.length; i++) {" +
-                        "    var el = elements[i];" +
-                        "    var text = el.innerText || el.textContent || '';" +
-                        "    var className = el.className || '';" +
-                        "    var id = el.id || '';" +
-                        "    if(text && text.includes('Refill aktivieren')) {" +
-                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                        "      setTimeout(function(e) {" +
-                        "        var rect = e.getBoundingClientRect();" +
-                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 600, el);" +
-                        "      found = true;" +
-                        "      break;" +
-                        "    } else if(className && className.toLowerCase().includes('refill')) {" +
-                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                        "      setTimeout(function(e) {" +
-                        "        var rect = e.getBoundingClientRect();" +
-                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 600, el);" +
-                        "      found = true;" +
-                        "      break;" +
-                        "    } else if(id && id.toLowerCase().includes('refill')) {" +
-                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                        "      setTimeout(function(e) {" +
-                        "        var rect = e.getBoundingClientRect();" +
-                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 600, el);" +
-                        "      found = true;" +
-                        "      break;" +
-                        "    }" +
-                        "  }" +
-                        "  if(!found) {" +
-                        "    Android.onRefillNotFound();" +
-                        "  }" +
-                        "} catch(e) {" +
-                        "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                        "}" +
-                        "})();";
-                webView.loadUrl(js);
+                savedButtonX = x;
+                savedButtonY = y;
+                savedButtonWidth = width;
+                savedButtonHeight = height;
+                savedUrl = webView.getUrl();
+                isButtonRecorded = true;
+                isRecordingMode = false;
+
+                // Speichern in SharedPreferences
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putFloat(KEY_SAVED_X, x);
+                editor.putFloat(KEY_SAVED_Y, y);
+                editor.putFloat(KEY_SAVED_WIDTH, width);
+                editor.putFloat(KEY_SAVED_HEIGHT, height);
+                editor.putString(KEY_SAVED_URL, savedUrl);
+                editor.putBoolean(KEY_IS_RECORDED, true);
+                editor.apply();
+
+                tvRecordStatus.setText("✅ Button gespeichert bei (" + (int)x + ", " + (int)y + ")");
+                tvRecordStatus.setTextColor(Color.parseColor("#4CAF50"));
+                tvStatus.setText("📝 Button-Position gespeichert!");
+                Toast.makeText(MainActivity.this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
+
+                btnRecordRefill.setText("📝 Refill-Recorder (gespeichert)");
+            });
+        }
+
+        @JavascriptInterface
+        public void onRefillNotFound() {
+            runOnUiThread(() -> {
+                tvStatus.setText("⚠️ Refill-Button nicht gefunden!");
+                tvStatus.setTextColor(Color.parseColor("#FF5722"));
+                Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
+                isWaitingForRefill = false;
+                updateNextCheckTime();
             });
         }
 
         // ==========================================
-        // BUTTON POSITION
+        // BUTTON POSITION (für normalen Klick)
         // ==========================================
 
         @JavascriptInterface
         public void onButtonPosition(float x, float y, float width, float height) {
             runOnUiThread(() -> {
-                buttonX = x;
-                buttonY = y;
-                buttonWidth = width;
-                buttonHeight = height;
-                performTouchClick();
+                // Wenn Recorder aktiv ist, speichern
+                if (isRecordingMode) {
+                    onRecordButtonPosition(x, y, width, height);
+                    return;
+                }
+                
+                // Normaler Klick
+                performTouchClick(x, y, width, height);
             });
         }
     }
 
     // ==========================================
-    // TOUCH-SIMULATION
+    // TOUCH-SIMULATION (mit übergebenen Koordinaten)
     // ==========================================
 
-    private void performTouchClick() {
-        if (buttonX == 0 || buttonY == 0) return;
+    private void performTouchClick(float x, float y, float width, float height) {
+        if (x == 0 || y == 0) return;
 
         isTouchPending = true;
 
@@ -295,11 +307,11 @@ public class MainActivity extends AppCompatActivity {
         mainHandler.postDelayed(() -> {
             if (webView == null) return;
 
-            float centerX = buttonX + buttonWidth / 2;
-            float centerY = buttonY + buttonHeight / 2;
+            float centerX = x + width / 2;
+            float centerY = y + height / 2;
 
-            float touchX = centerX + (random.nextFloat() - 0.5f) * buttonWidth * 0.3f;
-            float touchY = centerY + (random.nextFloat() - 0.5f) * buttonHeight * 0.3f;
+            float touchX = centerX + (random.nextFloat() - 0.5f) * width * 0.3f;
+            float touchY = centerY + (random.nextFloat() - 0.5f) * height * 0.3f;
 
             String js = "javascript:(function() {" +
                     "try {" +
@@ -350,6 +362,43 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
+    // 📝 RECORDER - GESPEICHERTE POSITION VERWENDEN
+    // ==========================================
+
+    private void useRecordedPosition() {
+        if (!isButtonRecorded) {
+            tvStatus.setText("⚠️ Kein Button gespeichert! Bitte zuerst aufnehmen.");
+            return;
+        }
+
+        tvStatus.setText("📌 Verwende gespeicherte Position (" + (int)savedButtonX + ", " + (int)savedButtonY + ")");
+        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
+        
+        // Klick an gespeicherter Position
+        performTouchClick(savedButtonX, savedButtonY, savedButtonWidth, savedButtonHeight);
+    }
+
+    // ==========================================
+    // 📝 RECORDER - STARTEN
+    // ==========================================
+
+    private void startRecording() {
+        if (!isLoggedIn) {
+            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        isRecordingMode = true;
+        tvRecordStatus.setText("📝 Bitte manuell zum Refill-Button scrollen und klicken!");
+        tvRecordStatus.setTextColor(Color.parseColor("#FF9800"));
+        tvStatus.setText("📝 Aufnahme-Modus aktiv! Klicke auf den Refill-Button.");
+        tvStatus.setTextColor(Color.parseColor("#FF9800"));
+        Toast.makeText(this, "📝 Klicke jetzt auf den Refill-Button!", Toast.LENGTH_LONG).show();
+
+        btnRecordRefill.setText("⏹️ Aufnahme beenden");
+    }
+
+    // ==========================================
     // MANUELLER REFILL TEST
     // ==========================================
 
@@ -364,6 +413,13 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // Wenn gespeicherte Position vorhanden, verwende sie
+        if (isButtonRecorded) {
+            useRecordedPosition();
+            return;
+        }
+
+        // Sonst normale Suche
         isManualRefill = true;
         tvStatus.setText("🧪 Suche Refill-Button...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
@@ -380,9 +436,14 @@ public class MainActivity extends AppCompatActivity {
     private void findAndClickRefillButton() {
         if (webView == null) return;
         
+        // Wenn gespeicherte Position vorhanden, sofort verwenden
+        if (isButtonRecorded) {
+            useRecordedPosition();
+            return;
+        }
+        
         tvStatus.setText("🔍 Suche Refill-Button...");
         
-        // Rufe die JS-Interface-Methode auf
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var found = false;" +
@@ -534,6 +595,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
+    // GESPEICHERTE POSITION LADEN
+    // ==========================================
+
+    private void loadSavedPosition() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        isButtonRecorded = prefs.getBoolean(KEY_IS_RECORDED, false);
+        
+        if (isButtonRecorded) {
+            savedButtonX = prefs.getFloat(KEY_SAVED_X, 0);
+            savedButtonY = prefs.getFloat(KEY_SAVED_Y, 0);
+            savedButtonWidth = prefs.getFloat(KEY_SAVED_WIDTH, 0);
+            savedButtonHeight = prefs.getFloat(KEY_SAVED_HEIGHT, 0);
+            savedUrl = prefs.getString(KEY_SAVED_URL, "");
+            
+            tvRecordStatus.setText("✅ Gespeichert bei (" + (int)savedButtonX + ", " + (int)savedButtonY + ")");
+            tvRecordStatus.setTextColor(Color.parseColor("#4CAF50"));
+            btnRecordRefill.setText("📝 Refill-Recorder (gespeichert)");
+        } else {
+            tvRecordStatus.setText("❌ Kein Button gespeichert");
+            tvRecordStatus.setTextColor(Color.parseColor("#B0BEC5"));
+            btnRecordRefill.setText("📝 Refill-Recorder");
+        }
+    }
+
+    // ==========================================
     // LEBENSZYKLUS
     // ==========================================
 
@@ -544,6 +630,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         initViews();
+        loadSavedPosition();
         setupWebView();
         setupButtons();
         loadLidlPage();
@@ -555,12 +642,14 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnRefresh = findViewById(R.id.btn_refresh);
         btnRefillTest = findViewById(R.id.btn_refill_test);
+        btnRecordRefill = findViewById(R.id.btn_record_refill);
         tvStatus = findViewById(R.id.tv_status);
         tvVolume = findViewById(R.id.tv_volume);
         tvRefill = findViewById(R.id.tv_refill);
         tvRefillCount = findViewById(R.id.tv_refill_count);
         tvNextCheck = findViewById(R.id.tv_next_check);
         tvLoginHint = findViewById(R.id.tv_login_hint);
+        tvRecordStatus = findViewById(R.id.tv_record_status);
         progressStatus = findViewById(R.id.progress_status);
     }
 
@@ -650,6 +739,40 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
 
     private void setupButtons() {
+        // 📝 Refill-Recorder Button
+        btnRecordRefill.setOnClickListener(v -> {
+            if (isRecordingMode) {
+                // Aufnahme beenden
+                isRecordingMode = false;
+                btnRecordRefill.setText("📝 Refill-Recorder");
+                tvRecordStatus.setText("⏹️ Aufnahme beendet");
+                tvRecordStatus.setTextColor(Color.parseColor("#FF9800"));
+                tvStatus.setText("⏹️ Aufnahme beendet");
+                return;
+            }
+            
+            // Wenn bereits gespeichert, frage ob neu aufnehmen
+            if (isButtonRecorded) {
+                Toast.makeText(this, "🗑️ Gespeicherte Position löschen? Nochmal klicken zum Überschreiben.", Toast.LENGTH_LONG).show();
+                // Bei zweitem Klick löschen
+                btnRecordRefill.postDelayed(() -> {
+                    if (btnRecordRefill.isPressed()) {
+                        // Nochmal geklickt -> löschen
+                        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                        prefs.edit().clear().apply();
+                        isButtonRecorded = false;
+                        tvRecordStatus.setText("🗑️ Gespeicherte Position gelöscht");
+                        tvRecordStatus.setTextColor(Color.parseColor("#F44336"));
+                        btnRecordRefill.setText("📝 Refill-Recorder");
+                        Toast.makeText(this, "🗑️ Gespeicherte Position gelöscht!", Toast.LENGTH_SHORT).show();
+                    }
+                }, 500);
+                return;
+            }
+            
+            startRecording();
+        });
+
         btnRefillTest.setOnClickListener(v -> manualRefillTest());
 
         btnRefresh.setOnClickListener(v -> {
@@ -719,6 +842,12 @@ public class MainActivity extends AppCompatActivity {
 
         btnStop.setEnabled(false);
     }
+
+    // ==========================================
+    // TOUCH-PENDING (für Zugriff von außen)
+    // ==========================================
+
+    private boolean isTouchPending = false;
 
     @Override
     protected void onPause() {
