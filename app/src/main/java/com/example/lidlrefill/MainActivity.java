@@ -48,6 +48,9 @@ public class MainActivity extends AppCompatActivity {
     private String lastInklusiv = "--";
     private String lastRefill = "--";
 
+    // ✅ KORREKTE URL
+    private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
+
     // JavaScript-Interface für Kommunikation
     private class LidlJSInterface {
         @JavascriptInterface
@@ -180,9 +183,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (url.contains("konto.lidl-connect.de") && isRunning) {
+                if (url.contains("lidl-connect.de") && isRunning) {
                     if (!isLoggedIn) {
-                        // Prüfe ob bereits eingeloggt
                         checkLoginStatus();
                     } else {
                         checkVolume();
@@ -197,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
     private void checkLoginStatus() {
         String js = "javascript:(function() {" +
                 "try {" +
-                "  var loggedIn = document.body.innerText.includes('Eingeloggt als:');" +
+                "  var loggedIn = document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben');" +
                 "  if (loggedIn) {" +
                 "    Android.onAlreadyLoggedIn();" +
                 "  } else {" +
@@ -222,14 +224,24 @@ public class MainActivity extends AppCompatActivity {
                 "try {" +
                 "  var userField = document.getElementById('username');" +
                 "  var passField = document.getElementById('password');" +
-                "  var loginBtn = document.getElementById('login-btn');" +
-                "  if (userField && passField && loginBtn) {" +
+                "  var loginBtn = document.querySelector('button[type=\"submit\"], button:contains(\"Anmelden\"), .login-button, #login-btn');" +
+                "  if (userField && passField) {" +
                 "    userField.value = '" + username + "';" +
                 "    passField.value = '" + password + "';" +
-                "    loginBtn.click();" +
+                "    if (loginBtn) {" +
+                "      loginBtn.click();" +
+                "    } else {" +
+                "      var btns = document.querySelectorAll('button, input[type=\"submit\"]');" +
+                "      for(var i=0; i<btns.length; i++) {" +
+                "        if(btns[i].innerText && (btns[i].innerText.includes('Anmelden') || btns[i].innerText.includes('Login'))) {" +
+                "          btns[i].click();" +
+                "          break;" +
+                "        }" +
+                "      }" +
+                "    }" +
                 "    Android.onStatus('🔐 Login wird ausgeführt...');" +
                 "    setTimeout(function() {" +
-                "      if (document.body.innerText.includes('Eingeloggt als:')) {" +
+                "      if (document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben')) {" +
                 "        Android.onLoginSuccess();" +
                 "      } else {" +
                 "        Android.onLoginFailed();" +
@@ -287,7 +299,6 @@ public class MainActivity extends AppCompatActivity {
     private void checkVolumeDelayed() {
         if (!isRunning || !isLoggedIn) return;
 
-        // Zufälliges Intervall: 20-45 Sekunden
         int delay = random.nextInt(25000) + 20000;
 
         mainHandler.postDelayed(() -> {
@@ -319,7 +330,7 @@ public class MainActivity extends AppCompatActivity {
 
             webView.setVisibility(View.VISIBLE);
             layoutStatus.setVisibility(View.VISIBLE);
-            webView.loadUrl("https://konto.lidl-connect.de");
+            webView.loadUrl(LIDL_URL);
         });
 
         btnStop.setOnClickListener(v -> {
