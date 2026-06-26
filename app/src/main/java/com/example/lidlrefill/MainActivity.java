@@ -23,7 +23,7 @@ import java.util.Random;
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
-    private Button btnStart, btnStop, btnRefresh;
+    private Button btnStart, btnStop, btnRefresh, btnRefillTest;
     private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvLoginHint;
     private ProgressBar progressStatus;
 
@@ -39,7 +39,6 @@ public class MainActivity extends AppCompatActivity {
     private float lastRefillGb = 0.99f;
     private int consecutiveNoChange = 0;
 
-    // Verbrauchsanalyse
     private long lastCheckTime = 0;
     private float lastVolumeForRate = 0.99f;
     private boolean isFirstCheck = true;
@@ -88,6 +87,18 @@ public class MainActivity extends AppCompatActivity {
                 tvRefill.setText("🔄 Refill: 1.00 GB");
                 lastVolumeForRate = 1.00f;
                 isFirstCheck = true;
+
+                // Wartezeit nach Refill automatisch anpassen
+                updateNextCheckTime();
+            });
+        }
+
+        @JavascriptInterface
+        public void onRefillNotFound() {
+            runOnUiThread(() -> {
+                tvStatus.setText("⚠️ Refill-Button nicht gefunden!");
+                tvStatus.setTextColor(Color.parseColor("#FF5722"));
+                Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -181,6 +192,7 @@ public class MainActivity extends AppCompatActivity {
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
         btnRefresh = findViewById(R.id.btn_refresh);
+        btnRefillTest = findViewById(R.id.btn_refill_test);
         tvStatus = findViewById(R.id.tv_status);
         tvVolume = findViewById(R.id.tv_volume);
         tvRefill = findViewById(R.id.tv_refill);
@@ -257,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
 
     private void checkAndClickRefill() {
-        if (!isRunning || !isLoggedIn) return;
+        if (!isLoggedIn) return;
 
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
@@ -289,7 +301,7 @@ public class MainActivity extends AppCompatActivity {
                 "          }" +
                 "        }" +
                 "        if (!found) {" +
-                "          Android.onStatus('⚠️ Button nicht gefunden!');" +
+                "          Android.onRefillNotFound();" +
                 "        }" +
                 "      }, delay);" +
                 "    } else {" +
@@ -301,6 +313,58 @@ public class MainActivity extends AppCompatActivity {
                 "}" +
                 "})();";
         webView.loadUrl(js);
+    }
+
+    // ==========================================
+    // MANUELLER REFILL TEST
+    // ==========================================
+
+    private void manualRefillTest() {
+        if (!isLoggedIn) {
+            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        tvStatus.setText("🧪 Refill-Test wird ausgeführt...");
+        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
+
+        String js = "javascript:(function() {" +
+                "try {" +
+                "  var found = false;" +
+                "  var elements = document.querySelectorAll('button, div, a, span');" +
+                "  for(var i=0; i<elements.length; i++) {" +
+                "    var text = elements[i].innerText || elements[i].textContent || '';" +
+                "    if(text.includes('Refill aktivieren')) {" +
+                "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "      setTimeout(function(el) { el.click(); }, 500);" +
+                "      Android.onRefillClicked();" +
+                "      found = true;" +
+                "      break;" +
+                "    }" +
+                "  }" +
+                "  if (!found) {" +
+                "    Android.onRefillNotFound();" +
+                "  }" +
+                "} catch(e) {" +
+                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                "}" +
+                "})();";
+        webView.loadUrl(js);
+    }
+
+    // ==========================================
+    // WARTEZEIT ANPASSEN
+    // ==========================================
+
+    private void updateNextCheckTime() {
+        int delay = calculateAdaptiveDelay() * 1000;
+        int minutes = delay / 60000;
+        int seconds = (delay % 60000) / 1000;
+        if (minutes > 0) {
+            tvNextCheck.setText("⏱️ Nächste Prüfung: " + minutes + "m " + seconds + "s");
+        } else {
+            tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
+        }
     }
 
     // ==========================================
@@ -387,17 +451,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // BUTTONS (mit Refresh)
+    // BUTTONS
     // ==========================================
 
     private void setupButtons() {
+        // 🧪 MANUELLER REFILL TEST
+        btnRefillTest.setOnClickListener(v -> manualRefillTest());
+
         // 🔄 MANUELLER REFRESH
         btnRefresh.setOnClickListener(v -> {
             if (webView != null) {
                 webView.reload();
                 tvStatus.setText("🔄 Seite wird aktualisiert...");
                 tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
-                Toast.makeText(this, "🔄 Seite aktualisiert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "🔄 Seite aktualisiert! Prüfe Refill...", Toast.LENGTH_SHORT).show();
+
+                mainHandler.postDelayed(() -> {
+                    if (isLoggedIn) {
+                        checkAndClickRefill();
+                        tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
+                    } else {
+                        tvStatus.setText("⚠️ Bitte zuerst einloggen!");
+                    }
+                }, 3000);
             }
         });
 
