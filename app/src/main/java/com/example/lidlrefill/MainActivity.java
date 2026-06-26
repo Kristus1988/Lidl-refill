@@ -96,13 +96,8 @@ public class MainActivity extends AppCompatActivity {
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
-        // ChromeDriver Download Button
+        // 🔥 ChromeDriver Download Button (OHNE Berechtigungsprüfung!)
         btnDownloadChromeDriver.setOnClickListener(v -> {
-            // Prüfe Berechtigungen
-            if (!checkAllPermissionsForDownload()) {
-                Toast.makeText(this, "⚠️ Bitte aktiviere alle Berechtigungen zuerst!", Toast.LENGTH_LONG).show();
-                return;
-            }
             downloadChromeDriver();
         });
         
@@ -152,20 +147,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onTarifDetected(String tarifName, int maxGb) {
                 runOnUiThread(() -> tvTarifInfo.setText("📶 Tarif: Unlimited on Demand " + tarifName + " (" + maxGb + " GB)"));
-            }
-            
-            @Override
-            public void onChromeDriverProgress(int progress) {
-                runOnUiThread(() -> {
-                    progressChromeDriver.setProgress(progress);
-                    if (progress < 100) {
-                        tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
-                        tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
-                    } else {
-                        tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
-                        tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-                    }
-                });
             }
         });
     }
@@ -356,6 +337,7 @@ public class MainActivity extends AppCompatActivity {
             tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
             progressChromeDriver.setVisibility(View.GONE);
             btnStart.setEnabled(true);
+            btnStart.setText("▶️ Start");
         } else {
             btnDownloadChromeDriver.setText("⬇️ ChromeDriver installieren");
             btnDownloadChromeDriver.setEnabled(true);
@@ -367,20 +349,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    private boolean checkAllPermissionsForDownload() {
-        boolean storageGranted = true;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            storageGranted = checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-        }
-        
-        if (!storageGranted) {
-            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1001);
-            return false;
-        }
-        return true;
-    }
-    
     private void downloadChromeDriver() {
+        // Button deaktivieren und Status setzen
         btnDownloadChromeDriver.setEnabled(false);
         btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
         progressChromeDriver.setVisibility(View.VISIBLE);
@@ -390,6 +360,7 @@ public class MainActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
+                // Download in den App-eigenen Ordner (KEINE Berechtigung nötig!)
                 String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
                 URL downloadUrl = new URL(url);
                 URLConnection connection = downloadUrl.openConnection();
@@ -411,19 +382,13 @@ public class MainActivity extends AppCompatActivity {
                     
                     final int progress = fileSize > 0 ? (int) ((totalDownloaded * 100) / fileSize) : 0;
                     mainHandler.post(() -> {
-                        // Direkt den Status-Listener im RefillService aufrufen
-                        if (refillService != null) {
-                            // Wir rufen die Methode direkt im StatusListener auf
-                            runOnUiThread(() -> {
-                                progressChromeDriver.setProgress(progress);
-                                if (progress < 100) {
-                                    tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
-                                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
-                                } else {
-                                    tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
-                                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-                                }
-                            });
+                        progressChromeDriver.setProgress(progress);
+                        if (progress < 100) {
+                            tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
+                            tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
+                        } else {
+                            tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
+                            tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
                         }
                     });
                 }
@@ -491,17 +456,5 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         checkAllPermissions();
         checkChromeDriver();
-    }
-    
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 1001) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                downloadChromeDriver();
-            } else {
-                Toast.makeText(this, "❌ Speicherberechtigung benötigt für den Download!", Toast.LENGTH_LONG).show();
-            }
-        }
     }
 }
