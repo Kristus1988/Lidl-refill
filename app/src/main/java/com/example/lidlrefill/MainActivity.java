@@ -234,8 +234,8 @@ public class MainActivity extends AppCompatActivity {
         // 🔥 START-Button: Immer aktiv, zeigt Fehler an, falls Berechtigungen fehlen
         btnStart.setOnClickListener(v -> {
             // 1. Prüfe Berechtigungen
-            if (!checkAllPermissionsForStart()) {
-                Toast.makeText(this, "⚠️ Bitte aktiviere alle Berechtigungen zuerst!", Toast.LENGTH_LONG).show();
+            if (!PermissionHelper.isBatteryOptimizationDisabled(this)) {
+                Toast.makeText(this, "⚠️ Bitte Akku-Optimierung deaktivieren!", Toast.LENGTH_LONG).show();
                 return;
             }
             
@@ -263,10 +263,16 @@ public class MainActivity extends AppCompatActivity {
             String loginUsername = cleanPhoneNumber(username);
             tvDisplayNumber.setText("📱 Login mit: " + loginUsername);
             
+            // Status zurücksetzen und Start anzeigen
             tvStatus.setText("🔄 Starte...");
-            refillService.start(loginUsername, password, interval, target, waitAfter);
+            tvLoginStatus.setText("🔄 Starte...");
+            
+            // Button-Status aktualisieren
             btnStart.setEnabled(false);
             btnStop.setEnabled(true);
+            
+            // Service starten
+            refillService.start(loginUsername, password, interval, target, waitAfter);
         });
         
         btnStop.setOnClickListener(v -> {
@@ -277,6 +283,7 @@ public class MainActivity extends AppCompatActivity {
             tvDisplayNumber.setText("📱 " + cleanPhoneNumber(etUsername.getText().toString()));
         });
         
+        // Stop-Button initial deaktivieren
         btnStop.setEnabled(false);
         
         etUsername.setOnFocusChangeListener((v, hasFocus) -> {
@@ -284,16 +291,6 @@ public class MainActivity extends AppCompatActivity {
                 updateDisplayNumber();
             }
         });
-    }
-    
-    private boolean checkAllPermissionsForStart() {
-        // Prüfe Akku-Optimierung
-        boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
-        if (!batteryGranted) {
-            Toast.makeText(this, "⚠️ Bitte Akku-Optimierung deaktivieren!", Toast.LENGTH_LONG).show();
-            return false;
-        }
-        return true;
     }
     
     private boolean isValidPhoneNumber(String number) {
