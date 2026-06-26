@@ -52,6 +52,12 @@ public class MainActivity extends AppCompatActivity {
     private int countdownSeconds = 0;
     private Runnable countdownRunnable;
 
+    private float buttonX = 0;
+    private float buttonY = 0;
+    private float buttonWidth = 0;
+    private float buttonHeight = 0;
+    private boolean isTouchPending = false;
+
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
     // ==========================================
@@ -79,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
                 calculateConsumptionRate();
 
                 if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill && !isRefreshing) {
-                    checkAndClickRefill();
+                    checkAndClickRefillWithTouch();
                 }
             });
         }
@@ -136,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isRunning) {
                     mainHandler.postDelayed(() -> {
                         if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                            checkAndClickRefill();
+                            checkAndClickRefillWithTouch();
                             updateNextCheckTime();
                         }
                     }, 3000);
@@ -170,7 +176,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isRunning) {
                     mainHandler.postDelayed(() -> {
                         if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                            checkAndClickRefill();
+                            checkAndClickRefillWithTouch();
                             updateNextCheckTime();
                         }
                     }, 3000);
@@ -202,11 +208,9 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 🔥 NEU: Holt die Position des Buttons für Touch-Simulation
         @JavascriptInterface
         public void onButtonPosition(float x, float y, float width, float height) {
             runOnUiThread(() -> {
-                // Position für Touch-Geste speichern
                 buttonX = x;
                 buttonY = y;
                 buttonWidth = width;
@@ -220,32 +224,22 @@ public class MainActivity extends AppCompatActivity {
     // TOUCH-SIMULATION
     // ==========================================
 
-    private float buttonX = 0;
-    private float buttonY = 0;
-    private float buttonWidth = 0;
-    private float buttonHeight = 0;
-    private boolean isTouchPending = false;
-
     private void performTouchClick() {
         if (buttonX == 0 || buttonY == 0) return;
 
         isTouchPending = true;
 
-        // Menschliche Verzögerung vor dem "Tippen" (200-800ms)
         int delay = random.nextInt(600) + 200;
 
         mainHandler.postDelayed(() -> {
             if (webView == null) return;
 
-            // Zentrum des Buttons berechnen
             float centerX = buttonX + buttonWidth / 2;
             float centerY = buttonY + buttonHeight / 2;
 
-            // Zufällige Abweichung (wie bei einem echten Finger-Tipp)
             float touchX = centerX + (random.nextFloat() - 0.5f) * buttonWidth * 0.3f;
             float touchY = centerY + (random.nextFloat() - 0.5f) * buttonHeight * 0.3f;
 
-            // JavaScript für Touch-Event simulieren
             String js = "javascript:(function() {" +
                     "try {" +
                     "  var x = " + touchX + ";" +
@@ -295,7 +289,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void findButtonForTouch() {
-        // JavaScript zum Finden der Button-Position
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var elements = document.querySelectorAll('button, div, a, span');" +
@@ -442,7 +435,6 @@ public class MainActivity extends AppCompatActivity {
 
                     if (isLoggedIn && isRunning && !isWaitingForRefill && !isManualRefill) {
                         isRefreshing = false;
-                        // 🔥 NEU: Touch-basierte Refill-Prüfung
                         checkAndClickRefillWithTouch();
                         updateNextCheckTime();
                     }
@@ -490,7 +482,6 @@ public class MainActivity extends AppCompatActivity {
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
 
-        // 🔥 Zuerst Volumen prüfen, dann bei Zielerreichung Touch auslösen
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var pageText = document.body.innerText;" +
@@ -549,7 +540,6 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setText("🧪 Suche Refill-Button...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
-        // 🔥 Button finden und Touch auslösen
         findButtonForTouch();
     }
 
