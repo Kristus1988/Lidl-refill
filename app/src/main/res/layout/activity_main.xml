@@ -211,7 +211,171 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- CHROMEDRIVER INSTALLATION (MIT STATUS) -->
+        <!-- BEREITIGUNGEN (KOMPLETT) -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:background="#1E1E1E">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔑 Berechtigungen"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#E0E0E0"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="(Zum Aktivieren auf roten Eintrag klicken)"
+                    android:textSize="11sp"
+                    android:textColor="#78909C"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- Internet -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="📶 Internet"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
+
+                    <TextView
+                        android:id="@+id/tv_internet_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="✅ Aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="#4CAF50" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#333333"
+                    android:layout_marginVertical="4dp" />
+
+                <!-- Akku-Optimierung -->
+                <LinearLayout
+                    android:id="@+id/layout_battery"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="4dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="🔋 Akku-Optimierung"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
+
+                    <TextView
+                        android:id="@+id/tv_battery_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❌ Nicht aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="#F44336" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#333333"
+                    android:layout_marginVertical="4dp" />
+
+                <!-- Speicher -->
+                <LinearLayout
+                    android:id="@+id/layout_storage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="4dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="💾 Speicher"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
+
+                    <TextView
+                        android:id="@+id/tv_storage_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❌ Nicht aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="#F44336" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#333333"
+                    android:layout_marginVertical="4dp" />
+
+                <!-- Unbekannte Quellen -->
+                <LinearLayout
+                    android:id="@+id/layout_install"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:padding="4dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="📥 Unbekannte Quellen"
+                        android:textSize="13sp"
+                        android:textColor="#E0E0E0" />
+
+                    <TextView
+                        android:id="@+id/tv_install_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❌ Nicht aktiviert"
+                        android:textSize="12sp"
+                        android:textColor="#F44336" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- CHROMEDRIVER -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -243,7 +407,7 @@
                     android:textColor="#B0BEC5"
                     android:layout_marginBottom="8dp" />
 
-                <!-- FORTSCHRITTSANZEIGE -->
+                <!-- Status -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -290,93 +454,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- BEREITIGUNGEN -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp"
-                android:background="#1E1E1E">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🔑 Berechtigungen"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="#E0E0E0"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="(Zum Aktivieren auf roten Eintrag klicken)"
-                    android:textSize="11sp"
-                    android:textColor="#78909C"
-                    android:layout_marginBottom="8dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="📶 Internet"
-                        android:textSize="13sp"
-                        android:textColor="#E0E0E0" />
-
-                    <TextView
-                        android:id="@+id/tv_internet_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="✅ Aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_green_dark" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/layout_battery"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="4dp"
-                    android:padding="4dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="🔋 Akku-Optimierung"
-                        android:textSize="13sp"
-                        android:textColor="#E0E0E0" />
-
-                    <TextView
-                        android:id="@+id/tv_battery_status"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="❌ Nicht aktiviert"
-                        android:textSize="12sp"
-                        android:textColor="@android:color/holo_red_dark" />
-                </LinearLayout>
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- DETAIL-STATUS (VOLUMEN) -->
+        <!-- DETAIL-STATUS -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
