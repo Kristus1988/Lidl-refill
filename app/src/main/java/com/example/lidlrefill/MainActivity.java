@@ -212,26 +212,15 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
+        // 🔥 NEU: Scrollt zum Refill-Button und gibt die Position zurück
         @JavascriptInterface
-        public void onButtonPosition(float x, float y, float width, float height) {
-            runOnUiThread(() -> {
-                buttonX = x;
-                buttonY = y;
-                buttonWidth = width;
-                buttonHeight = height;
-                performTouchClick();
-            });
-        }
-
-        // 🔥 NEU: Scrollt zum Refill-Button und gibt dann die Position zurück
-        @JavascriptInterface
-        public void scrollToRefillButton() {
+        public void findAndScrollToRefillButton() {
             runOnUiThread(() -> {
                 tvStatus.setText("🔽 Scrolle zum Refill-Button...");
                 String js = "javascript:(function() {" +
                         "try {" +
                         "  var found = false;" +
-                        "  var elements = document.querySelectorAll('button, div, a, span');" +
+                        "  var elements = document.querySelectorAll('*');" +
                         "  for(var i=0; i<elements.length; i++) {" +
                         "    var text = elements[i].innerText || elements[i].textContent || '';" +
                         "    if(text && text.includes('Refill aktivieren')) {" +
@@ -239,7 +228,7 @@ public class MainActivity extends AppCompatActivity {
                         "      setTimeout(function() {" +
                         "        var rect = elements[i].getBoundingClientRect();" +
                         "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 500);" +
+                        "      }, 600);" +
                         "      found = true;" +
                         "      break;" +
                         "    }" +
@@ -410,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
                 "    if (refillValue <= " + TARGET_VOLUME + ") {" +
                 "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Scrolle & Tippe...');" +
                 "      setTimeout(function() {" +
-                "        Android.scrollToRefillButton();" +
+                "        Android.findAndScrollToRefillButton();" +
                 "      }, 500);" +
                 "    } else {" +
                 "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
@@ -447,7 +436,7 @@ public class MainActivity extends AppCompatActivity {
             String scrollJs = "javascript:(function() {" +
                     "try {" +
                     "  var found = false;" +
-                    "  var elements = document.querySelectorAll('button, div, a, span');" +
+                    "  var elements = document.querySelectorAll('*');" +
                     "  for(var i=0; i<elements.length; i++) {" +
                     "    var text = elements[i].innerText || elements[i].textContent || '';" +
                     "    if(text && text.includes('Refill aktivieren')) {" +
@@ -455,7 +444,7 @@ public class MainActivity extends AppCompatActivity {
                     "      setTimeout(function() {" +
                     "        var rect = elements[i].getBoundingClientRect();" +
                     "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                    "      }, 500);" +
+                    "      }, 600);" +
                     "      found = true;" +
                     "      break;" +
                     "    }" +
