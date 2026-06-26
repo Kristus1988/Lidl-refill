@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
     private Random random = new Random();
     private int checkCount = 0;
 
-    // 🔥 NEU: Zielvolumen auf 0.35 GB erhöht (früherer Refill)
+    // 🔥 Zielvolumen auf 0.35 GB erhöht (früherer Refill)
     private static final float TARGET_VOLUME = 0.35f;
 
     private float currentRefillGb = 0.99f;
@@ -48,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private float consumptionRate = 0.05f;
 
     private boolean isWaitingForRefill = false;
+    private boolean isManualRefill = false;
     private int countdownSeconds = 0;
     private Runnable countdownRunnable;
 
@@ -75,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
 
-                // 🔥 Nach einem Refill die Wartezeit neu berechnen
                 if (isWaitingForRefill) {
                     updateNextCheckTime();
                 }
@@ -95,7 +95,6 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
                 Toast.makeText(MainActivity.this, "✅ Refill #" + refillCount + " aktiviert!", Toast.LENGTH_SHORT).show();
 
-                // 🔥 Nach Refill: Volumen auf 1.00 GB setzen
                 currentRefillGb = 1.00f;
                 lastRefillGb = 1.00f;
                 consecutiveNoChange = 0;
@@ -103,10 +102,8 @@ public class MainActivity extends AppCompatActivity {
                 lastVolumeForRate = 1.00f;
                 isFirstCheck = true;
 
-                // 🔥 Wartezeit nach Refill anpassen
                 updateNextCheckTime();
 
-                // Warte 3 Sekunden, dann Seite neu laden
                 int delay = random.nextInt(1000) + 2000;
                 tvStatus.setText("⏳ Refill verarbeitet. Warte " + (delay/1000) + "s...");
 
@@ -127,7 +124,6 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#FF5722"));
                 Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
                 isWaitingForRefill = false;
-                // Bei Fehler trotzdem Countdown starten
                 updateNextCheckTime();
             });
         }
@@ -173,6 +169,22 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void onManualRefillSuccess() {
+            runOnUiThread(() -> {
+                isManualRefill = false;
+                tvStatus.setText("✅ Manueller Refill erfolgreich!");
+                tvStatus.setTextColor(Color.parseColor("#4CAF50"));
+
+                if (webView != null) {
+                    mainHandler.postDelayed(() -> {
+                        webView.reload();
+                        tvStatus.setText("🔄 Prüfe neues Volumen...");
+                    }, 2000);
+                }
+            });
+        }
     }
 
     // ==========================================
@@ -180,7 +192,6 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
 
     private void startCountdown(int seconds) {
-        // Alten Countdown stoppen
         if (countdownRunnable != null) {
             mainHandler.removeCallbacks(countdownRunnable);
         }
@@ -199,8 +210,7 @@ public class MainActivity extends AppCompatActivity {
                     mainHandler.postDelayed(this, 1000);
                 } else {
                     tvNextCheck.setText("⏱️ Prüfung jetzt!");
-                    // Prüfung ausführen
-                    if (isRunning && isLoggedIn && !isWaitingForRefill) {
+                    if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill) {
                         webView.reload();
                     }
                 }
@@ -298,7 +308,7 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url.contains("lidl-connect.de")) {
                     checkLoginStatus();
-                    if (isLoggedIn && isRunning && !isWaitingForRefill) {
+                    if (isLoggedIn && isRunning && !isWaitingForRefill && !isManualRefill) {
                         checkAndClickRefill();
                     }
                 }
@@ -329,11 +339,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG (mit TARGET_VOLUME = 0.35)
+    // REFILL ÜBERWACHUNG
     // ==========================================
 
     private void checkAndClickRefill() {
-        if (!isLoggedIn || isWaitingForRefill) return;
+        if (!isLoggedIn || isWaitingForRefill || isManualRefill) return;
 
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
@@ -394,7 +404,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        tvStatus.setText("🧪 Refill-Test wird ausgeführt...");
+        isManualRefill = true;
+        tvStatus.setText("🧪 Suche Refill-Button...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
         String js = "javascript:(function() {" +
@@ -405,14 +416,18 @@ public class MainActivity extends AppCompatActivity {
                 "    var text = elements[i].innerText || elements[i].textContent || '';" +
                 "    if(text && text.includes('Refill aktivieren')) {" +
                 "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                "      setTimeout(function(el) { el.click(); }, 500);" +
-                "      Android.onRefillClicked();" +
+                "      setTimeout(function(el) {" +
+                "        el.click();" +
+                "        Android.onRefillClicked();" +
+                "        Android.onManualRefillSuccess();" +
+                "      }, 500, elements[i]);" +
                 "      found = true;" +
                 "      break;" +
                 "    }" +
                 "  }" +
                 "  if (!found) {" +
                 "    Android.onRefillNotFound();" +
+                "    Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
                 "  }" +
                 "} catch(e) {" +
                 "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
@@ -422,7 +437,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // WARTEZEIT ANPASSEN (mit Countdown)
+    // WARTEZEIT ANPASSEN
     // ==========================================
 
     private void updateNextCheckTime() {
@@ -438,7 +453,6 @@ public class MainActivity extends AppCompatActivity {
         float refill = currentRefillGb;
         int baseDelay;
 
-        // 🔥 Größere Intervalle für längeres Warten
         if (refill > 0.80) {
             baseDelay = random.nextInt(600) + 900; // 15-25 Minuten
         } else if (refill > 0.40) {
@@ -484,12 +498,7 @@ public class MainActivity extends AppCompatActivity {
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        // 🔥 Sofort Countdown für erste Prüfung starten
         updateNextCheckTime();
-    }
-
-    private void checkRefillDelayed() {
-        // Wird nicht mehr benötigt – Countdown übernimmt die Steuerung
     }
 
     // ==========================================
@@ -507,10 +516,10 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "🔄 Seite aktualisiert! Prüfe Refill...", Toast.LENGTH_SHORT).show();
 
                 mainHandler.postDelayed(() -> {
-                    if (isLoggedIn && !isWaitingForRefill) {
+                    if (isLoggedIn && !isWaitingForRefill && !isManualRefill) {
                         checkAndClickRefill();
                         tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
-                    } else if (isWaitingForRefill) {
+                    } else if (isWaitingForRefill || isManualRefill) {
                         tvStatus.setText("⏳ Refill wird bereits verarbeitet...");
                     } else {
                         tvStatus.setText("⚠️ Bitte zuerst einloggen!");
@@ -525,7 +534,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            if (isWaitingForRefill) {
+            if (isWaitingForRefill || isManualRefill) {
                 Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
                 return;
             }
