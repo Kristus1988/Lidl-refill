@@ -204,9 +204,8 @@ public class MainActivity extends AppCompatActivity {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             );
-        } catch (GeneralSecurityException | IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
-            // Fallback: Normale SharedPreferences
             sharedPreferences = getSharedPreferences("prefs", Context.MODE_PRIVATE);
         }
     }
