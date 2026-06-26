@@ -222,6 +222,38 @@ public class MainActivity extends AppCompatActivity {
                 performTouchClick();
             });
         }
+
+        // 🔥 NEU: Scrollt zum Refill-Button und gibt dann die Position zurück
+        @JavascriptInterface
+        public void scrollToRefillButton() {
+            runOnUiThread(() -> {
+                tvStatus.setText("🔽 Scrolle zum Refill-Button...");
+                String js = "javascript:(function() {" +
+                        "try {" +
+                        "  var found = false;" +
+                        "  var elements = document.querySelectorAll('button, div, a, span');" +
+                        "  for(var i=0; i<elements.length; i++) {" +
+                        "    var text = elements[i].innerText || elements[i].textContent || '';" +
+                        "    if(text && text.includes('Refill aktivieren')) {" +
+                        "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                        "      setTimeout(function() {" +
+                        "        var rect = elements[i].getBoundingClientRect();" +
+                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                        "      }, 500);" +
+                        "      found = true;" +
+                        "      break;" +
+                        "    }" +
+                        "  }" +
+                        "  if (!found) {" +
+                        "    Android.onRefillNotFound();" +
+                        "  }" +
+                        "} catch(e) {" +
+                        "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                        "}" +
+                        "})();";
+                webView.loadUrl(js);
+            });
+        }
     }
 
     // ==========================================
@@ -352,27 +384,91 @@ public class MainActivity extends AppCompatActivity {
         }, delay);
     }
 
-    private void findButtonForTouch() {
-        String scrollJs = "javascript:(function() {" +
+    // ==========================================
+    // REFILL ÜBERWACHUNG (MIT SCROLL ZUM BUTTON)
+    // ==========================================
+
+    private void checkAndClickRefillWithTouch() {
+        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
+            return;
+        }
+
+        checkCount++;
+        tvStatus.setText("🔍 Prüfung #" + checkCount);
+
+        // 🔥 1. Volumen prüfen
+        String js = "javascript:(function() {" +
                 "try {" +
-                "  var elements = document.querySelectorAll('button, div, a, span');" +
-                "  for(var i=0; i<elements.length; i++) {" +
-                "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                "    if(text && text.includes('Refill aktivieren')) {" +
-                "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "  var pageText = document.body.innerText;" +
+                "  var inklusivMatch = pageText.match(/(\\d+[\\,\\d]*)\\s*GB\\s*\\/\\s*25\\s*GB/);" +
+                "  var refillMatch = pageText.match(/Unlimited Refill\\s*(\\d+[\\,\\d]*)\\s*GB/);" +
+                "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
+                "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
+                "  Android.onVolumeUpdate(inklusiv, refill);" +
+                "  if (refillMatch) {" +
+                "    var refillValue = parseFloat(refill);" +
+                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
+                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Scrolle & Tippe...');" +
                 "      setTimeout(function() {" +
-                "        var rect = elements[i].getBoundingClientRect();" +
-                "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "        Android.scrollToRefillButton();" +
                 "      }, 500);" +
-                "      return;" +
+                "    } else {" +
+                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
                 "    }" +
                 "  }" +
-                "  Android.onRefillNotFound();" +
                 "} catch(e) {" +
                 "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
                 "}" +
                 "})();";
-        webView.loadUrl(scrollJs);
+        webView.loadUrl(js);
+    }
+
+    // ==========================================
+    // MANUELLER REFILL TEST (MIT SCROLL)
+    // ==========================================
+
+    private void manualRefillTest() {
+        if (!isLoggedIn) {
+            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (isWaitingForRefill || isTouchPending) {
+            Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        isManualRefill = true;
+        tvStatus.setText("🧪 Suche Refill-Button...");
+        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
+
+        // 🔥 Direkt scrollen und Button suchen
+        if (webView != null) {
+            String scrollJs = "javascript:(function() {" +
+                    "try {" +
+                    "  var found = false;" +
+                    "  var elements = document.querySelectorAll('button, div, a, span');" +
+                    "  for(var i=0; i<elements.length; i++) {" +
+                    "    var text = elements[i].innerText || elements[i].textContent || '';" +
+                    "    if(text && text.includes('Refill aktivieren')) {" +
+                    "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                    "      setTimeout(function() {" +
+                    "        var rect = elements[i].getBoundingClientRect();" +
+                    "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                    "      }, 500);" +
+                    "      found = true;" +
+                    "      break;" +
+                    "    }" +
+                    "  }" +
+                    "  if (!found) {" +
+                    "    Android.onRefillNotFound();" +
+                    "  }" +
+                    "} catch(e) {" +
+                    "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                    "}" +
+                    "})();";
+            webView.loadUrl(scrollJs);
+        }
     }
 
     // ==========================================
@@ -408,82 +504,6 @@ public class MainActivity extends AppCompatActivity {
             }
         };
         mainHandler.post(countdownRunnable);
-    }
-
-    // ==========================================
-    // REFILL ÜBERWACHUNG
-    // ==========================================
-
-    private void checkAndClickRefillWithTouch() {
-        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
-            return;
-        }
-
-        checkCount++;
-        tvStatus.setText("🔍 Prüfung #" + checkCount);
-
-        String js = "javascript:(function() {" +
-                "try {" +
-                "  var pageText = document.body.innerText;" +
-                "  var inklusivMatch = pageText.match(/(\\d+[\\,\\d]*)\\s*GB\\s*\\/\\s*25\\s*GB/);" +
-                "  var refillMatch = pageText.match(/Unlimited Refill\\s*(\\d+[\\,\\d]*)\\s*GB/);" +
-                "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
-                "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
-                "  Android.onVolumeUpdate(inklusiv, refill);" +
-                "  if (refillMatch) {" +
-                "    var refillValue = parseFloat(refill);" +
-                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
-                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Scrolle & Tippe...');" +
-                "      setTimeout(function() {" +
-                "        var found = false;" +
-                "        var elements = document.querySelectorAll('button, div, a, span');" +
-                "        for(var i=0; i<elements.length; i++) {" +
-                "          var text = elements[i].innerText || elements[i].textContent || '';" +
-                "          if(text && text.includes('Refill aktivieren')) {" +
-                "            elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                "            setTimeout(function() {" +
-                "              var rect = elements[i].getBoundingClientRect();" +
-                "              Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                "            }, 500);" +
-                "            found = true;" +
-                "            break;" +
-                "          }" +
-                "        }" +
-                "        if (!found) {" +
-                "          Android.onRefillNotFound();" +
-                "        }" +
-                "      }, 500);" +
-                "    } else {" +
-                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
-                "    }" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
-        webView.loadUrl(js);
-    }
-
-    // ==========================================
-    // MANUELLER REFILL TEST
-    // ==========================================
-
-    private void manualRefillTest() {
-        if (!isLoggedIn) {
-            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (isWaitingForRefill || isTouchPending) {
-            Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        isManualRefill = true;
-        tvStatus.setText("🧪 Suche Refill-Button...");
-        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
-
-        findButtonForTouch();
     }
 
     // ==========================================
