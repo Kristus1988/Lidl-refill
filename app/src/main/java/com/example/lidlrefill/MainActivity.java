@@ -41,7 +41,6 @@ public class MainActivity extends AppCompatActivity {
     private float lastRefillGb = 0.99f;
     private int consecutiveNoChange = 0;
 
-    // Intelligente Wartezeit
     private long lastCheckTime = 0;
     private float lastVolumeForRate = 0.99f;
     private float consumptionRate = 0.05f;
@@ -87,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
                 calculateConsumptionRate();
 
                 if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill && !isRefreshing) {
-                    checkAndClickRefillWithTouch();
+                    findAndClickRefillButton();
                 }
             });
         }
@@ -146,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isRunning) {
                     mainHandler.postDelayed(() -> {
                         if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                            checkAndClickRefillWithTouch();
+                            findAndClickRefillButton();
                             updateNextCheckTime();
                         }
                     }, 3000);
@@ -180,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isRunning) {
                     mainHandler.postDelayed(() -> {
                         if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                            checkAndClickRefillWithTouch();
+                            findAndClickRefillButton();
                             updateNextCheckTime();
                         }
                     }, 3000);
@@ -212,28 +211,60 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 🔥 NEU: Scrollt zum Refill-Button mit Swipe-Geste
+        // ==========================================
+        // 🔥 ULTIMATIVE BUTTON-SUCHE
+        // ==========================================
+
         @JavascriptInterface
         public void findAndClickRefillButton() {
             runOnUiThread(() -> {
-                tvStatus.setText("🔽 Suche Refill-Button...");
+                tvStatus.setText("🔍 Suche Refill-Button...");
                 String js = "javascript:(function() {" +
                         "try {" +
                         "  var found = false;" +
-                        "  var elements = document.querySelectorAll('button, div, a, span, input');" +
+                        "  var selectors = [" +
+                        "    'button:contains(\"Refill aktivieren\")'," +
+                        "    'div:contains(\"Refill aktivieren\")'," +
+                        "    'a:contains(\"Refill aktivieren\")'," +
+                        "    'span:contains(\"Refill aktivieren\")'," +
+                        "    '[class*=\"refill\"]'," +
+                        "    '[id*=\"refill\"]'," +
+                        "    '[class*=\"Refill\"]'," +
+                        "    '[id*=\"Refill\"]'" +
+                        "  ];" +
+                        "  var elements = document.querySelectorAll('*');" +
                         "  for(var i=0; i<elements.length; i++) {" +
-                        "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                        "    if(text && (text.includes('Refill aktivieren') || text.includes('Refill'))) {" +
-                        "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                        "      setTimeout(function() {" +
-                        "        var rect = elements[i].getBoundingClientRect();" +
+                        "    var el = elements[i];" +
+                        "    var text = el.innerText || el.textContent || '';" +
+                        "    var className = el.className || '';" +
+                        "    var id = el.id || '';" +
+                        "    if(text && text.includes('Refill aktivieren')) {" +
+                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                        "      setTimeout(function(e) {" +
+                        "        var rect = e.getBoundingClientRect();" +
                         "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 800);" +
+                        "      }, 600, el);" +
+                        "      found = true;" +
+                        "      break;" +
+                        "    } else if(className && className.toLowerCase().includes('refill')) {" +
+                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                        "      setTimeout(function(e) {" +
+                        "        var rect = e.getBoundingClientRect();" +
+                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                        "      }, 600, el);" +
+                        "      found = true;" +
+                        "      break;" +
+                        "    } else if(id && id.toLowerCase().includes('refill')) {" +
+                        "      el.scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                        "      setTimeout(function(e) {" +
+                        "        var rect = e.getBoundingClientRect();" +
+                        "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                        "      }, 600, el);" +
                         "      found = true;" +
                         "      break;" +
                         "    }" +
                         "  }" +
-                        "  if (!found) {" +
+                        "  if(!found) {" +
                         "    Android.onRefillNotFound();" +
                         "  }" +
                         "} catch(e) {" +
@@ -244,133 +275,20 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 🔥 NEU: Führt einen echten Swipe (Wisch-Geste) nach unten aus
+        // ==========================================
+        // BUTTON POSITION
+        // ==========================================
+
         @JavascriptInterface
-        public void performSwipeDown() {
+        public void onButtonPosition(float x, float y, float width, float height) {
             runOnUiThread(() -> {
-                tvStatus.setText("👆 Simuliere Swipe nach unten...");
-                String js = "javascript:(function() {" +
-                        "try {" +
-                        "  var startX = window.innerWidth / 2;" +
-                        "  var startY = 100;" +
-                        "  var endY = window.innerHeight - 100;" +
-                        "  var touchStart = new Touch({" +
-                        "    identifier: Date.now()," +
-                        "    target: document.body," +
-                        "    clientX: startX," +
-                        "    clientY: startY," +
-                        "    radiusX: 10," +
-                        "    radiusY: 10," +
-                        "    force: 1" +
-                        "  });" +
-                        "  var touchEnd = new Touch({" +
-                        "    identifier: Date.now()," +
-                        "    target: document.body," +
-                        "    clientX: startX," +
-                        "    clientY: endY," +
-                        "    radiusX: 10," +
-                        "    radiusY: 10," +
-                        "    force: 1" +
-                        "  });" +
-                        "  var touchStartEvent = new TouchEvent('touchstart', {" +
-                        "    touches: [touchStart]," +
-                        "    targetTouches: [touchStart]," +
-                        "    changedTouches: [touchStart]," +
-                        "    bubbles: true," +
-                        "    cancelable: true" +
-                        "  });" +
-                        "  document.body.dispatchEvent(touchStartEvent);" +
-                        "  setTimeout(function() {" +
-                        "    var touchMoveEvent = new TouchEvent('touchmove', {" +
-                        "      touches: [touchEnd]," +
-                        "      targetTouches: [touchEnd]," +
-                        "      changedTouches: [touchEnd]," +
-                        "      bubbles: true," +
-                        "      cancelable: true" +
-                        "    });" +
-                        "    document.body.dispatchEvent(touchMoveEvent);" +
-                        "    setTimeout(function() {" +
-                        "      var touchEndEvent = new TouchEvent('touchend', {" +
-                        "        touches: []," +
-                        "        targetTouches: []," +
-                        "        changedTouches: [touchEnd]," +
-                        "        bubbles: true," +
-                        "        cancelable: true" +
-                        "      });" +
-                        "      document.body.dispatchEvent(touchEndEvent);" +
-                        "      Android.onStatus('✅ Swipe ausgeführt! Suche Button...');" +
-                        "      setTimeout(function() {" +
-                        "        Android.findAndClickRefillButton();" +
-                        "      }, 500);" +
-                        "    }, 300);" +
-                        "  }, 300);" +
-                        "} catch(e) {" +
-                        "  Android.onStatus('⚠️ Swipe-Fehler: ' + e.message);" +
-                        "}" +
-                        "})();";
-                webView.loadUrl(js);
+                buttonX = x;
+                buttonY = y;
+                buttonWidth = width;
+                buttonHeight = height;
+                performTouchClick();
             });
         }
-    }
-
-    // ==========================================
-    // INTELLIGENTE WARTEZEIT
-    // ==========================================
-
-    private void calculateConsumptionRate() {
-        if (isFirstCheck) {
-            isFirstCheck = false;
-            lastCheckTime = System.currentTimeMillis();
-            lastVolumeForRate = currentRefillGb;
-            return;
-        }
-
-        long timeDiff = System.currentTimeMillis() - lastCheckTime;
-        if (timeDiff < 30000) return;
-
-        float volumeDiff = lastVolumeForRate - currentRefillGb;
-
-        if (volumeDiff > 0.001) {
-            float minutes = timeDiff / 60000f;
-            consumptionRate = volumeDiff / minutes;
-            consumptionRate = Math.max(0.001f, Math.min(consumptionRate, 0.2f));
-            isLearningPhase = false;
-
-            tvStatus.setText("📊 Verbrauch: " + String.format("%.3f", consumptionRate) + " GB/min");
-        }
-
-        lastCheckTime = System.currentTimeMillis();
-        lastVolumeForRate = currentRefillGb;
-    }
-
-    private int calculateIntelligentDelay() {
-        float refill = currentRefillGb;
-
-        if (isLearningPhase || consumptionRate <= 0.001) {
-            if (refill > 0.80) {
-                return random.nextInt(120) + 120;
-            } else if (refill > 0.40) {
-                return random.nextInt(90) + 90;
-            } else if (refill > 0.15) {
-                return random.nextInt(60) + 60;
-            } else {
-                return random.nextInt(30) + 30;
-            }
-        }
-
-        float gbRemaining = refill - TARGET_VOLUME;
-
-        if (gbRemaining <= 0) {
-            return random.nextInt(30) + 30;
-        }
-
-        float estimatedMinutes = gbRemaining / consumptionRate;
-        estimatedMinutes = Math.max(1, Math.min(estimatedMinutes, 30));
-
-        double variation = 0.75 + (random.nextDouble() * 0.5);
-        int finalDelay = (int) (estimatedMinutes * 60 * variation);
-
-        return Math.max(30, Math.min(finalDelay, 1800));
     }
 
     // ==========================================
@@ -442,46 +360,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG (MIT SWIPE + TOUCH)
-    // ==========================================
-
-    private void checkAndClickRefillWithTouch() {
-        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
-            return;
-        }
-
-        checkCount++;
-        tvStatus.setText("🔍 Prüfung #" + checkCount);
-
-        // 🔥 Volumen prüfen
-        String js = "javascript:(function() {" +
-                "try {" +
-                "  var pageText = document.body.innerText;" +
-                "  var inklusivMatch = pageText.match(/(\\d+[\\,\\d]*)\\s*GB\\s*\\/\\s*25\\s*GB/);" +
-                "  var refillMatch = pageText.match(/Unlimited Refill\\s*(\\d+[\\,\\d]*)\\s*GB/);" +
-                "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
-                "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
-                "  Android.onVolumeUpdate(inklusiv, refill);" +
-                "  if (refillMatch) {" +
-                "    var refillValue = parseFloat(refill);" +
-                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
-                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Swipe & Tippe...');" +
-                "      setTimeout(function() {" +
-                "        Android.performSwipeDown();" +
-                "      }, 500);" +
-                "    } else {" +
-                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
-                "    }" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
-        webView.loadUrl(js);
-    }
-
-    // ==========================================
-    // MANUELLER REFILL TEST (MIT SWIPE)
+    // MANUELLER REFILL TEST
     // ==========================================
 
     private void manualRefillTest() {
@@ -500,77 +379,68 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
         if (webView != null) {
-            // 🔥 Direkt Swipe + Button-Suche
-            String swipeJs = "javascript:(function() {" +
-                    "try {" +
-                    "  var startX = window.innerWidth / 2;" +
-                    "  var startY = 100;" +
-                    "  var endY = window.innerHeight - 100;" +
-                    "  var touchStart = new Touch({" +
-                    "    identifier: Date.now()," +
-                    "    target: document.body," +
-                    "    clientX: startX," +
-                    "    clientY: startY," +
-                    "    radiusX: 10," +
-                    "    radiusY: 10," +
-                    "    force: 1" +
-                    "  });" +
-                    "  var touchEnd = new Touch({" +
-                    "    identifier: Date.now()," +
-                    "    target: document.body," +
-                    "    clientX: startX," +
-                    "    clientY: endY," +
-                    "    radiusX: 10," +
-                    "    radiusY: 10," +
-                    "    force: 1" +
-                    "  });" +
-                    "  var touchStartEvent = new TouchEvent('touchstart', {" +
-                    "    touches: [touchStart]," +
-                    "    targetTouches: [touchStart]," +
-                    "    changedTouches: [touchStart]," +
-                    "    bubbles: true," +
-                    "    cancelable: true" +
-                    "  });" +
-                    "  document.body.dispatchEvent(touchStartEvent);" +
-                    "  setTimeout(function() {" +
-                    "    var touchMoveEvent = new TouchEvent('touchmove', {" +
-                    "      touches: [touchEnd]," +
-                    "      targetTouches: [touchEnd]," +
-                    "      changedTouches: [touchEnd]," +
-                    "      bubbles: true," +
-                    "      cancelable: true" +
-                    "    });" +
-                    "    document.body.dispatchEvent(touchMoveEvent);" +
-                    "    setTimeout(function() {" +
-                    "      var touchEndEvent = new TouchEvent('touchend', {" +
-                    "        touches: []," +
-                    "        targetTouches: []," +
-                    "        changedTouches: [touchEnd]," +
-                    "        bubbles: true," +
-                    "        cancelable: true" +
-                    "      });" +
-                    "      document.body.dispatchEvent(touchEndEvent);" +
-                    "      Android.onStatus('✅ Swipe ausgeführt! Suche Button...');" +
-                    "      setTimeout(function() {" +
-                    "        var elements = document.querySelectorAll('button, div, a, span, input');" +
-                    "        for(var i=0; i<elements.length; i++) {" +
-                    "          var text = elements[i].innerText || elements[i].textContent || '';" +
-                    "          if(text && (text.includes('Refill aktivieren') || text.includes('Refill'))) {" +
-                    "            var rect = elements[i].getBoundingClientRect();" +
-                    "            Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                    "            return;" +
-                    "          }" +
-                    "        }" +
-                    "        Android.onRefillNotFound();" +
-                    "      }, 600);" +
-                    "    }, 300);" +
-                    "  }, 300);" +
-                    "} catch(e) {" +
-                    "  Android.onStatus('⚠️ Swipe-Fehler: ' + e.message);" +
-                    "}" +
-                    "})();";
-            webView.loadUrl(swipeJs);
+            findAndClickRefillButton();
         }
+    }
+
+    // ==========================================
+    // INTELLIGENTE WARTEZEIT
+    // ==========================================
+
+    private void calculateConsumptionRate() {
+        if (isFirstCheck) {
+            isFirstCheck = false;
+            lastCheckTime = System.currentTimeMillis();
+            lastVolumeForRate = currentRefillGb;
+            return;
+        }
+
+        long timeDiff = System.currentTimeMillis() - lastCheckTime;
+        if (timeDiff < 30000) return;
+
+        float volumeDiff = lastVolumeForRate - currentRefillGb;
+
+        if (volumeDiff > 0.001) {
+            float minutes = timeDiff / 60000f;
+            consumptionRate = volumeDiff / minutes;
+            consumptionRate = Math.max(0.001f, Math.min(consumptionRate, 0.2f));
+            isLearningPhase = false;
+
+            tvStatus.setText("📊 Verbrauch: " + String.format("%.3f", consumptionRate) + " GB/min");
+        }
+
+        lastCheckTime = System.currentTimeMillis();
+        lastVolumeForRate = currentRefillGb;
+    }
+
+    private int calculateIntelligentDelay() {
+        float refill = currentRefillGb;
+
+        if (isLearningPhase || consumptionRate <= 0.001) {
+            if (refill > 0.80) {
+                return random.nextInt(120) + 120;
+            } else if (refill > 0.40) {
+                return random.nextInt(90) + 90;
+            } else if (refill > 0.15) {
+                return random.nextInt(60) + 60;
+            } else {
+                return random.nextInt(30) + 30;
+            }
+        }
+
+        float gbRemaining = refill - TARGET_VOLUME;
+
+        if (gbRemaining <= 0) {
+            return random.nextInt(30) + 30;
+        }
+
+        float estimatedMinutes = gbRemaining / consumptionRate;
+        estimatedMinutes = Math.max(1, Math.min(estimatedMinutes, 30));
+
+        double variation = 0.75 + (random.nextDouble() * 0.5);
+        int finalDelay = (int) (estimatedMinutes * 60 * variation);
+
+        return Math.max(30, Math.min(finalDelay, 1800));
     }
 
     // ==========================================
@@ -683,7 +553,7 @@ public class MainActivity extends AppCompatActivity {
 
                     if (isLoggedIn && isRunning && !isWaitingForRefill && !isManualRefill) {
                         isRefreshing = false;
-                        checkAndClickRefillWithTouch();
+                        findAndClickRefillButton();
                         updateNextCheckTime();
                     }
                 }
@@ -723,7 +593,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                checkAndClickRefillWithTouch();
+                findAndClickRefillButton();
                 updateNextCheckTime();
             }
         }, 3000);
@@ -746,7 +616,7 @@ public class MainActivity extends AppCompatActivity {
 
                 mainHandler.postDelayed(() -> {
                     if (isLoggedIn && !isWaitingForRefill && !isManualRefill) {
-                        checkAndClickRefillWithTouch();
+                        findAndClickRefillButton();
                         updateNextCheckTime();
                         tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
                     } else if (isWaitingForRefill || isManualRefill) {
