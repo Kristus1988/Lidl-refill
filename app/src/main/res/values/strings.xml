@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Display Reader</string>
+    <string name="app_name">Lidl Refill Automatik</string>
+    <string name="accessibility_service_description">Ermöglicht automatische Klicks und Swipes für Lidl Refill</string>
 </resources>
