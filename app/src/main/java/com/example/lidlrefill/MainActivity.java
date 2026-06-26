@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -32,7 +33,6 @@ public class MainActivity extends AppCompatActivity {
     private View vStatusIndicator;
     private Button btnStart, btnStop;
     
-    private LinearLayout layoutBattery;
     private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
@@ -71,13 +71,10 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
-        layoutBattery = findViewById(R.id.layout_battery);
         
+        // Diese TextViews existieren jetzt in der XML!
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        
-        // Akku-Optimierung: Klick öffnet Einstellungen
-        layoutBattery.setOnClickListener(v -> openBatterySettings());
         
         refillService = new RefillService(this);
         refillService.setStatusListener(new RefillService.StatusListener() {
@@ -286,24 +283,28 @@ public class MainActivity extends AppCompatActivity {
     private boolean checkAllPermissions() {
         boolean allGranted = true;
         
-        updatePermissionStatus(tvInternetStatus, true);
-        
-        boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
-        updatePermissionStatus(tvBatteryStatus, batteryGranted);
-        if (!batteryGranted) allGranted = false;
-        
-        btnStart.setEnabled(allGranted);
-        return allGranted;
-    }
-    
-    private void updatePermissionStatus(TextView tv, boolean granted) {
-        if (granted) {
-            tv.setText("✅ Aktiviert");
-            tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
-        } else {
-            tv.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
-            tv.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+        // Internet ist immer aktiviert
+        if (tvInternetStatus != null) {
+            tvInternetStatus.setText("✅ Aktiviert");
+            tvInternetStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
         }
+        
+        // Akku-Optimierung prüfen
+        boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
+        if (tvBatteryStatus != null) {
+            if (batteryGranted) {
+                tvBatteryStatus.setText("✅ Aktiviert");
+                tvBatteryStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
+            } else {
+                tvBatteryStatus.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
+                tvBatteryStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+                // Klick öffnet Akku-Einstellungen
+                tvBatteryStatus.setOnClickListener(v -> openBatterySettings());
+            }
+        }
+        
+        btnStart.setEnabled(batteryGranted);
+        return batteryGranted;
     }
     
     private void openBatterySettings() {
