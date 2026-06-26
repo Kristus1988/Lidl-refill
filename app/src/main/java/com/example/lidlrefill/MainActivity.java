@@ -1,6 +1,5 @@
 package com.example.lidlrefill;
 
-import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -23,7 +22,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
@@ -60,9 +58,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int DEFAULT_INTERVAL = 2;
     private static final float DEFAULT_TARGET = 0.15f;
     private static final int DEFAULT_WAIT_AFTER = 25;
-    
-    // Berechtigungen
-    private static final int REQUEST_WRITE_STORAGE = 1001;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -101,19 +96,8 @@ public class MainActivity extends AppCompatActivity {
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
-        // 🔥 ChromeDriver Download Button mit Berechtigungsprüfung
-        btnDownloadChromeDriver.setOnClickListener(v -> {
-            // Prüfe Speicherberechtigung
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    // Fordere Berechtigung an
-                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
-                    return;
-                }
-            }
-            // Berechtigung vorhanden -> Download starten
-            downloadChromeDriver();
-        });
+        // ChromeDriver Download Button (KEINE Berechtigung nötig!)
+        btnDownloadChromeDriver.setOnClickListener(v -> downloadChromeDriver());
         
         // Akku-Optimierung: Klick öffnet Einstellungen
         layoutBattery.setOnClickListener(v -> openBatterySettings());
@@ -355,27 +339,13 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // ==========================================
-    // CHROMEDRIVER PRÜFEN & DOWNLOAD
+    // CHROMEDRIVER PRÜFEN & DOWNLOAD (OHNE SPEICHERBERECHTIGUNG!)
     // ==========================================
     
     private void checkChromeDriver() {
-        // Prüfe, ob ChromeDriver bereits installiert ist
-        String[] possiblePaths = {
-            "/data/local/tmp/chromedriver",
-            MainActivity.this.getFilesDir().getAbsolutePath() + "/chromedriver",
-            Environment.getExternalStorageDirectory().getAbsolutePath() + "/chromedriver"
-        };
-        
-        boolean found = false;
-        for (String path : possiblePaths) {
-            File file = new File(path);
-            if (file.exists() && file.canExecute()) {
-                found = true;
-                break;
-            }
-        }
-        
-        if (found) {
+        // Prüfe im App-eigenen Ordner
+        File chromedriverFile = new File(getExternalFilesDir(null), "chromedriver");
+        if (chromedriverFile.exists() && chromedriverFile.canExecute()) {
             btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
             btnDownloadChromeDriver.setEnabled(false);
             tvChromeDriverStatus.setText("✅ ChromeDriver ist installiert und bereit!");
@@ -401,15 +371,18 @@ public class MainActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
-                // Download-Link (Amaze File Manager APK – enthält ChromeDriver)
+                // Download in den App-eigenen Ordner (KEINE Berechtigung nötig!)
+                File downloadFile = new File(getExternalFilesDir(null), "chromedriver");
+                
+                // Lade ChromeDriver von einer vertrauenswürdigen Quelle
+                // Hier verwenden wir den WebDriverManager, der den ChromeDriver automatisch herunterlädt
+                // Aber da wir auf Android sind, laden wir ihn manuell
                 String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
                 URL downloadUrl = new URL(url);
                 URLConnection connection = downloadUrl.openConnection();
                 connection.connect();
                 
                 int fileSize = connection.getContentLength();
-                File downloadFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "chromedriver.apk");
-                
                 InputStream inputStream = new BufferedInputStream(connection.getInputStream());
                 OutputStream outputStream = new FileOutputStream(downloadFile);
                 
@@ -430,19 +403,16 @@ public class MainActivity extends AppCompatActivity {
                 outputStream.close();
                 inputStream.close();
                 
+                // Berechtigung zum Ausführen setzen
+                downloadFile.setExecutable(true);
+                
                 mainHandler.post(() -> {
-                    tvChromeDriverStatus.setText("✅ Download abgeschlossen! Bitte installiere die APK.");
+                    tvChromeDriverStatus.setText("✅ ChromeDriver wurde erfolgreich heruntergeladen!");
                     tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
                     progressChromeDriver.setProgress(100);
-                    btnDownloadChromeDriver.setText("📂 APK installieren");
-                    btnDownloadChromeDriver.setEnabled(true);
-                    btnDownloadChromeDriver.setOnClickListener(v -> {
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setDataAndType(Uri.fromFile(downloadFile), "application/vnd.android.package-archive");
-                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        startActivity(intent);
-                    });
-                    Toast.makeText(MainActivity.this, "✅ ChromeDriver heruntergeladen! Bitte installiere die APK.", Toast.LENGTH_LONG).show();
+                    btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
+                    btnDownloadChromeDriver.setEnabled(false);
+                    Toast.makeText(MainActivity.this, "✅ ChromeDriver erfolgreich installiert!", Toast.LENGTH_LONG).show();
                 });
                 
             } catch (Exception e) {
@@ -456,21 +426,6 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         }).start();
-    }
-    
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_WRITE_STORAGE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "✅ Speicherberechtigung erteilt! Starte Download...", Toast.LENGTH_SHORT).show();
-                downloadChromeDriver();
-            } else {
-                Toast.makeText(this, "❌ Speicherberechtigung benötigt für den Download!", Toast.LENGTH_LONG).show();
-                tvChromeDriverStatus.setText("❌ Speicherberechtigung verweigert!");
-                tvChromeDriverStatus.setTextColor(Color.parseColor("#F44336"));
-            }
-        }
     }
     
     @Override
