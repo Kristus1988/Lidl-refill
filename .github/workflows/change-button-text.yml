@@ -1,0 +1,36 @@
+name: Change button text from "Kernel to KEL"
+
+on:
+  workflow_dispatch:
+    inputs:
+      button_text:
+        description: 'Neuer Button-Text'
+        required: true
+        default: 'KEL'
+        type: string
+
+jobs:
+  change-text:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Repository auschecken
+      uses: actions/checkout@v4
+    
+    - name: Button-Text in MainActivity ändern
+      run: |
+        # Suche nach "Kernel" und ersetze mit dem neuen Text
+        sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/java/com/example/displayreader/MainActivity.kt
+    
+    - name: Button-Text in activity_main.xml ändern
+      run: |
+        # Suche nach "Kernel" und ersetze mit dem neuen Text
+        sed -i 's/Kernel/${{ github.event.inputs.button_text }}/g' app/src/main/res/layout/activity_main.xml
+    
+    - name: Änderungen committen
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Button-Text geändert zu ${{ github.event.inputs.button_text }}" || echo "Keine Änderungen"
+        git push
