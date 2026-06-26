@@ -38,7 +38,7 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- WebView für die Lidl-Seite -->
+    <!-- WebView (unsichtbar, läuft im Hintergrund) -->
     <WebView
         android:id="@+id/webview_lidl"
         android:layout_width="match_parent"
@@ -110,7 +110,8 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="12dp"
-        android:background="#1E1E1E">
+        android:background="#1E1E1E"
+        android:gravity="center_vertical">
 
         <EditText
             android:id="@+id/et_username"
@@ -141,21 +142,23 @@
             android:id="@+id/btn_start"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
-            android:text="▶️"
+            android:text="▶️ Start"
             android:backgroundTint="#4CAF50"
             android:textColor="#FFFFFF"
             android:paddingStart="16dp"
-            android:paddingEnd="16dp" />
+            android:paddingEnd="16dp"
+            android:textSize="13sp" />
 
         <Button
             android:id="@+id/btn_stop"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
-            android:text="⏹️"
+            android:text="⏹️ Stop"
             android:backgroundTint="#F44336"
             android:textColor="#FFFFFF"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
+            android:textSize="13sp"
             android:layout_marginStart="4dp" />
     </LinearLayout>
 
