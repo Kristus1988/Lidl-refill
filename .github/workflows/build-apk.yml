@@ -25,21 +25,23 @@ jobs:
     - name: Make Gradle executable
       run: chmod +x gradlew
     
-    - name: Debug - Zeige Dateien
+    - name: Prüfe Projekt-Struktur
       run: |
-        echo "=== Verzeichnisstruktur ==="
+        echo "=== Projekt-Struktur ==="
         ls -la
-        echo "=== Gradle Wrapper ==="
-        ls -la gradle/wrapper/
-        echo "=== Gradle Wrapper JAR ==="
-        file gradle/wrapper/gradle-wrapper.jar
-        echo "=== Gradle Properties ==="
-        cat gradle/wrapper/gradle-wrapper.properties
+        echo "=== App-Verzeichnis ==="
+        ls -la app/ || echo "app/ existiert nicht!"
+        echo "=== build.gradle ==="
+        cat app/build.gradle || echo "app/build.gradle existiert nicht!"
     
-    - name: Build Debug APK mit Details
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace
+    
+    - name: Prüfe ob APK existiert
       run: |
-        ./gradlew assembleDebug --stacktrace --info 2>&1 | tee build.log
-        cat build.log | grep -i error || echo "Keine Fehler gefunden"
+        echo "=== Suche nach APK ==="
+        find . -name "*.apk" || echo "Keine APK gefunden!"
+        ls -la app/build/outputs/apk/debug/ || echo "APK nicht gefunden!"
     
     - name: Upload Debug APK
       if: success()
@@ -47,10 +49,3 @@ jobs:
       with:
         name: Lidl-refill-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-    
-    - name: Upload Build Log bei Fehler
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build.log
