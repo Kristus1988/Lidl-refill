@@ -212,23 +212,23 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // 🔥 NEU: Scrollt zum Refill-Button und gibt die Position zurück
+        // 🔥 NEU: Scrollt zum Refill-Button mit Swipe-Geste
         @JavascriptInterface
-        public void findAndScrollToRefillButton() {
+        public void findAndClickRefillButton() {
             runOnUiThread(() -> {
-                tvStatus.setText("🔽 Scrolle zum Refill-Button...");
+                tvStatus.setText("🔽 Suche Refill-Button...");
                 String js = "javascript:(function() {" +
                         "try {" +
                         "  var found = false;" +
-                        "  var elements = document.querySelectorAll('*');" +
+                        "  var elements = document.querySelectorAll('button, div, a, span, input');" +
                         "  for(var i=0; i<elements.length; i++) {" +
                         "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                        "    if(text && text.includes('Refill aktivieren')) {" +
+                        "    if(text && (text.includes('Refill aktivieren') || text.includes('Refill'))) {" +
                         "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
                         "      setTimeout(function() {" +
                         "        var rect = elements[i].getBoundingClientRect();" +
                         "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                        "      }, 600);" +
+                        "      }, 800);" +
                         "      found = true;" +
                         "      break;" +
                         "    }" +
@@ -238,6 +238,74 @@ public class MainActivity extends AppCompatActivity {
                         "  }" +
                         "} catch(e) {" +
                         "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                        "}" +
+                        "})();";
+                webView.loadUrl(js);
+            });
+        }
+
+        // 🔥 NEU: Führt einen echten Swipe (Wisch-Geste) nach unten aus
+        @JavascriptInterface
+        public void performSwipeDown() {
+            runOnUiThread(() -> {
+                tvStatus.setText("👆 Simuliere Swipe nach unten...");
+                String js = "javascript:(function() {" +
+                        "try {" +
+                        "  var startX = window.innerWidth / 2;" +
+                        "  var startY = 100;" +
+                        "  var endY = window.innerHeight - 100;" +
+                        "  var touchStart = new Touch({" +
+                        "    identifier: Date.now()," +
+                        "    target: document.body," +
+                        "    clientX: startX," +
+                        "    clientY: startY," +
+                        "    radiusX: 10," +
+                        "    radiusY: 10," +
+                        "    force: 1" +
+                        "  });" +
+                        "  var touchEnd = new Touch({" +
+                        "    identifier: Date.now()," +
+                        "    target: document.body," +
+                        "    clientX: startX," +
+                        "    clientY: endY," +
+                        "    radiusX: 10," +
+                        "    radiusY: 10," +
+                        "    force: 1" +
+                        "  });" +
+                        "  var touchStartEvent = new TouchEvent('touchstart', {" +
+                        "    touches: [touchStart]," +
+                        "    targetTouches: [touchStart]," +
+                        "    changedTouches: [touchStart]," +
+                        "    bubbles: true," +
+                        "    cancelable: true" +
+                        "  });" +
+                        "  document.body.dispatchEvent(touchStartEvent);" +
+                        "  setTimeout(function() {" +
+                        "    var touchMoveEvent = new TouchEvent('touchmove', {" +
+                        "      touches: [touchEnd]," +
+                        "      targetTouches: [touchEnd]," +
+                        "      changedTouches: [touchEnd]," +
+                        "      bubbles: true," +
+                        "      cancelable: true" +
+                        "    });" +
+                        "    document.body.dispatchEvent(touchMoveEvent);" +
+                        "    setTimeout(function() {" +
+                        "      var touchEndEvent = new TouchEvent('touchend', {" +
+                        "        touches: []," +
+                        "        targetTouches: []," +
+                        "        changedTouches: [touchEnd]," +
+                        "        bubbles: true," +
+                        "        cancelable: true" +
+                        "      });" +
+                        "      document.body.dispatchEvent(touchEndEvent);" +
+                        "      Android.onStatus('✅ Swipe ausgeführt! Suche Button...');" +
+                        "      setTimeout(function() {" +
+                        "        Android.findAndClickRefillButton();" +
+                        "      }, 500);" +
+                        "    }, 300);" +
+                        "  }, 300);" +
+                        "} catch(e) {" +
+                        "  Android.onStatus('⚠️ Swipe-Fehler: ' + e.message);" +
                         "}" +
                         "})();";
                 webView.loadUrl(js);
@@ -374,7 +442,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG (MIT SCROLL ZUM BUTTON)
+    // REFILL ÜBERWACHUNG (MIT SWIPE + TOUCH)
     // ==========================================
 
     private void checkAndClickRefillWithTouch() {
@@ -385,7 +453,7 @@ public class MainActivity extends AppCompatActivity {
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
 
-        // 🔥 1. Volumen prüfen
+        // 🔥 Volumen prüfen
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var pageText = document.body.innerText;" +
@@ -397,9 +465,9 @@ public class MainActivity extends AppCompatActivity {
                 "  if (refillMatch) {" +
                 "    var refillValue = parseFloat(refill);" +
                 "    if (refillValue <= " + TARGET_VOLUME + ") {" +
-                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Scrolle & Tippe...');" +
+                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Swipe & Tippe...');" +
                 "      setTimeout(function() {" +
-                "        Android.findAndScrollToRefillButton();" +
+                "        Android.performSwipeDown();" +
                 "      }, 500);" +
                 "    } else {" +
                 "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
@@ -413,7 +481,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // MANUELLER REFILL TEST (MIT SCROLL)
+    // MANUELLER REFILL TEST (MIT SWIPE)
     // ==========================================
 
     private void manualRefillTest() {
@@ -431,32 +499,77 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setText("🧪 Suche Refill-Button...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
-        // 🔥 Direkt scrollen und Button suchen
         if (webView != null) {
-            String scrollJs = "javascript:(function() {" +
+            // 🔥 Direkt Swipe + Button-Suche
+            String swipeJs = "javascript:(function() {" +
                     "try {" +
-                    "  var found = false;" +
-                    "  var elements = document.querySelectorAll('*');" +
-                    "  for(var i=0; i<elements.length; i++) {" +
-                    "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                    "    if(text && text.includes('Refill aktivieren')) {" +
-                    "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                    "  var startX = window.innerWidth / 2;" +
+                    "  var startY = 100;" +
+                    "  var endY = window.innerHeight - 100;" +
+                    "  var touchStart = new Touch({" +
+                    "    identifier: Date.now()," +
+                    "    target: document.body," +
+                    "    clientX: startX," +
+                    "    clientY: startY," +
+                    "    radiusX: 10," +
+                    "    radiusY: 10," +
+                    "    force: 1" +
+                    "  });" +
+                    "  var touchEnd = new Touch({" +
+                    "    identifier: Date.now()," +
+                    "    target: document.body," +
+                    "    clientX: startX," +
+                    "    clientY: endY," +
+                    "    radiusX: 10," +
+                    "    radiusY: 10," +
+                    "    force: 1" +
+                    "  });" +
+                    "  var touchStartEvent = new TouchEvent('touchstart', {" +
+                    "    touches: [touchStart]," +
+                    "    targetTouches: [touchStart]," +
+                    "    changedTouches: [touchStart]," +
+                    "    bubbles: true," +
+                    "    cancelable: true" +
+                    "  });" +
+                    "  document.body.dispatchEvent(touchStartEvent);" +
+                    "  setTimeout(function() {" +
+                    "    var touchMoveEvent = new TouchEvent('touchmove', {" +
+                    "      touches: [touchEnd]," +
+                    "      targetTouches: [touchEnd]," +
+                    "      changedTouches: [touchEnd]," +
+                    "      bubbles: true," +
+                    "      cancelable: true" +
+                    "    });" +
+                    "    document.body.dispatchEvent(touchMoveEvent);" +
+                    "    setTimeout(function() {" +
+                    "      var touchEndEvent = new TouchEvent('touchend', {" +
+                    "        touches: []," +
+                    "        targetTouches: []," +
+                    "        changedTouches: [touchEnd]," +
+                    "        bubbles: true," +
+                    "        cancelable: true" +
+                    "      });" +
+                    "      document.body.dispatchEvent(touchEndEvent);" +
+                    "      Android.onStatus('✅ Swipe ausgeführt! Suche Button...');" +
                     "      setTimeout(function() {" +
-                    "        var rect = elements[i].getBoundingClientRect();" +
-                    "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                    "        var elements = document.querySelectorAll('button, div, a, span, input');" +
+                    "        for(var i=0; i<elements.length; i++) {" +
+                    "          var text = elements[i].innerText || elements[i].textContent || '';" +
+                    "          if(text && (text.includes('Refill aktivieren') || text.includes('Refill'))) {" +
+                    "            var rect = elements[i].getBoundingClientRect();" +
+                    "            Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                    "            return;" +
+                    "          }" +
+                    "        }" +
+                    "        Android.onRefillNotFound();" +
                     "      }, 600);" +
-                    "      found = true;" +
-                    "      break;" +
-                    "    }" +
-                    "  }" +
-                    "  if (!found) {" +
-                    "    Android.onRefillNotFound();" +
-                    "  }" +
+                    "    }, 300);" +
+                    "  }, 300);" +
                     "} catch(e) {" +
-                    "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                    "  Android.onStatus('⚠️ Swipe-Fehler: ' + e.message);" +
                     "}" +
                     "})();";
-            webView.loadUrl(scrollJs);
+            webView.loadUrl(swipeJs);
         }
     }
 
