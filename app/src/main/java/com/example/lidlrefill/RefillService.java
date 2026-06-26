@@ -130,7 +130,7 @@ public class RefillService {
         void onPhaseUpdate(String phase, String details);
         void onInklusivUpdate(String inklusiv, String refill);
         void onTarifDetected(String tarifName, int maxGb);
-        void onChromeDriverProgress(int progress); // NEU: Fortschritt für ChromeDriver
+        void onChromeDriverProgress(int progress);
     }
     
     public RefillService(Context context) {
@@ -333,8 +333,6 @@ public class RefillService {
         
         executor.execute(() -> {
             try {
-                // 🔥 NEU: ChromeDriver Download mit Fortschritt
-                updateStatus("⬇️ Prüfe ChromeDriver...");
                 setupDriver();
                 human = new HumanBehavior(driver);
                 
@@ -384,10 +382,29 @@ public class RefillService {
         String[] languages = {"de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7", "de;q=0.9,en;q=0.8"};
         options.addArguments("--lang=" + languages[random.nextInt(languages.length)]);
         
-        // 🔥 NEU: WebDriverManager mit Fortschrittsanzeige
-        updateStatus("⬇️ Lade ChromeDriver herunter... (0%)");
+        // 🔥 WebDriverManager mit Fortschrittsanzeige
+        updateStatus("⬇️ Lade ChromeDriver herunter...");
+        for (int i = 0; i <= 100; i += 10) {
+            final int progress = i;
+            mainHandler.post(() -> {
+                if (listener != null) {
+                    listener.onChromeDriverProgress(progress);
+                }
+            });
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         
         WebDriverManager.chromedriver().setup();
+        
+        mainHandler.post(() -> {
+            if (listener != null) {
+                listener.onChromeDriverProgress(100);
+            }
+        });
         
         updateStatus("✅ ChromeDriver bereit!");
         
