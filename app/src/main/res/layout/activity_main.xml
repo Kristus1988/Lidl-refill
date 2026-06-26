@@ -17,7 +17,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp"
+            android:padding="10dp"
             android:background="#1E1E1E"
             android:gravity="center">
 
@@ -33,7 +33,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Automatische Aufladung"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="#B0BEC5" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
@@ -43,24 +43,22 @@
         android:id="@+id/webview_lidl"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:visibility="gone" />
+        android:layout_weight="1" />
 
     <!-- Statusanzeige -->
     <LinearLayout
-        android:id="@+id/layout_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="10dp"
         android:background="#1E1E1E"
-        android:visibility="visible">
+        android:elevation="4dp">
 
         <TextView
             android:id="@+id/tv_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🔄 Bereit"
+            android:text="🔄 Lade Lidl Connect..."
             android:textSize="14sp"
             android:textColor="#B0BEC5"
             android:gravity="center" />
@@ -69,115 +67,93 @@
             android:id="@+id/progress_status"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
+            android:layout_height="4dp"
             android:max="100"
             android:progress="0"
             android:progressTint="#4FC3F7"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/tv_volume"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="📦 Inklusiv: -- GB / 25 GB"
-            android:textSize="13sp"
-            android:textColor="#4FC3F7"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/tv_refill"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🔄 Refill: -- GB"
-            android:textSize="13sp"
-            android:textColor="#FFB300"
-            android:layout_marginTop="2dp" />
-
-        <TextView
-            android:id="@+id/tv_refill_count"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🔄 Refills: 0"
-            android:textSize="13sp"
-            android:textColor="#B0BEC5"
-            android:layout_marginTop="2dp" />
-    </LinearLayout>
-
-    <!-- Steuerung -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:background="#2A2A2A"
-        android:elevation="8dp">
-
-        <EditText
-            android:id="@+id/et_username"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:hint="Telefonnummer"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#B0BEC5"
-            android:background="@drawable/edittext_border"
-            android:padding="12dp"
-            android:layout_marginBottom="8dp"
-            android:inputType="phone"
-            android:textSize="14sp"
-            android:importantForAutofill="no" />
-
-        <EditText
-            android:id="@+id/et_password"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:hint="Passwort"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#B0BEC5"
-            android:background="@drawable/edittext_border"
-            android:padding="12dp"
-            android:layout_marginBottom="8dp"
-            android:inputType="textPassword"
-            android:textSize="14sp"
-            android:importantForAutofill="no" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginTop="4dp">
 
-            <Button
-                android:id="@+id/btn_login"
+            <TextView
+                android:id="@+id/tv_volume"
                 android:layout_width="0dp"
-                android:layout_height="44dp"
+                android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="🔑 Login"
-                android:backgroundTint="#2196F3"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
+                android:text="📦 Inklusiv: -- GB / 25 GB"
+                android:textSize="12sp"
+                android:textColor="#4FC3F7" />
+
+            <TextView
+                android:id="@+id/tv_refill"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔄 Refill: -- GB"
+                android:textSize="12sp"
+                android:textColor="#FFB300"
+                android:textAlignment="textEnd" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_refill_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔄 Refills: 0"
+                android:textSize="12sp"
+                android:textColor="#B0BEC5" />
+
+            <TextView
+                android:id="@+id/tv_next_check"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="⏱️ --"
+                android:textSize="12sp"
+                android:textColor="#78909C"
+                android:textAlignment="textEnd" />
+        </LinearLayout>
+
+        <!-- Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp">
 
             <Button
                 android:id="@+id/btn_start"
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="▶️ Start"
+                android:text="▶️ START"
                 android:backgroundTint="#4CAF50"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp" />
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="4dp" />
 
             <Button
                 android:id="@+id/btn_stop"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="44dp"
-                android:text="⏹️"
+                android:layout_weight="1"
+                android:text="⏹️ STOP"
                 android:backgroundTint="#F44336"
                 android:textColor="#FFFFFF"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:textSize="18sp"
+                android:textSize="14sp"
+                android:textStyle="bold"
                 android:layout_marginStart="4dp" />
         </LinearLayout>
     </LinearLayout>
