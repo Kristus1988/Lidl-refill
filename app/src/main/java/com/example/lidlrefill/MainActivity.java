@@ -37,7 +37,6 @@ public class MainActivity extends AppCompatActivity {
     private View vStatusIndicator;
     private Button btnStart, btnStop;
     private LinearLayout layoutBattery;
-    private LinearLayout layoutChromeDriver;
     
     private TextView tvInternetStatus, tvBatteryStatus;
     
@@ -79,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
         layoutBattery = findViewById(R.id.layout_battery);
-        layoutChromeDriver = findViewById(R.id.layout_chromedriver);
         tvChromeDriverStatus = findViewById(R.id.tv_chromedriver_status);
         progressChromeDriver = findViewById(R.id.progress_chromedriver);
         
