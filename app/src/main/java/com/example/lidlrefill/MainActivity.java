@@ -8,9 +8,6 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.View;
@@ -26,14 +23,7 @@ import androidx.core.content.ContextCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URL;
-import java.net.URLConnection;
 import java.security.GeneralSecurityException;
 
 public class MainActivity extends AppCompatActivity {
@@ -45,14 +35,14 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvChromeDriverStatus;
     private ProgressBar progressChromeDriver;
     private View vStatusIndicator;
-    private Button btnStart, btnStop, btnDownloadChromeDriver;
+    private Button btnStart, btnStop;
     private LinearLayout layoutBattery;
+    private LinearLayout layoutChromeDriver;
     
     private TextView tvInternetStatus, tvBatteryStatus;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
     
     // Feste Werte
     private static final int DEFAULT_INTERVAL = 2;
@@ -70,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
         setupButtons();
         updateDisplayNumber();
         checkAllPermissions();
-        checkChromeDriver();
+        resetChromeDriverStatus();
     }
     
     private void initViews() {
@@ -88,18 +78,13 @@ public class MainActivity extends AppCompatActivity {
         vStatusIndicator = findViewById(R.id.v_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
-        btnDownloadChromeDriver = findViewById(R.id.btn_download_chromedriver);
         layoutBattery = findViewById(R.id.layout_battery);
+        layoutChromeDriver = findViewById(R.id.layout_chromedriver);
         tvChromeDriverStatus = findViewById(R.id.tv_chromedriver_status);
         progressChromeDriver = findViewById(R.id.progress_chromedriver);
         
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        
-        // ChromeDriver Download Button
-        btnDownloadChromeDriver.setOnClickListener(v -> {
-            downloadChromeDriver();
-        });
         
         // Akku-Optimierung: Klick öffnet Einstellungen
         layoutBattery.setOnClickListener(v -> openBatterySettings());
@@ -149,21 +134,28 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> tvTarifInfo.setText("📶 Tarif: Unlimited on Demand " + tarifName + " (" + maxGb + " GB)"));
             }
             
-            // 🔥 DIE FEHLENDE METHODE!
             @Override
             public void onChromeDriverProgress(int progress) {
                 runOnUiThread(() -> {
                     progressChromeDriver.setProgress(progress);
+                    progressChromeDriver.setVisibility(View.VISIBLE);
                     if (progress < 100) {
-                        tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
+                        tvChromeDriverStatus.setText("⬇️ Lade ChromeDriver herunter... " + progress + "%");
                         tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
                     } else {
-                        tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
+                        tvChromeDriverStatus.setText("✅ ChromeDriver bereit!");
                         tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
                     }
                 });
             }
         });
+    }
+    
+    private void resetChromeDriverStatus() {
+        tvChromeDriverStatus.setText("⏳ Bereit zum Download");
+        tvChromeDriverStatus.setTextColor(Color.parseColor("#FFA726"));
+        progressChromeDriver.setProgress(0);
+        progressChromeDriver.setVisibility(View.GONE);
     }
     
     private void updateLoginStatusUI(RefillService.LoginStatus status, String details) {
@@ -259,19 +251,13 @@ public class MainActivity extends AppCompatActivity {
     
     private void setupButtons() {
         btnStart.setOnClickListener(v -> {
-            // 1. Prüfe ob ChromeDriver installiert ist
-            if (!isChromeDriverInstalled()) {
-                Toast.makeText(this, "⚠️ Bitte zuerst ChromeDriver installieren!", Toast.LENGTH_LONG).show();
-                return;
-            }
-            
-            // 2. Prüfe Berechtigungen
+            // 1. Prüfe Berechtigungen
             if (!PermissionHelper.isBatteryOptimizationDisabled(this)) {
                 Toast.makeText(this, "⚠️ Bitte Akku-Optimierung deaktivieren!", Toast.LENGTH_LONG).show();
                 return;
             }
             
-            // 3. Prüfe Zugangsdaten
+            // 2. Prüfe Zugangsdaten
             String username = etUsername.getText().toString();
             String password = etPassword.getText().toString();
             
@@ -285,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // 4. Alles ok -> starten
+            // 3. Alles ok -> starten
             saveData();
             
             int interval = DEFAULT_INTERVAL;
@@ -310,6 +296,7 @@ public class MainActivity extends AppCompatActivity {
             btnStop.setEnabled(false);
             tvStatus.setText("⏹️ Gestoppt");
             tvDisplayNumber.setText("📱 " + cleanPhoneNumber(etUsername.getText().toString()));
+            resetChromeDriverStatus();
         });
         
         btnStop.setEnabled(false);
@@ -334,109 +321,6 @@ public class MainActivity extends AppCompatActivity {
         }
         return false;
     }
-    
-    // ==========================================
-    // CHROMEDRIVER PRÜFEN & DOWNLOAD
-    // ==========================================
-    
-    private boolean isChromeDriverInstalled() {
-        File chromedriver = new File(getExternalFilesDir(null), "chromedriver");
-        return chromedriver.exists() && chromedriver.canExecute();
-    }
-    
-    private void checkChromeDriver() {
-        if (isChromeDriverInstalled()) {
-            btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
-            btnDownloadChromeDriver.setEnabled(false);
-            tvChromeDriverStatus.setText("✅ ChromeDriver ist installiert und bereit!");
-            tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-            progressChromeDriver.setVisibility(View.GONE);
-            btnStart.setEnabled(true);
-            btnStart.setText("▶️ Start");
-        } else {
-            btnDownloadChromeDriver.setText("⬇️ ChromeDriver installieren");
-            btnDownloadChromeDriver.setEnabled(true);
-            tvChromeDriverStatus.setText("⏳ ChromeDriver wird benötigt. Klicke auf 'Installieren'.");
-            tvChromeDriverStatus.setTextColor(Color.parseColor("#FFA726"));
-            progressChromeDriver.setVisibility(View.GONE);
-            btnStart.setEnabled(false);
-            btnStart.setText("▶️ Start (ChromeDriver fehlt)");
-        }
-    }
-    
-    private void downloadChromeDriver() {
-        btnDownloadChromeDriver.setEnabled(false);
-        btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
-        progressChromeDriver.setVisibility(View.VISIBLE);
-        progressChromeDriver.setProgress(0);
-        tvChromeDriverStatus.setText("⏳ Starte Download...");
-        tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        
-        new Thread(() -> {
-            try {
-                String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
-                URL downloadUrl = new URL(url);
-                URLConnection connection = downloadUrl.openConnection();
-                connection.connect();
-                
-                int fileSize = connection.getContentLength();
-                File downloadFile = new File(getExternalFilesDir(null), "chromedriver");
-                
-                InputStream inputStream = new BufferedInputStream(connection.getInputStream());
-                OutputStream outputStream = new FileOutputStream(downloadFile);
-                
-                byte[] buffer = new byte[4096];
-                int length;
-                long totalDownloaded = 0;
-                
-                while ((length = inputStream.read(buffer)) > 0) {
-                    outputStream.write(buffer, 0, length);
-                    totalDownloaded += length;
-                    
-                    final int progress = fileSize > 0 ? (int) ((totalDownloaded * 100) / fileSize) : 0;
-                    mainHandler.post(() -> {
-                        progressChromeDriver.setProgress(progress);
-                        if (progress < 100) {
-                            tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
-                            tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
-                        } else {
-                            tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
-                            tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-                        }
-                    });
-                }
-                outputStream.close();
-                inputStream.close();
-                
-                downloadFile.setExecutable(true);
-                
-                mainHandler.post(() -> {
-                    tvChromeDriverStatus.setText("✅ ChromeDriver erfolgreich installiert!");
-                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
-                    progressChromeDriver.setProgress(100);
-                    btnDownloadChromeDriver.setText("✅ ChromeDriver ist installiert");
-                    btnDownloadChromeDriver.setEnabled(false);
-                    btnStart.setEnabled(true);
-                    btnStart.setText("▶️ Start");
-                    Toast.makeText(MainActivity.this, "✅ ChromeDriver erfolgreich installiert!", Toast.LENGTH_LONG).show();
-                });
-                
-            } catch (Exception e) {
-                mainHandler.post(() -> {
-                    tvChromeDriverStatus.setText("❌ Fehler: " + e.getMessage());
-                    tvChromeDriverStatus.setTextColor(Color.parseColor("#F44336"));
-                    btnDownloadChromeDriver.setEnabled(true);
-                    btnDownloadChromeDriver.setText("⬇️ Erneut versuchen");
-                    progressChromeDriver.setVisibility(View.GONE);
-                    Toast.makeText(MainActivity.this, "❌ Fehler beim Download: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
-            }
-        }).start();
-    }
-    
-    // ==========================================
-    // BEREITIGUNGEN
-    // ==========================================
     
     private void checkAllPermissions() {
         if (tvInternetStatus != null) {
@@ -468,6 +352,5 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkAllPermissions();
-        checkChromeDriver();
     }
 }
