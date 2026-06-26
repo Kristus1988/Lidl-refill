@@ -211,7 +211,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- BEREITIGUNGEN (KOMPLETT) -->
+        <!-- BEREITIGUNGEN -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -243,7 +243,6 @@
                     android:textColor="#78909C"
                     android:layout_marginBottom="8dp" />
 
-                <!-- Internet -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -273,7 +272,7 @@
                     android:background="#333333"
                     android:layout_marginVertical="4dp" />
 
-                <!-- Akku-Optimierung -->
+                <!-- Akku -->
                 <LinearLayout
                     android:id="@+id/layout_battery"
                     android:layout_width="match_parent"
@@ -407,7 +406,6 @@
                     android:textColor="#B0BEC5"
                     android:layout_marginBottom="8dp" />
 
-                <!-- Status -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -420,8 +418,7 @@
                         android:layout_height="wrap_content"
                         android:text="⏳ Bereit zum Download"
                         android:textSize="12sp"
-                        android:textColor="#FFA726"
-                        android:layout_marginBottom="4dp" />
+                        android:textColor="#FFA726" />
 
                     <ProgressBar
                         android:id="@+id/progress_chromedriver"
