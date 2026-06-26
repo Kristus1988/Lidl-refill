@@ -171,7 +171,6 @@ class OverlayService : Service() {
                         Toast.LENGTH_SHORT
                     ).show()
                     
-                    // Menschliche Verzögerung vor dem Schließen: 2-4 Sekunden
                     handler.postDelayed({
                         if (isDragging) return@postDelayed
                         stopSelf()
