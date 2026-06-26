@@ -41,10 +41,12 @@ public class MainActivity extends AppCompatActivity {
     private float lastRefillGb = 0.99f;
     private int consecutiveNoChange = 0;
 
+    // Intelligente Wartezeit
     private long lastCheckTime = 0;
     private float lastVolumeForRate = 0.99f;
-    private boolean isFirstCheck = true;
     private float consumptionRate = 0.05f;
+    private boolean isFirstCheck = true;
+    private boolean isLearningPhase = true;
 
     private boolean isWaitingForRefill = false;
     private boolean isManualRefill = false;
@@ -106,7 +108,9 @@ public class MainActivity extends AppCompatActivity {
                 consecutiveNoChange = 0;
                 tvRefill.setText("🔄 Refill: 1.00 GB");
                 lastVolumeForRate = 1.00f;
+
                 isFirstCheck = true;
+                isLearningPhase = true;
 
                 int delay = random.nextInt(1000) + 2000;
                 tvStatus.setText("⏳ Refill verarbeitet. Warte " + (delay/1000) + "s...");
@@ -221,6 +225,66 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
+    // INTELLIGENTE WARTEZEIT
+    // ==========================================
+
+    private void calculateConsumptionRate() {
+        if (isFirstCheck) {
+            isFirstCheck = false;
+            lastCheckTime = System.currentTimeMillis();
+            lastVolumeForRate = currentRefillGb;
+            return;
+        }
+
+        long timeDiff = System.currentTimeMillis() - lastCheckTime;
+        if (timeDiff < 30000) return;
+
+        float volumeDiff = lastVolumeForRate - currentRefillGb;
+
+        if (volumeDiff > 0.001) {
+            float minutes = timeDiff / 60000f;
+            consumptionRate = volumeDiff / minutes;
+            consumptionRate = Math.max(0.001f, Math.min(consumptionRate, 0.2f));
+            isLearningPhase = false;
+
+            tvStatus.setText("📊 Verbrauch: " + String.format("%.3f", consumptionRate) + " GB/min");
+        }
+
+        lastCheckTime = System.currentTimeMillis();
+        lastVolumeForRate = currentRefillGb;
+    }
+
+    private int calculateIntelligentDelay() {
+        float refill = currentRefillGb;
+
+        if (isLearningPhase || consumptionRate <= 0.001) {
+            if (refill > 0.80) {
+                return random.nextInt(120) + 120;
+            } else if (refill > 0.40) {
+                return random.nextInt(90) + 90;
+            } else if (refill > 0.15) {
+                return random.nextInt(60) + 60;
+            } else {
+                return random.nextInt(30) + 30;
+            }
+        }
+
+        float gbRemaining = refill - TARGET_VOLUME;
+
+        if (gbRemaining <= 0) {
+            return random.nextInt(30) + 30;
+        }
+
+        float estimatedMinutes = gbRemaining / consumptionRate;
+        estimatedMinutes = Math.max(1, Math.min(estimatedMinutes, 30));
+
+        double variation = 0.75 + (random.nextDouble() * 0.5);
+        int finalDelay = (int) (estimatedMinutes * 60 * variation);
+
+        return Math.max(30, Math.min(finalDelay, 1800));
+    }
+
+    // ==========================================
     // TOUCH-SIMULATION
     // ==========================================
 
@@ -289,14 +353,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void findButtonForTouch() {
-        String js = "javascript:(function() {" +
+        String scrollJs = "javascript:(function() {" +
                 "try {" +
                 "  var elements = document.querySelectorAll('button, div, a, span');" +
                 "  for(var i=0; i<elements.length; i++) {" +
                 "    var text = elements[i].innerText || elements[i].textContent || '';" +
                 "    if(text && text.includes('Refill aktivieren')) {" +
-                "      var rect = elements[i].getBoundingClientRect();" +
-                "      Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "      setTimeout(function() {" +
+                "        var rect = elements[i].getBoundingClientRect();" +
+                "        Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      }, 500);" +
                 "      return;" +
                 "    }" +
                 "  }" +
@@ -305,11 +372,11 @@ public class MainActivity extends AppCompatActivity {
                 "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
                 "}" +
                 "})();";
-        webView.loadUrl(js);
+        webView.loadUrl(scrollJs);
     }
 
     // ==========================================
-    // COUNTDOWN-LOGIK
+    // COUNTDOWN
     // ==========================================
 
     private void startCountdown(int seconds) {
@@ -344,29 +411,88 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // VERBRAUCHS-ANALYSE
+    // REFILL ÜBERWACHUNG
     // ==========================================
 
-    private void calculateConsumptionRate() {
-        if (isFirstCheck) {
-            isFirstCheck = false;
-            lastCheckTime = System.currentTimeMillis();
-            lastVolumeForRate = currentRefillGb;
+    private void checkAndClickRefillWithTouch() {
+        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
             return;
         }
 
-        long timeDiff = System.currentTimeMillis() - lastCheckTime;
-        if (timeDiff < 30000) return;
+        checkCount++;
+        tvStatus.setText("🔍 Prüfung #" + checkCount);
 
-        float volumeDiff = lastVolumeForRate - currentRefillGb;
-        if (volumeDiff > 0.001) {
-            float minutes = timeDiff / 60000f;
-            consumptionRate = volumeDiff / minutes;
-            consumptionRate = Math.max(0.01f, Math.min(consumptionRate, 0.2f));
+        String js = "javascript:(function() {" +
+                "try {" +
+                "  var pageText = document.body.innerText;" +
+                "  var inklusivMatch = pageText.match(/(\\d+[\\,\\d]*)\\s*GB\\s*\\/\\s*25\\s*GB/);" +
+                "  var refillMatch = pageText.match(/Unlimited Refill\\s*(\\d+[\\,\\d]*)\\s*GB/);" +
+                "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
+                "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
+                "  Android.onVolumeUpdate(inklusiv, refill);" +
+                "  if (refillMatch) {" +
+                "    var refillValue = parseFloat(refill);" +
+                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
+                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Scrolle & Tippe...');" +
+                "      setTimeout(function() {" +
+                "        var found = false;" +
+                "        var elements = document.querySelectorAll('button, div, a, span');" +
+                "        for(var i=0; i<elements.length; i++) {" +
+                "          var text = elements[i].innerText || elements[i].textContent || '';" +
+                "          if(text && text.includes('Refill aktivieren')) {" +
+                "            elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                "            setTimeout(function() {" +
+                "              var rect = elements[i].getBoundingClientRect();" +
+                "              Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "            }, 500);" +
+                "            found = true;" +
+                "            break;" +
+                "          }" +
+                "        }" +
+                "        if (!found) {" +
+                "          Android.onRefillNotFound();" +
+                "        }" +
+                "      }, 500);" +
+                "    } else {" +
+                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
+                "    }" +
+                "  }" +
+                "} catch(e) {" +
+                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                "}" +
+                "})();";
+        webView.loadUrl(js);
+    }
+
+    // ==========================================
+    // MANUELLER REFILL TEST
+    // ==========================================
+
+    private void manualRefillTest() {
+        if (!isLoggedIn) {
+            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
+            return;
         }
 
-        lastCheckTime = System.currentTimeMillis();
-        lastVolumeForRate = currentRefillGb;
+        if (isWaitingForRefill || isTouchPending) {
+            Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        isManualRefill = true;
+        tvStatus.setText("🧪 Suche Refill-Button...");
+        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
+
+        findButtonForTouch();
+    }
+
+    // ==========================================
+    // WARTEZEIT AKTUALISIEREN
+    // ==========================================
+
+    private void updateNextCheckTime() {
+        int delay = calculateIntelligentDelay();
+        startCountdown(delay);
     }
 
     // ==========================================
@@ -470,138 +596,6 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(js);
     }
 
-    // ==========================================
-    // REFILL ÜBERWACHUNG (MIT TOUCH)
-    // ==========================================
-
-    private void checkAndClickRefillWithTouch() {
-        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
-            return;
-        }
-
-        checkCount++;
-        tvStatus.setText("🔍 Prüfung #" + checkCount);
-
-        String js = "javascript:(function() {" +
-                "try {" +
-                "  var pageText = document.body.innerText;" +
-                "  var inklusivMatch = pageText.match(/(\\d+[\\,\\d]*)\\s*GB\\s*\\/\\s*25\\s*GB/);" +
-                "  var refillMatch = pageText.match(/Unlimited Refill\\s*(\\d+[\\,\\d]*)\\s*GB/);" +
-                "  var inklusiv = inklusivMatch ? inklusivMatch[1].replace(',', '.') : '--';" +
-                "  var refill = refillMatch ? refillMatch[1].replace(',', '.') : '--';" +
-                "  Android.onVolumeUpdate(inklusiv, refill);" +
-                "  if (refillMatch) {" +
-                "    var refillValue = parseFloat(refill);" +
-                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
-                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Tippe Button...');" +
-                "      setTimeout(function() {" +
-                "        var found = false;" +
-                "        var elements = document.querySelectorAll('button, div, a, span');" +
-                "        for(var i=0; i<elements.length; i++) {" +
-                "          var text = elements[i].innerText || elements[i].textContent || '';" +
-                "          if(text && text.includes('Refill aktivieren')) {" +
-                "            var rect = elements[i].getBoundingClientRect();" +
-                "            Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
-                "            found = true;" +
-                "            break;" +
-                "          }" +
-                "        }" +
-                "        if (!found) {" +
-                "          Android.onRefillNotFound();" +
-                "        }" +
-                "      }, 500);" +
-                "    } else {" +
-                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
-                "    }" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
-        webView.loadUrl(js);
-    }
-
-    // ==========================================
-    // MANUELLER REFILL TEST (MIT TOUCH)
-    // ==========================================
-
-    private void manualRefillTest() {
-        if (!isLoggedIn) {
-            Toast.makeText(this, "⚠️ Bitte zuerst einloggen!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (isWaitingForRefill || isTouchPending) {
-            Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        isManualRefill = true;
-        tvStatus.setText("🧪 Suche Refill-Button...");
-        tvStatus.setTextColor(Color.parseColor("#9C27B0"));
-
-        findButtonForTouch();
-    }
-
-    // ==========================================
-    // WARTEZEIT ANPASSEN
-    // ==========================================
-
-    private void updateNextCheckTime() {
-        int delay = calculateAdaptiveDelay();
-        startCountdown(delay);
-    }
-
-    // ==========================================
-    // ADAPTIVE WARTEZEIT
-    // ==========================================
-
-    private int calculateAdaptiveDelay() {
-        float refill = currentRefillGb;
-        int baseDelay;
-
-        if (refill > 0.80) {
-            baseDelay = random.nextInt(600) + 900; // 15-25 Minuten
-        } else if (refill > 0.40) {
-            baseDelay = random.nextInt(420) + 480; // 8-15 Minuten
-        } else if (refill > 0.15) {
-            baseDelay = random.nextInt(240) + 240; // 4-8 Minuten
-        } else {
-            baseDelay = random.nextInt(120) + 60; // 1-3 Minuten
-        }
-
-        if (consumptionRate > 0.06) {
-            baseDelay = (int) (baseDelay * 0.7);
-        } else if (consumptionRate > 0.03) {
-            baseDelay = (int) (baseDelay * 0.85);
-        } else if (consumptionRate < 0.01) {
-            baseDelay = (int) (baseDelay * 1.3);
-        }
-
-        if (Math.abs(currentRefillGb - lastRefillGb) < 0.01) {
-            consecutiveNoChange++;
-            if (consecutiveNoChange > 3) {
-                baseDelay = (int) (baseDelay * 1.5);
-            }
-        } else {
-            consecutiveNoChange = 0;
-        }
-        lastRefillGb = currentRefillGb;
-
-        double variation = 0.7 + (random.nextDouble() * 0.6);
-        int finalDelay = (int) (baseDelay * variation);
-
-        if (random.nextInt(10) == 0) {
-            finalDelay += random.nextInt(180) + 60;
-        }
-
-        if (random.nextInt(15) == 0) {
-            finalDelay += random.nextInt(300) + 120;
-        }
-
-        return Math.max(30, Math.min(finalDelay, 1500));
-    }
-
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
@@ -661,6 +655,7 @@ public class MainActivity extends AppCompatActivity {
             currentRefillGb = 0.99f;
             lastRefillGb = 0.99f;
             isFirstCheck = true;
+            isLearningPhase = true;
             consumptionRate = 0.05f;
             tvRefillCount.setText("🔄 Refills: 0");
             tvStatus.setText("🔄 Starte Überwachung...");
