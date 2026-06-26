@@ -104,62 +104,75 @@
             android:layout_marginTop="2dp" />
     </LinearLayout>
 
-    <!-- Steuerung -->
+    <!-- Steuerung (Eingabefelder jetzt besser sichtbar!) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="12dp"
-        android:background="#1E1E1E"
-        android:gravity="center_vertical">
+        android:background="#2A2A2A"
+        android:elevation="8dp">
 
+        <!-- Telefonnummer -->
         <EditText
             android:id="@+id/et_username"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:hint="Telefonnummer"
-            android:textColor="#E0E0E0"
-            android:textColorHint="#78909C"
-            android:background="@android:drawable/editbox_background"
-            android:padding="8dp"
-            android:layout_marginEnd="8dp"
-            android:inputType="phone" />
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="Telefonnummer (z.B. 01749995818)"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#B0BEC5"
+            android:background="@drawable/edittext_border"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:inputType="phone"
+            android:textSize="14sp"
+            android:importantForAutofill="no" />
 
+        <!-- Passwort -->
         <EditText
             android:id="@+id/et_password"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
             android:hint="Passwort"
-            android:textColor="#E0E0E0"
-            android:textColorHint="#78909C"
-            android:background="@android:drawable/editbox_background"
-            android:padding="8dp"
-            android:inputType="textPassword" />
-
-        <Button
-            android:id="@+id/btn_start"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:text="▶️ Start"
-            android:backgroundTint="#4CAF50"
             android:textColor="#FFFFFF"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:textSize="13sp" />
+            android:textColorHint="#B0BEC5"
+            android:background="@drawable/edittext_border"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp"
+            android:inputType="textPassword"
+            android:textSize="14sp"
+            android:importantForAutofill="no" />
 
-        <Button
-            android:id="@+id/btn_stop"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:text="⏹️ Stop"
-            android:backgroundTint="#F44336"
-            android:textColor="#FFFFFF"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:textSize="13sp"
-            android:layout_marginStart="4dp" />
+        <!-- Buttons (groß und auffällig) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_start"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:text="▶️ START"
+                android:backgroundTint="#4CAF50"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btn_stop"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_weight="1"
+                android:text="⏹️ STOP"
+                android:backgroundTint="#F44336"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>
