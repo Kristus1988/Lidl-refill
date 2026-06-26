@@ -67,7 +67,6 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         setContentView(R.layout.activity_main)
 
-        // Views initialisieren
         btnCircle = findViewById(R.id.btn_circle)
         btnRectangle = findViewById(R.id.btn_rectangle)
         btnStartAutomation = findViewById(R.id.btn_start_automation)
@@ -83,7 +82,6 @@ class MainActivity : AppCompatActivity() {
         checkOverlayPermission()
         checkAccessibilityPermission()
 
-        // ===== BUTTON 1: KREIS = REFILL BUTTON =====
         btnCircle.setOnClickListener {
             if (checkOverlayPermission()) {
                 startOverlayService("circle")
@@ -92,7 +90,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ===== BUTTON 2: RECHTECK = VOLUMEN-ANZEIGE =====
         btnRectangle.setOnClickListener {
             if (checkOverlayPermission()) {
                 startOverlayService("rectangle")
@@ -101,7 +98,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ===== BUTTON 3: AUTOMATISIERUNG STARTEN =====
         btnStartAutomation.setOnClickListener {
             if (refillButtonPos == null || volumeArea == null) {
                 Toast.makeText(this, "❌ Bitte zuerst Kreis (Refill) und Rechteck (Volumen) setzen!", Toast.LENGTH_LONG).show()
@@ -119,17 +115,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ===== BUTTON 4: AUTOMATISIERUNG STOPPEN =====
         btnStopAutomation.setOnClickListener {
             stopAutomation()
         }
 
-        // ===== BUTTON 5: APP AKTUALISIEREN =====
         btnRefresh.setOnClickListener {
             refreshApp()
         }
 
-        // Overlay Listener
         overlayService = OverlayService.getInstance()
         overlayService?.setOnAreaSelectedListener { areaData ->
             runOnUiThread {
@@ -145,45 +138,35 @@ class MainActivity : AppCompatActivity() {
                     tvStatus.text = "✅ Volumen-Bereich positioniert!"
                     tvStatus.setTextColor(resources.getColor(R.color.status_success, null))
                     addLog("✅ Volumen-Bereich gespeichert bei (${areaData.x}, ${areaData.y})")
-                    
-                    // Sofort Volumen auslesen
                     readVolumeFromArea(areaData)
                 }
             }
         }
     }
 
-    // ===== MENSCHLICHE ZUFALLSVERZÖGERUNGEN =====
     private fun getHumanDelay(baseMinutes: Int): Long {
-        // Menschliche Abweichung: +/- 20% zufällig
         val baseMs = baseMinutes * 60 * 1000L
         val variation = (baseMs * 0.2).toLong()
         return baseMs + (random.nextLong() % (2 * variation) - variation)
     }
 
     private fun getHumanActionDelay(): Long {
-        // Menschliche Reaktionszeit: 300-800ms
         return (300 + random.nextInt(500)).toLong()
     }
 
     private fun getHumanSwipeDelay(): Long {
-        // Menschliche Swipe-Geschwindigkeit: 400-800ms
         return (400 + random.nextInt(400)).toLong()
     }
 
     private fun getHumanClickDelay(): Long {
-        // Menschliche Klick-Dauer: 50-200ms
         return (50 + random.nextInt(150)).toLong()
     }
 
     private fun getHumanWaitAfterAction(): Long {
-        // Menschliches Warten nach Aktion: 1-3 Sekunden
         return (1000 + random.nextInt(2000)).toLong()
     }
 
-    // ===== VOLUMEN AUSLESEN =====
     private fun readVolumeFromArea(area: AreaData) {
-        // Simuliert Volumen mit realistischen Werten
         val simulatedVolumes = listOf(
             1.00, 0.98, 0.95, 0.92, 0.89, 0.85, 0.82, 0.78, 0.75, 0.72,
             0.68, 0.65, 0.62, 0.58, 0.55, 0.52, 0.48, 0.45, 0.42, 0.38,
@@ -204,7 +187,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== AUTOMATISIERUNG STARTEN =====
     private fun startAutomation() {
         isAutomationRunning = true
         isRefilling = false
@@ -216,25 +198,20 @@ class MainActivity : AppCompatActivity() {
         addLog("🚀 Automatisierung gestartet (menschliches Verhalten)")
         sendNotification("🔄 Automatisierung gestartet", "Überwache Volumen mit menschlichen Verzögerungen...", NotificationCompat.PRIORITY_DEFAULT)
         
-        // Menschliche Startverzögerung: 2-5 Sekunden
         val startDelay = 2000 + random.nextInt(3000)
         automationHandler.postDelayed({
             runAutomationCycle()
         }, startDelay)
     }
 
-    // ===== AUTOMATISIERUNG CYCLE =====
     private fun runAutomationCycle() {
         if (!isAutomationRunning) return
 
-        // 1. Volumen auslesen mit menschlicher Verzögerung
         automationHandler.postDelayed({
             readVolumeFromArea(volumeArea!!)
             
-            // 2. Entscheidung basierend auf Volumen
             when {
                 currentVolume >= 0.80 -> {
-                    // Viel Volumen - 12-18 Minuten warten
                     val waitTime = getHumanDelay(15)
                     tvStatus.text = "⏳ ${String.format("%.2f", currentVolume)} GB - Warte ${waitTime/60000} Minuten..."
                     addLog("⏳ ${String.format("%.2f", currentVolume)} GB → Warte ${waitTime/60000} Minuten (menschlich)")
@@ -242,11 +219,9 @@ class MainActivity : AppCompatActivity() {
                     
                     automationHandler.postDelayed({
                         if (isAutomationRunning && !isRefilling) {
-                            // Menschliche Swipe-Verzögerung
                             automationHandler.postDelayed({
                                 performSwipeToRefresh()
                             }, getHumanActionDelay())
-                            // Nach Aktualisierung erneut prüfen
                             automationHandler.postDelayed({
                                 runAutomationCycle()
                             }, getHumanWaitAfterAction())
@@ -255,7 +230,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 currentVolume in 0.50..0.79 -> {
-                    // Mittleres Volumen - 4-6 Minuten warten
                     val waitTime = getHumanDelay(5)
                     tvStatus.text = "⏳ ${String.format("%.2f", currentVolume)} GB - Warte ${waitTime/60000} Minuten..."
                     addLog("⏳ ${String.format("%.2f", currentVolume)} GB → Warte ${waitTime/60000} Minuten (menschlich)")
@@ -274,7 +248,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 currentVolume <= 0.35 -> {
-                    // Wenig Volumen - REFILL!
                     isRefilling = true
                     tvStatus.text = "🔴 ${String.format("%.2f", currentVolume)} GB - REFILL wird ausgeführt!"
                     tvStatus.setTextColor(resources.getColor(R.color.status_error, null))
@@ -285,11 +258,9 @@ class MainActivity : AppCompatActivity() {
                         NotificationCompat.PRIORITY_HIGH
                     )
                     
-                    // Menschliche Vorbereitungszeit vor Klick: 1-3 Sekunden
                     automationHandler.postDelayed({
                         performRefillClick()
                         
-                        // Nach Refill warten und erneut prüfen
                         automationHandler.postDelayed({
                             isRefilling = false
                             performSwipeToRefresh()
@@ -301,7 +272,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 else -> {
-                    // Normales Volumen - 1-3 Minuten warten
                     val waitTime = getHumanDelay(2)
                     tvStatus.text = "⏳ ${String.format("%.2f", currentVolume)} GB - Warte ${waitTime/60000} Minuten..."
                     addLog("⏳ ${String.format("%.2f", currentVolume)} GB → Warte ${waitTime/60000} Minuten (menschlich)")
@@ -322,11 +292,9 @@ class MainActivity : AppCompatActivity() {
         }, getHumanActionDelay())
     }
 
-    // ===== REFILL KLICK =====
     private fun performRefillClick() {
         if (refillButtonPos != null) {
             refillCount++
-            // Menschliche Abweichung beim Klickpunkt: +/- 10 Pixel
             val offsetX = (-10 + random.nextInt(20))
             val offsetY = (-10 + random.nextInt(20))
             val x = refillButtonPos!!.x + refillButtonPos!!.width / 2 + offsetX
@@ -334,7 +302,6 @@ class MainActivity : AppCompatActivity() {
             
             val service = RefillAccessibilityService.instance
             if (service != null && RefillAccessibilityService.isServiceRunning) {
-                // Menschliche Klick-Dauer
                 service.performClick(x, y, getHumanClickDelay())
                 addLog("🔄 REFILL #${refillCount} ausgeführt bei (${x}, ${y}) +${offsetX},${offsetY} Abweichung")
                 tvStatus.text = "✅ Refill #${refillCount} ausgeführt!"
@@ -351,17 +318,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== SWIPE =====
     private fun performSwipeToRefresh() {
         val service = RefillAccessibilityService.instance
         if (service != null && RefillAccessibilityService.isServiceRunning) {
-            // Menschliche Swipe-Geschwindigkeit
             val swipeSpeed = getHumanSwipeDelay()
-            // Menschliche Abweichung beim Swipe-Pfad
-            val startX = 400 + random.nextInt(200)  // 400-600
-            val startY = 80 + random.nextInt(40)    // 80-120
-            val endX = 400 + random.nextInt(200)    // 400-600
-            val endY = 800 + random.nextInt(400)    // 800-1200
+            val startX = 400 + random.nextInt(200)
+            val startY = 80 + random.nextInt(40)
+            val endX = 400 + random.nextInt(200)
+            val endY = 800 + random.nextInt(400)
             service.performSwipeToRefresh(startX, startY, endX, endY, swipeSpeed)
             addLog("🔄 Lidl App aktualisiert (Swipe) - ${swipeSpeed}ms")
         } else {
@@ -369,7 +333,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== TIMER =====
     private fun startTimer(duration: Long) {
         var remaining = duration
         val timerHandler = Handler(Looper.getMainLooper())
@@ -394,7 +357,6 @@ class MainActivity : AppCompatActivity() {
         timerHandler.post(timerRunnable)
     }
 
-    // ===== STOP =====
     private fun stopAutomation() {
         isAutomationRunning = false
         isRefilling = false
@@ -408,7 +370,6 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "⏹️ Automatisierung gestoppt", Toast.LENGTH_SHORT).show()
     }
 
-    // ===== BENACHRICHTIGUNG =====
     private fun sendNotification(title: String, message: String, priority: Int) {
         try {
             val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
@@ -425,7 +386,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== CHANNEL =====
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
@@ -442,7 +402,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== ACCESSIBILITY =====
     private fun checkAccessibilityPermission() {
         if (!isAccessibilityServiceEnabled()) {
             addLog("⚠️ Accessibility Service nicht aktiviert!")
@@ -463,7 +422,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ===== LOG =====
     private fun addLog(message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         logMessages.add("[${timestamp}] $message")
@@ -473,7 +431,6 @@ class MainActivity : AppCompatActivity() {
         tvLog.text = logMessages.joinToString("\n")
     }
 
-    // ===== REFRESH =====
     private fun refreshApp() {
         stopAutomation()
         overlayService?.stopSelf()
@@ -495,7 +452,6 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "🔄 App wurde aktualisiert!", Toast.LENGTH_SHORT).show()
     }
 
-    // ===== OVERLAY PERMISSION =====
     private fun checkOverlayPermission(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
