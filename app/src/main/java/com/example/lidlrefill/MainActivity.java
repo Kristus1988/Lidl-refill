@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
             public void onChromeDriverProgress(int progress) {
                 runOnUiThread(() -> {
                     if (progress < 100) {
-                        tvStatus.setText("⬇️ Lade ChromeDriver herunter... " + progress + "%");
+                        tvStatus.setText("⬇️ Lade ChromeDriver... " + progress + "%");
                     } else {
                         tvStatus.setText("✅ ChromeDriver bereit!");
                     }
@@ -231,7 +231,15 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void setupButtons() {
+        // 🔥 START-Button: Immer aktiv, zeigt Fehler an, falls Berechtigungen fehlen
         btnStart.setOnClickListener(v -> {
+            // 1. Prüfe Berechtigungen
+            if (!checkAllPermissionsForStart()) {
+                Toast.makeText(this, "⚠️ Bitte aktiviere alle Berechtigungen zuerst!", Toast.LENGTH_LONG).show();
+                return;
+            }
+            
+            // 2. Prüfe Zugangsdaten
             String username = etUsername.getText().toString();
             String password = etPassword.getText().toString();
             
@@ -245,11 +253,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            if (!checkAllPermissions()) {
-                Toast.makeText(this, "Bitte alle Berechtigungen aktivieren!", Toast.LENGTH_LONG).show();
-                return;
-            }
-            
+            // 3. Alles ok -> starten
             saveData();
             
             int interval = DEFAULT_INTERVAL;
@@ -259,10 +263,10 @@ public class MainActivity extends AppCompatActivity {
             String loginUsername = cleanPhoneNumber(username);
             tvDisplayNumber.setText("📱 Login mit: " + loginUsername);
             
+            tvStatus.setText("🔄 Starte...");
             refillService.start(loginUsername, password, interval, target, waitAfter);
             btnStart.setEnabled(false);
             btnStop.setEnabled(true);
-            tvStatus.setText("🔄 Läuft...");
         });
         
         btnStop.setOnClickListener(v -> {
@@ -282,6 +286,16 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     
+    private boolean checkAllPermissionsForStart() {
+        // Prüfe Akku-Optimierung
+        boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
+        if (!batteryGranted) {
+            Toast.makeText(this, "⚠️ Bitte Akku-Optimierung deaktivieren!", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        return true;
+    }
+    
     private boolean isValidPhoneNumber(String number) {
         if (TextUtils.isEmpty(number)) return false;
         String cleaned = number.replaceAll("[\\s.-]", "");
@@ -296,30 +310,30 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
     
-    private boolean checkAllPermissions() {
-        boolean allGranted = true;
-        
-        // Internet ist immer aktiviert
+    // ==========================================
+    // BEREITIGUNGEN ANZEIGEN (NUR INFO)
+    // ==========================================
+    
+    private void checkAllPermissions() {
+        // Internet (immer grün)
         if (tvInternetStatus != null) {
             tvInternetStatus.setText("✅ Aktiviert");
             tvInternetStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
         }
         
-        // Akku-Optimierung prüfen
+        // Akku-Optimierung
         boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
         if (tvBatteryStatus != null) {
             if (batteryGranted) {
                 tvBatteryStatus.setText("✅ Aktiviert");
                 tvBatteryStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
+                tvBatteryStatus.setOnClickListener(null);
             } else {
                 tvBatteryStatus.setText("❌ Nicht aktiviert (Zum Aktivieren klicken)");
                 tvBatteryStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
                 tvBatteryStatus.setOnClickListener(v -> openBatterySettings());
             }
         }
-        
-        btnStart.setEnabled(batteryGranted);
-        return batteryGranted;
     }
     
     private void openBatterySettings() {
