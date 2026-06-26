@@ -51,7 +51,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- STATUS -->
+        <!-- 1. STATUS -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -107,7 +107,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- ZUGANGSDATEN -->
+        <!-- 2. ZUGANGSDATEN (LIDL) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -125,10 +125,10 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🔐 Zugangsdaten"
+                    android:text="🔐 Lidl Connect Zugangsdaten"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:textColor="#E0E0E0"
+                    android:textColor="#4FC3F7"
                     android:layout_marginBottom="12dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -180,7 +180,7 @@
                         android:inputType="textPassword" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- BUTTONS -->
+                <!-- START / STOP -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -211,8 +211,9 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- CHROMEDRIVER DOWNLOAD -->
+        <!-- 3. CHROMEDRIVER (EIGENER BEREICH) -->
         <androidx.cardview.widget.CardView
+            android:id="@+id/layout_chromedriver"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
@@ -238,17 +239,17 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Die App benötigt ChromeDriver, um die Lidl-Seite zu steuern."
+                    android:text="Wird beim Start automatisch heruntergeladen und eingerichtet."
                     android:textSize="11sp"
                     android:textColor="#B0BEC5"
                     android:layout_marginBottom="8dp" />
 
-                <!-- Status & Fortschritt -->
+                <!-- FORTSCHRITTSANZEIGE -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:layout_marginBottom="8dp">
+                    android:layout_marginBottom="4dp">
 
                     <TextView
                         android:id="@+id/tv_chromedriver_status"
@@ -256,40 +257,32 @@
                         android:layout_height="wrap_content"
                         android:text="⏳ Bereit zum Download"
                         android:textSize="12sp"
-                        android:textColor="#FFA726" />
+                        android:textColor="#FFA726"
+                        android:layout_marginBottom="4dp" />
 
                     <ProgressBar
                         android:id="@+id/progress_chromedriver"
                         style="?android:attr/progressBarStyleHorizontal"
                         android:layout_width="match_parent"
-                        android:layout_height="8dp"
+                        android:layout_height="10dp"
                         android:max="100"
                         android:progress="0"
                         android:progressTint="#4FC3F7"
                         android:visibility="gone" />
                 </LinearLayout>
 
-                <Button
-                    android:id="@+id/btn_download_chromedriver"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:text="⬇️ ChromeDriver installieren"
-                    android:backgroundTint="#2196F3"
-                    android:textColor="#FFFFFF"
-                    android:textSize="13sp" />
-
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="ℹ️ Der Download erfolgt in den App-Ordner – keine Speicherberechtigung nötig!"
+                    android:text="ℹ️ Der Download kann je nach Verbindung 30-60 Sekunden dauern."
                     android:textSize="10sp"
                     android:textColor="#78909C"
-                    android:layout_marginTop="4dp"
-                    android:gravity="center" />
+                    android:gravity="center"
+                    android:layout_marginTop="4dp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- BEREITIGUNGEN -->
+        <!-- 4. BEREITIGUNGEN -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -321,6 +314,7 @@
                     android:textColor="#78909C"
                     android:layout_marginBottom="8dp" />
 
+                <!-- Internet -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -382,7 +376,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- DETAIL-STATUS -->
+        <!-- 5. DETAIL-STATUS (VOLUMEN) -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -400,7 +394,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="📊 Status"
+                    android:text="📊 Lidl Connect Status"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#E0E0E0"
