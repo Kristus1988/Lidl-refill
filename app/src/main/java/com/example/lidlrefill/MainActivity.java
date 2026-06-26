@@ -23,7 +23,7 @@ import java.util.Random;
 public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
-    private Button btnStart, btnStop;
+    private Button btnStart, btnStop, btnRefresh;
     private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvLoginHint;
     private ProgressBar progressStatus;
 
@@ -38,6 +38,12 @@ public class MainActivity extends AppCompatActivity {
     private float currentInklusivGb = 25.0f;
     private float lastRefillGb = 0.99f;
     private int consecutiveNoChange = 0;
+
+    // Verbrauchsanalyse
+    private long lastCheckTime = 0;
+    private float lastVolumeForRate = 0.99f;
+    private boolean isFirstCheck = true;
+    private float consumptionRate = 0.05f;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -62,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
 
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
+
+                calculateConsumptionRate();
             });
         }
 
@@ -73,6 +81,13 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setText("✅ Refill #" + refillCount + " aktiviert!");
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
                 Toast.makeText(MainActivity.this, "✅ Refill #" + refillCount + " aktiviert!", Toast.LENGTH_SHORT).show();
+
+                currentRefillGb = 1.00f;
+                lastRefillGb = 1.00f;
+                consecutiveNoChange = 0;
+                tvRefill.setText("🔄 Refill: 1.00 GB");
+                lastVolumeForRate = 1.00f;
+                isFirstCheck = true;
             });
         }
 
@@ -120,6 +135,32 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
+    // VERBRAUCHS-ANALYSE
+    // ==========================================
+
+    private void calculateConsumptionRate() {
+        if (isFirstCheck) {
+            isFirstCheck = false;
+            lastCheckTime = System.currentTimeMillis();
+            lastVolumeForRate = currentRefillGb;
+            return;
+        }
+
+        long timeDiff = System.currentTimeMillis() - lastCheckTime;
+        if (timeDiff < 30000) return;
+
+        float volumeDiff = lastVolumeForRate - currentRefillGb;
+        if (volumeDiff > 0.001) {
+            float minutes = timeDiff / 60000f;
+            consumptionRate = volumeDiff / minutes;
+            consumptionRate = Math.max(0.01f, Math.min(consumptionRate, 0.2f));
+        }
+
+        lastCheckTime = System.currentTimeMillis();
+        lastVolumeForRate = currentRefillGb;
+    }
+
+    // ==========================================
     // LEBENSZYKLUS
     // ==========================================
 
@@ -139,6 +180,7 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webview_lidl);
         btnStart = findViewById(R.id.btn_start);
         btnStop = findViewById(R.id.btn_stop);
+        btnRefresh = findViewById(R.id.btn_refresh);
         tvStatus = findViewById(R.id.tv_status);
         tvVolume = findViewById(R.id.tv_volume);
         tvRefill = findViewById(R.id.tv_refill);
@@ -270,19 +312,27 @@ public class MainActivity extends AppCompatActivity {
         int baseDelay;
 
         if (refill > 0.80) {
-            baseDelay = random.nextInt(600) + 600; // 10-20 Minuten
+            baseDelay = random.nextInt(600) + 900; // 15-25 Minuten
         } else if (refill > 0.40) {
-            baseDelay = random.nextInt(300) + 300; // 5-10 Minuten
+            baseDelay = random.nextInt(420) + 480; // 8-15 Minuten
         } else if (refill > 0.15) {
-            baseDelay = random.nextInt(180) + 120; // 2-5 Minuten
+            baseDelay = random.nextInt(240) + 240; // 4-8 Minuten
         } else {
-            baseDelay = random.nextInt(30) + 30; // 30-60 Sekunden
+            baseDelay = random.nextInt(120) + 60; // 1-3 Minuten
+        }
+
+        if (consumptionRate > 0.06) {
+            baseDelay = (int) (baseDelay * 0.7);
+        } else if (consumptionRate > 0.03) {
+            baseDelay = (int) (baseDelay * 0.85);
+        } else if (consumptionRate < 0.01) {
+            baseDelay = (int) (baseDelay * 1.3);
         }
 
         if (Math.abs(currentRefillGb - lastRefillGb) < 0.01) {
             consecutiveNoChange++;
             if (consecutiveNoChange > 3) {
-                baseDelay = baseDelay * 2;
+                baseDelay = (int) (baseDelay * 1.5);
             }
         } else {
             consecutiveNoChange = 0;
@@ -293,10 +343,14 @@ public class MainActivity extends AppCompatActivity {
         int finalDelay = (int) (baseDelay * variation);
 
         if (random.nextInt(10) == 0) {
-            finalDelay += random.nextInt(180) + 120;
+            finalDelay += random.nextInt(180) + 60;
         }
 
-        return Math.max(15, Math.min(finalDelay, 1200));
+        if (random.nextInt(15) == 0) {
+            finalDelay += random.nextInt(300) + 120;
+        }
+
+        return Math.max(30, Math.min(finalDelay, 1500));
     }
 
     private void startMonitoring() {
@@ -318,6 +372,12 @@ public class MainActivity extends AppCompatActivity {
             tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
         }
 
+        if (consumptionRate > 0.03) {
+            tvStatus.setText("⚡ " + String.format("%.2f", consumptionRate) + " GB/min | ⏱️ " + (delay/1000) + "s");
+        } else {
+            tvStatus.setText("🐢 " + String.format("%.2f", consumptionRate) + " GB/min | ⏱️ " + (delay/1000) + "s");
+        }
+
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn) {
                 webView.reload();
@@ -327,10 +387,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // BUTTONS
+    // BUTTONS (mit Refresh)
     // ==========================================
 
     private void setupButtons() {
+        // 🔄 MANUELLER REFRESH
+        btnRefresh.setOnClickListener(v -> {
+            if (webView != null) {
+                webView.reload();
+                tvStatus.setText("🔄 Seite wird aktualisiert...");
+                tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
+                Toast.makeText(this, "🔄 Seite aktualisiert!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
         btnStart.setOnClickListener(v -> {
             if (!isLoggedIn) {
                 Toast.makeText(this, "⚠️ Bitte zuerst in der WebView einloggen!", Toast.LENGTH_SHORT).show();
@@ -343,6 +413,8 @@ public class MainActivity extends AppCompatActivity {
             consecutiveNoChange = 0;
             currentRefillGb = 0.99f;
             lastRefillGb = 0.99f;
+            isFirstCheck = true;
+            consumptionRate = 0.05f;
             tvRefillCount.setText("🔄 Refills: 0");
             tvStatus.setText("🔄 Starte Überwachung...");
             tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
