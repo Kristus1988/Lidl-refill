@@ -4,158 +4,136 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:padding="16dp"
     android:background="#121212">
 
     <!-- Header -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:cardCornerRadius="0dp"
+        app:cardCornerRadius="12dp"
         app:cardElevation="4dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="10dp"
+            android:padding="20dp"
             android:background="#1E1E1E"
             android:gravity="center">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🛒 Lidl Connect Refill"
-                android:textSize="18sp"
+                android:text="👆 Lidl Refill Helper"
+                android:textSize="22sp"
                 android:textStyle="bold"
                 android:textColor="#4FC3F7" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Automatische Aufladung"
-                android:textSize="11sp"
+                android:text="Ziehe die Felder auf die Lidl App"
+                android:textSize="12sp"
                 android:textColor="#B0BEC5" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- WebView -->
-    <WebView
-        android:id="@+id/webview_lidl"
+    <!-- Status -->
+    <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp"
+        android:layout_marginTop="16dp">
 
-    <!-- Statusanzeige -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="#1E1E1E">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 Status"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#E0E0E0" />
+
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⏳ Warte auf Start..."
+                android:textSize="13sp"
+                android:textColor="#B0BEC5"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/tv_volume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📦 Volumen: -- GB"
+                android:textSize="13sp"
+                android:textColor="#4FC3F7"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/tv_refill_count"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🔄 Refills: 0"
+                android:textSize="13sp"
+                android:textColor="#FFB300"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/tv_next_check"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⏱️ Nächste Prüfung: --"
+                android:textSize="13sp"
+                android:textColor="#78909C"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="10dp"
-        android:background="#1E1E1E"
-        android:elevation="4dp">
+        android:layout_marginTop="16dp">
 
-        <TextView
-            android:id="@+id/tv_status"
+        <Button
+            android:id="@+id/btn_start"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🔄 Lade Lidl Connect..."
+            android:layout_height="48dp"
+            android:text="▶️ Overlay aktivieren"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF"
             android:textSize="14sp"
-            android:textColor="#B0BEC5"
-            android:gravity="center" />
+            android:layout_marginBottom="8dp" />
 
-        <ProgressBar
-            android:id="@+id/progress_status"
-            style="?android:attr/progressBarStyleHorizontal"
+        <Button
+            android:id="@+id/btn_stop"
             android:layout_width="match_parent"
-            android:layout_height="4dp"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="#4FC3F7"
-            android:layout_marginTop="4dp"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-
-            <TextView
-                android:id="@+id/tv_volume"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📦 Inklusiv: -- GB / 25 GB"
-                android:textSize="12sp"
-                android:textColor="#4FC3F7" />
-
-            <TextView
-                android:id="@+id/tv_refill"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🔄 Refill: -- GB"
-                android:textSize="12sp"
-                android:textColor="#FFB300"
-                android:textAlignment="textEnd" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/tv_refill_count"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🔄 Refills: 0"
-                android:textSize="12sp"
-                android:textColor="#B0BEC5" />
-
-            <TextView
-                android:id="@+id/tv_next_check"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="⏱️ --"
-                android:textSize="12sp"
-                android:textColor="#78909C"
-                android:textAlignment="textEnd" />
-        </LinearLayout>
-
-        <!-- Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="6dp">
-
-            <Button
-                android:id="@+id/btn_start"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:text="▶️ START"
-                android:backgroundTint="#4CAF50"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/btn_stop"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:text="⏹️ STOP"
-                android:backgroundTint="#F44336"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginStart="4dp" />
-        </LinearLayout>
+            android:layout_height="48dp"
+            android:text="⏹️ Overlay deaktivieren"
+            android:backgroundTint="#F44336"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
     </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ℹ️ Ziehe den 🔵 Kreis auf den Refill-Button und das 🟦 Rechteck auf die Volumen-Anzeige. Die App überwacht dann automatisch."
+        android:textSize="11sp"
+        android:textColor="#78909C"
+        android:gravity="center"
+        android:layout_marginTop="16dp" />
 
 </LinearLayout>
