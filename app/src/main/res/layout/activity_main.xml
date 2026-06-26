@@ -38,7 +38,7 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- WebView (lädt die Lidl-Seite) -->
+    <!-- WebView -->
     <WebView
         android:id="@+id/webview_lidl"
         android:layout_width="match_parent"
@@ -125,12 +125,24 @@
                 android:textAlignment="textEnd" />
         </LinearLayout>
 
-        <!-- Buttons (START + STOP + REFRESH) -->
+        <!-- Buttons (4 Buttons) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginTop="6dp">
+
+            <Button
+                android:id="@+id/btn_refill_test"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="🧪 Refill"
+                android:backgroundTint="#9C27B0"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="4dp" />
 
             <Button
                 android:id="@+id/btn_refresh"
@@ -148,11 +160,10 @@
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="▶️ START"
+                android:text="▶️"
                 android:backgroundTint="#4CAF50"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold"
+                android:textSize="18sp"
                 android:layout_marginEnd="4dp" />
 
             <Button
@@ -160,11 +171,10 @@
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="⏹️ STOP"
+                android:text="⏹️"
                 android:backgroundTint="#F44336"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:textSize="18sp" />
         </LinearLayout>
 
         <TextView
