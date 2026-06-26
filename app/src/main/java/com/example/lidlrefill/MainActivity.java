@@ -34,7 +34,6 @@ public class MainActivity extends AppCompatActivity {
     private Random random = new Random();
     private int checkCount = 0;
 
-    // 🔥 Zielvolumen auf 0.35 GB erhöht (früherer Refill)
     private static final float TARGET_VOLUME = 0.35f;
 
     private float currentRefillGb = 0.99f;
@@ -49,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isWaitingForRefill = false;
     private boolean isManualRefill = false;
+    private boolean isRefreshing = false; // 🔥 NEU: Verhindert doppelte Prüfungen
     private int countdownSeconds = 0;
     private Runnable countdownRunnable;
 
@@ -76,11 +76,12 @@ public class MainActivity extends AppCompatActivity {
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
 
-                if (isWaitingForRefill) {
-                    updateNextCheckTime();
-                }
-
                 calculateConsumptionRate();
+
+                // 🔥 Automatische Prüfung nach Volumen-Update
+                if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill && !isRefreshing) {
+                    checkAndClickRefill();
+                }
             });
         }
 
@@ -102,8 +103,7 @@ public class MainActivity extends AppCompatActivity {
                 lastVolumeForRate = 1.00f;
                 isFirstCheck = true;
 
-                updateNextCheckTime();
-
+                // 🔥 Countdown neu starten
                 int delay = random.nextInt(1000) + 2000;
                 tvStatus.setText("⏳ Refill verarbeitet. Warte " + (delay/1000) + "s...");
 
@@ -112,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
                         webView.reload();
                         tvStatus.setText("🔄 Seite wird neu geladen...");
                         isWaitingForRefill = false;
+                        // 🔥 Nach dem Neuladen wird onPageFinished die Prüfung starten
                     }
                 }, delay);
             });
@@ -124,6 +125,7 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#FF5722"));
                 Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
                 isWaitingForRefill = false;
+                // 🔥 Trotzdem Countdown fortsetzen
                 updateNextCheckTime();
             });
         }
@@ -136,7 +138,13 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
                 tvLoginHint.setVisibility(View.GONE);
                 if (isRunning) {
-                    startMonitoring();
+                    // 🔥 Sofort mit der ersten Prüfung starten
+                    mainHandler.postDelayed(() -> {
+                        if (isRunning && isLoggedIn && !isWaitingForRefill) {
+                            checkAndClickRefill();
+                            updateNextCheckTime();
+                        }
+                    }, 3000);
                 }
             });
         }
@@ -165,7 +173,13 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
                 tvLoginHint.setVisibility(View.GONE);
                 if (isRunning) {
-                    startMonitoring();
+                    // 🔥 Sofort mit der ersten Prüfung starten
+                    mainHandler.postDelayed(() -> {
+                        if (isRunning && isLoggedIn && !isWaitingForRefill) {
+                            checkAndClickRefill();
+                            updateNextCheckTime();
+                        }
+                    }, 3000);
                 }
             });
         }
@@ -185,6 +199,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
+
+        @JavascriptInterface
+        public void onDebugLoginStatus(String status) {
+            runOnUiThread(() -> {
+                tvStatus.setText("🔍 " + status);
+                tvStatus.setTextColor(Color.parseColor("#9C27B0"));
+            });
+        }
     }
 
     // ==========================================
@@ -202,7 +224,9 @@ public class MainActivity extends AppCompatActivity {
         countdownRunnable = new Runnable() {
             @Override
             public void run() {
-                if (!isRunning || !isLoggedIn) return;
+                if (!isRunning || !isLoggedIn) {
+                    return;
+                }
 
                 countdownSeconds--;
                 if (countdownSeconds > 0) {
@@ -210,8 +234,11 @@ public class MainActivity extends AppCompatActivity {
                     mainHandler.postDelayed(this, 1000);
                 } else {
                     tvNextCheck.setText("⏱️ Prüfung jetzt!");
-                    if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill) {
+                    // 🔥 PRÜFUNG AUSFÜHREN
+                    if (isRunning && isLoggedIn && !isWaitingForRefill && !isManualRefill && !isRefreshing) {
+                        isRefreshing = true;
                         webView.reload();
+                        // Prüfung wird nach onPageFinished ausgeführt
                     }
                 }
             }
@@ -307,9 +334,15 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (url.contains("lidl-connect.de")) {
+                    // 🔥 Login-Status prüfen
                     checkLoginStatus();
+
+                    // 🔥 Wenn eingeloggt und Automatismus läuft → Refill prüfen
                     if (isLoggedIn && isRunning && !isWaitingForRefill && !isManualRefill) {
+                        isRefreshing = false;
                         checkAndClickRefill();
+                        // 🔥 Wichtig: Countdown nach der Prüfung neu starten
+                        updateNextCheckTime();
                     }
                 }
             }
@@ -325,11 +358,16 @@ public class MainActivity extends AppCompatActivity {
     private void checkLoginStatus() {
         String js = "javascript:(function() {" +
                 "try {" +
-                "  var loggedIn = document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben');" +
-                "  if (loggedIn) {" +
+                "  var pageText = document.body.innerText;" +
+                "  var isLoggedIn = pageText.includes('Eingeloggt als:') || " +
+                "                    pageText.includes('Mein Guthaben') || " +
+                "                    pageText.includes('Übersicht') || " +
+                "                    pageText.includes('Guthaben') || " +
+                "                    pageText.includes('Tarif');" +
+                "  if (isLoggedIn) {" +
                 "    Android.onAlreadyLoggedIn();" +
                 "  } else {" +
-                "    Android.onStatus('🔐 Bitte manuell einloggen');" +
+                "    Android.onLoginFailed();" +
                 "  }" +
                 "} catch(e) {" +
                 "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
@@ -339,11 +377,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG
+    // REFILL ÜBERWACHUNG (AUTOMATISCH)
     // ==========================================
 
     private void checkAndClickRefill() {
-        if (!isLoggedIn || isWaitingForRefill || isManualRefill) return;
+        if (!isLoggedIn || isWaitingForRefill || isManualRefill) {
+            return;
+        }
 
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
@@ -498,7 +538,13 @@ public class MainActivity extends AppCompatActivity {
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        updateNextCheckTime();
+        // 🔥 Sofort erste Prüfung starten
+        mainHandler.postDelayed(() -> {
+            if (isRunning && isLoggedIn && !isWaitingForRefill) {
+                checkAndClickRefill();
+                updateNextCheckTime();
+            }
+        }, 3000);
     }
 
     // ==========================================
@@ -510,6 +556,7 @@ public class MainActivity extends AppCompatActivity {
 
         btnRefresh.setOnClickListener(v -> {
             if (webView != null) {
+                isRefreshing = true;
                 webView.reload();
                 tvStatus.setText("🔄 Seite wird aktualisiert...");
                 tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
@@ -518,12 +565,14 @@ public class MainActivity extends AppCompatActivity {
                 mainHandler.postDelayed(() -> {
                     if (isLoggedIn && !isWaitingForRefill && !isManualRefill) {
                         checkAndClickRefill();
+                        updateNextCheckTime();
                         tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
                     } else if (isWaitingForRefill || isManualRefill) {
                         tvStatus.setText("⏳ Refill wird bereits verarbeitet...");
                     } else {
                         tvStatus.setText("⚠️ Bitte zuerst einloggen!");
                     }
+                    isRefreshing = false;
                 }, 3000);
             }
         });
