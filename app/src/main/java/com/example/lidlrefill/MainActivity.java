@@ -96,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         
-        // 🔥 ChromeDriver Download Button (OHNE Berechtigungsprüfung!)
+        // ChromeDriver Download Button
         btnDownloadChromeDriver.setOnClickListener(v -> {
             downloadChromeDriver();
         });
@@ -147,6 +147,21 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onTarifDetected(String tarifName, int maxGb) {
                 runOnUiThread(() -> tvTarifInfo.setText("📶 Tarif: Unlimited on Demand " + tarifName + " (" + maxGb + " GB)"));
+            }
+            
+            // 🔥 DIE FEHLENDE METHODE!
+            @Override
+            public void onChromeDriverProgress(int progress) {
+                runOnUiThread(() -> {
+                    progressChromeDriver.setProgress(progress);
+                    if (progress < 100) {
+                        tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
+                        tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
+                    } else {
+                        tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
+                        tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
+                    }
+                });
             }
         });
     }
@@ -350,7 +365,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void downloadChromeDriver() {
-        // Button deaktivieren und Status setzen
         btnDownloadChromeDriver.setEnabled(false);
         btnDownloadChromeDriver.setText("⬇️ Lade herunter...");
         progressChromeDriver.setVisibility(View.VISIBLE);
@@ -360,7 +374,6 @@ public class MainActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
-                // Download in den App-eigenen Ordner (KEINE Berechtigung nötig!)
                 String url = "https://github.com/TeamAmaze/AmazeFileManager/releases/download/3.8.4/amaze-3.8.4.apk";
                 URL downloadUrl = new URL(url);
                 URLConnection connection = downloadUrl.openConnection();
