@@ -411,8 +411,19 @@ public class MainActivity extends AppCompatActivity {
                     
                     final int progress = fileSize > 0 ? (int) ((totalDownloaded * 100) / fileSize) : 0;
                     mainHandler.post(() -> {
-                        if (listener != null) {
-                            listener.onChromeDriverProgress(progress);
+                        // Direkt den Status-Listener im RefillService aufrufen
+                        if (refillService != null) {
+                            // Wir rufen die Methode direkt im StatusListener auf
+                            runOnUiThread(() -> {
+                                progressChromeDriver.setProgress(progress);
+                                if (progress < 100) {
+                                    tvChromeDriverStatus.setText("⬇️ Download: " + progress + "%");
+                                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4FC3F7"));
+                                } else {
+                                    tvChromeDriverStatus.setText("✅ Download abgeschlossen!");
+                                    tvChromeDriverStatus.setTextColor(Color.parseColor("#4CAF50"));
+                                }
+                            });
                         }
                     });
                 }
