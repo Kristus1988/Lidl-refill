@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Lidl Refill</string>
+    <string name="accessibility_service_description">Diese App überwacht die Lidl Connect App und klickt automatisch den "Refill aktivieren" Button, wenn das Volumen unter 0,15 GB fällt. Ziehe die Overlay-Felder auf die entsprechenden Bereiche.</string>
 </resources>
