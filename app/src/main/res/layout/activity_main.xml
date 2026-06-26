@@ -1,111 +1,186 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="20dp"
-    android:background="@color/background_dark"
-    tools:context=".MainActivity">
+    android:background="@color/background_dark">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="📱 Display Reader"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        android:textColor="@color/accent_primary"
-        android:layout_marginBottom="10dp"
-        android:layout_gravity="center"/>
-
-    <TextView
-        android:id="@+id/tv_status"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🟢 Bereit"
-        android:textSize="16sp"
-        android:textColor="@color/status_idle"
-        android:background="@color/surface_dark"
-        android:padding="12dp"
-        android:layout_marginBottom="10dp"
-        android:elevation="2dp"
-        android:alpha="0.95"/>
+        android:orientation="vertical"
+        android:padding="16dp"
+        tools:context=".MainActivity">
 
-    <TextView
-        android:id="@+id/tv_coordinates"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Koordinaten: -"
-        android:textSize="14sp"
-        android:textColor="@color/text_secondary"
-        android:background="@color/surface_dark"
-        android:padding="8dp"
-        android:layout_marginBottom="10dp"
-        android:elevation="2dp"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔄 Lidl Refill Automatik"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/accent_primary"
+            android:layout_marginBottom="4dp"
+            android:layout_gravity="center"/>
 
-    <TextView
-        android:id="@+id/tv_pixel_data"
-        android:layout_width="match_parent"
-        android:layout_height="120dp"
-        android:text="📊 Pixel-Daten erscheinen hier..."
-        android:textSize="12sp"
-        android:textColor="@color/text_secondary"
-        android:background="@color/surface_dark"
-        android:padding="10dp"
-        android:layout_marginBottom="15dp"
-        android:elevation="2dp"
-        android:scrollbars="vertical"
-        android:maxLines="6"
-        android:typeface="monospace"/>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dark Mode - Menschliches Verhalten"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="15dp"
+            android:layout_gravity="center"/>
 
-    <Button
-        android:id="@+id/btn_circle"
-        android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:text="🔵 1. Kreis öffnen"
-        android:textSize="16sp"
-        android:textColor="@color/text_button"
-        android:backgroundTint="@color/button_circle"
-        android:layout_marginBottom="10dp"
-        android:stateListAnimator="@null"/>
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🟢 Bereit"
+            android:textSize="15sp"
+            android:textColor="@color/status_idle"
+            android:background="@color/surface_dark"
+            android:padding="10dp"
+            android:layout_marginBottom="8dp"
+            android:elevation="2dp"/>
 
-    <Button
-        android:id="@+id/btn_rectangle"
-        android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:text="🟩 2. Rechteck öffnen"
-        android:textSize="16sp"
-        android:textColor="@color/text_button"
-        android:backgroundTint="@color/button_rectangle"
-        android:layout_marginBottom="10dp"/>
+        <TextView
+            android:id="@+id/tv_coordinates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Koordinaten: -"
+            android:textSize="13sp"
+            android:textColor="@color/text_secondary"
+            android:background="@color/surface_dark"
+            android:padding="8dp"
+            android:layout_marginBottom="8dp"
+            android:elevation="2dp"/>
 
-    <Button
-        android:id="@+id/btn_activate_circle"
-        android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:text="🎯 3. Kreis aktivieren"
-        android:textSize="16sp"
-        android:textColor="@color/text_button"
-        android:backgroundTint="@color/button_activate"
-        android:layout_marginBottom="10dp"/>
+        <TextView
+            android:id="@+id/tv_volume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📊 Volumen: -"
+            android:textSize="20sp"
+            android:textColor="@color/accent_primary"
+            android:textStyle="bold"
+            android:background="@color/surface_dark"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:elevation="2dp"
+            android:gravity="center"/>
 
-    <Button
-        android:id="@+id/btn_refresh"
-        android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:text="🔄 4. App aktualisieren"
-        android:textSize="16sp"
-        android:textColor="@color/text_button"
-        android:backgroundTint="@color/button_refresh"
-        android:layout_marginBottom="20dp"/>
+        <TextView
+            android:id="@+id/tv_timer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⏱️ Timer: -"
+            android:textSize="14sp"
+            android:textColor="@color/text_secondary"
+            android:background="@color/surface_dark"
+            android:padding="8dp"
+            android:layout_marginBottom="12dp"
+            android:elevation="2dp"
+            android:gravity="center"/>
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="💡 Tipp: Ziehe die Form auf den Bereich und lasse los."
-        android:textSize="12sp"
-        android:textColor="@color/text_hint"
-        android:gravity="center"
-        android:paddingTop="10dp"/>
+        <Button
+            android:id="@+id/btn_circle"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="🔵 1. Refill Button markieren (Kreis)"
+            android:textSize="13sp"
+            android:textColor="@color/text_button"
+            android:backgroundTint="@color/button_circle"
+            android:layout_marginBottom="8dp"/>
 
-</LinearLayout>
+        <Button
+            android:id="@+id/btn_rectangle"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="🟩 2. Volumen-Anzeige markieren (Rechteck)"
+            android:textSize="13sp"
+            android:textColor="@color/text_button"
+            android:backgroundTint="@color/button_rectangle"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btn_start_automation"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="▶️ 3. Automatisierung STARTEN"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_button"
+            android:backgroundTint="@color/button_start"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btn_stop_automation"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="⏹️ 4. Automatisierung STOPPEN"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_button"
+            android:backgroundTint="@color/button_stop"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btn_refresh"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="🔄 5. App zurücksetzen"
+            android:textSize="14sp"
+            android:textColor="@color/text_button"
+            android:backgroundTint="@color/button_refresh"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📋 Aktivitäten-Log:"
+            android:textSize="12sp"
+            android:textColor="@color/text_hint"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/tv_log"
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:text="📋 Log:"
+            android:textSize="11sp"
+            android:textColor="@color/text_secondary"
+            android:background="@color/surface_dark"
+            android:padding="8dp"
+            android:elevation="2dp"
+            android:scrollbars="vertical"
+            android:typeface="monospace"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 1. Lidl App öffnen | 2. Refill markieren | 3. Volumen markieren | 4. START"
+            android:textSize="11sp"
+            android:textColor="@color/text_hint"
+            android:gravity="center"
+            android:paddingTop="10dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🧠 Menschliche Verzögerungen: Zufällige Wartezeiten, Abweichungen & natürliche Bewegungen"
+            android:textSize="10sp"
+            android:textColor="@color/accent_secondary"
+            android:gravity="center"
+            android:paddingTop="4dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔒 Accessibility Service muss aktiviert sein!"
+            android:textSize="11sp"
+            android:textColor="@color/status_error"
+            android:gravity="center"
+            android:paddingTop="4dp"/>
+
+    </LinearLayout>
+</ScrollView>
