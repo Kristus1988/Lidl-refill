@@ -1,7 +1,6 @@
 package com.example.lidlrefill;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -23,7 +22,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
@@ -40,7 +38,6 @@ import java.security.GeneralSecurityException;
 
 public class MainActivity extends AppCompatActivity {
     
-    // UI-Elemente
     private EditText etUsername, etPassword;
     private TextView tvStatus, tvCurrentGb, tvRefillCount, tvDisplayNumber;
     private TextView tvLoginStatus, tvPhaseInfo, tvInklusiv, tvRefill, tvTarifInfo;
@@ -48,22 +45,17 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressChromeDriver;
     private View vStatusIndicator;
     private Button btnStart, btnStop, btnDownloadChromeDriver;
-    private LinearLayout layoutBattery;
+    private LinearLayout layoutBattery, layoutStorage, layoutInstall;
     
-    // Berechtigungs-Status
     private TextView tvInternetStatus, tvBatteryStatus, tvStorageStatus, tvInstallStatus;
-    private LinearLayout layoutStorage, layoutInstall;
     
     private RefillService refillService;
     private SharedPreferences sharedPreferences;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
     
-    // Feste Werte
     private static final int DEFAULT_INTERVAL = 2;
     private static final float DEFAULT_TARGET = 0.15f;
     private static final int DEFAULT_WAIT_AFTER = 25;
-    
-    // Berechtigungen
     private static final int REQUEST_WRITE_STORAGE = 1001;
     private static final int REQUEST_INSTALL_UNKNOWN = 1002;
     
@@ -98,25 +90,22 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnDownloadChromeDriver = findViewById(R.id.btn_download_chromedriver);
         layoutBattery = findViewById(R.id.layout_battery);
+        layoutStorage = findViewById(R.id.layout_storage);
+        layoutInstall = findViewById(R.id.layout_install);
         tvChromeDriverStatus = findViewById(R.id.tv_chromedriver_status);
         progressChromeDriver = findViewById(R.id.progress_chromedriver);
         
-        // Berechtigungs-Status
         tvInternetStatus = findViewById(R.id.tv_internet_status);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
         tvStorageStatus = findViewById(R.id.tv_storage_status);
         tvInstallStatus = findViewById(R.id.tv_install_status);
-        layoutStorage = findViewById(R.id.layout_storage);
-        layoutInstall = findViewById(R.id.layout_install);
         
         // Berechtigungs-Klicks
         layoutBattery.setOnClickListener(v -> openBatterySettings());
         layoutStorage.setOnClickListener(v -> requestStoragePermission());
         layoutInstall.setOnClickListener(v -> openInstallUnknownSettings());
         
-        // ChromeDriver Download Button
         btnDownloadChromeDriver.setOnClickListener(v -> {
-            // Prüfe alle Berechtigungen vor dem Download
             if (!checkAllPermissionsForDownload()) {
                 Toast.makeText(this, "⚠️ Bitte aktiviere alle Berechtigungen zuerst!", Toast.LENGTH_LONG).show();
                 return;
@@ -329,27 +318,23 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // ==========================================
-    // BEREITIGUNGEN PRÜFEN & ANZEIGEN
+    // BEREITIGUNGEN
     // ==========================================
     
     private boolean checkAllPermissions() {
         boolean allGranted = true;
         
-        // Internet (immer grün)
         updatePermissionStatus(tvInternetStatus, true);
         
-        // Akku-Optimierung
         boolean batteryGranted = PermissionHelper.isBatteryOptimizationDisabled(this);
         updatePermissionStatus(tvBatteryStatus, batteryGranted);
         if (!batteryGranted) allGranted = false;
         
-        // Speicherberechtigung
         boolean storageGranted = ContextCompat.checkSelfPermission(this, 
             Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         updatePermissionStatus(tvStorageStatus, storageGranted);
         if (!storageGranted) allGranted = false;
         
-        // Installation aus unbekannten Quellen (nur Android 8+)
         boolean installGranted = true;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             installGranted = getPackageManager().canRequestPackageInstalls();
@@ -393,10 +378,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    // ==========================================
-    // BEREITIGUNGEN ANFORDERN (MIT KLICK)
-    // ==========================================
-    
     private void requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
@@ -424,7 +405,7 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // ==========================================
-    // CHROMEDRIVER PRÜFEN & DOWNLOAD
+    // CHROMEDRIVER
     // ==========================================
     
     private void checkChromeDriver() {
@@ -532,7 +513,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "✅ Speicherberechtigung erteilt!", Toast.LENGTH_SHORT).show();
                 checkAllPermissions();
             } else {
-                Toast.makeText(this, "❌ Speicherberechtigung benötigt für den Download!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "❌ Speicherberechtigung benötigt!", Toast.LENGTH_LONG).show();
                 checkAllPermissions();
             }
         }
