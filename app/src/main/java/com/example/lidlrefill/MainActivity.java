@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
     private int refillCount = 0;
     private boolean isLoggedIn = false;
     private Random random = new Random();
+    private int checkCount = 0;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -53,18 +54,6 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
-
-                // 🔥 AUTOMATISCH REFILL AUSLÖSEN
-                try {
-                    float refillValue = Float.parseFloat(refill.replace(",", "."));
-                    if (refillValue <= 0.15) {
-                        tvStatus.setText("🎯 Ziel erreicht! (" + refillValue + " GB)");
-                        tvStatus.setTextColor(Color.parseColor("#FF9800"));
-                        // Refill wird durch JavaScript ausgelöst
-                    }
-                } catch (NumberFormatException e) {
-                    // Ignorieren
-                }
             });
         }
 
@@ -192,7 +181,11 @@ public class MainActivity extends AppCompatActivity {
                     if (!isLoggedIn) {
                         checkLoginStatus();
                     } else {
-                        checkAndClickRefill();
+                        // 🔥 Menschliche Verzögerung vor der Prüfung (zufällig 1-3 Sekunden)
+                        int delay = random.nextInt(2000) + 1000;
+                        mainHandler.postDelayed(() -> {
+                            checkAndClickRefill();
+                        }, delay);
                     }
                 }
             }
@@ -202,6 +195,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkLoginStatus() {
+        String username = etUsername.getText().toString().trim();
+        String password = etPassword.getText().toString().trim();
+
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var loggedIn = document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben');" +
@@ -209,56 +205,54 @@ public class MainActivity extends AppCompatActivity {
                 "    Android.onAlreadyLoggedIn();" +
                 "  } else {" +
                 "    var userField = document.getElementById('username');" +
-                "    if (userField) {" +
-                "      Android.onStatus('📝 Login-Daten eingeben...');" +
-                "      performLogin();" +
-                "    }" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
-        webView.loadUrl(js);
-    }
-
-    private void performLogin() {
-        String username = etUsername.getText().toString().trim();
-        String password = etPassword.getText().toString().trim();
-
-        String js = "javascript:(function() {" +
-                "try {" +
-                "  var userField = document.getElementById('username');" +
-                "  var passField = document.getElementById('password');" +
-                "  if (userField && passField) {" +
-                "    userField.value = '" + username + "';" +
-                "    passField.value = '" + password + "';" +
-                "    Android.onStatus('🔐 Login wird ausgeführt...');" +
-                "    var btns = document.querySelectorAll('button, input[type=\"submit\"]');" +
-                "    for(var i=0; i<btns.length; i++) {" +
-                "      if(btns[i].innerText && (btns[i].innerText.includes('Anmelden') || btns[i].innerText.includes('Login'))) {" +
-                "        btns[i].click();" +
-                "        break;" +
-                "      }" +
-                "    }" +
-                "    setTimeout(function() {" +
-                "      if (document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben')) {" +
-                "        Android.onLoginSuccess();" +
-                "      } else {" +
-                "        Android.onLoginFailed();" +
-                "      }" +
-                "    }, 5000);" +
-                "  } else {" +
-                "    Android.onLoginFailed();" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onLoginFailed();" +
-                "}" +
-                "})();";
+                "    var passField = document.getElementById('password');" +
+                "    if (userField && passField) {" +
+                    // 🔥 Menschliches Tippen simulieren (Buchstabe für Buchstabe)
+                    "      var usernameChars = '" + username + "'.split('');" +
+                    "      var passwordChars = '" + password + "'.split('');" +
+                    "      var currentUser = '';" +
+                    "      var currentPass = '';" +
+                    "      for(var i=0; i<usernameChars.length; i++) {" +
+                    "        currentUser += usernameChars[i];" +
+                    "        userField.value = currentUser;" +
+                    "        setTimeout(function(){}, 100);" +
+                    "      }" +
+                    "      for(var i=0; i<passwordChars.length; i++) {" +
+                    "        currentPass += passwordChars[i];" +
+                    "        passField.value = currentPass;" +
+                    "        setTimeout(function(){}, 100);" +
+                    "      }" +
+                    "      Android.onStatus('🔐 Login wird ausgeführt...');" +
+                    "      var btns = document.querySelectorAll('button, input[type=\"submit\"]');" +
+                    "      for(var i=0; i<btns.length; i++) {" +
+                    "        if(btns[i].innerText && (btns[i].innerText.includes('Anmelden') || btns[i].innerText.includes('Login'))) {" +
+                    "          btns[i].click();" +
+                    "          break;" +
+                    "        }" +
+                    "      }" +
+                    "      setTimeout(function() {" +
+                    "        if (document.body.innerText.includes('Eingeloggt als:') || document.body.innerText.includes('Mein Guthaben')) {" +
+                    "          Android.onLoginSuccess();" +
+                    "        } else {" +
+                    "          Android.onLoginFailed();" +
+                    "        }" +
+                    "      }, 5000);" +
+                    "    } else {" +
+                    "      Android.onLoginFailed();" +
+                    "    }" +
+                    "  }" +
+                    "} catch(e) {" +
+                    "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                    "}" +
+                    "})();";
         webView.loadUrl(js);
     }
 
     private void checkAndClickRefill() {
         if (!isRunning || !isLoggedIn) return;
+
+        checkCount++;
+        tvStatus.setText("🔍 Prüfung #" + checkCount);
 
         String js = "javascript:(function() {" +
                 "try {" +
@@ -271,28 +265,37 @@ public class MainActivity extends AppCompatActivity {
                 "  if (refillMatch) {" +
                 "    var refillValue = parseFloat(refill);" +
                 "    if (refillValue <= 0.15) {" +
-                "      Android.onStatus('🎯 Refill-Volumen: ' + refillValue + ' GB → Klicke Button...');" +
-                "      var found = false;" +
-                "      var elements = document.querySelectorAll('button, div, a, span');" +
-                "      for(var i=0; i<elements.length; i++) {" +
-                "        var text = elements[i].innerText || elements[i].textContent || '';" +
-                "        if(text.includes('Refill aktivieren')) {" +
-                "          elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                "          setTimeout(function(el) { el.click(); }, 500);" +
-                "          Android.onRefillClicked();" +
-                "          found = true;" +
-                "          break;" +
-                "        }" +
-                "      }" +
-                "      if (!found) {" +
-                "        Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
-                "      }" +
-                "    }" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
+                    // 🔥 Zufällige menschliche Verzögerung vor dem Klick (2-5 Sekunden)
+                    "      var delay = Math.floor(Math.random() * 3000) + 2000;" +
+                    "      Android.onStatus('🎯 Refill-Volumen: ' + refillValue + ' GB → Warte ' + (delay/1000) + 's...');" +
+                    "      setTimeout(function() {" +
+                    "        var found = false;" +
+                    "        var elements = document.querySelectorAll('button, div, a, span');" +
+                    "        for(var i=0; i<elements.length; i++) {" +
+                    "          var text = elements[i].innerText || elements[i].textContent || '';" +
+                    "          if(text.includes('Refill aktivieren')) {" +
+                                // 🔥 Menschliches Scrollen und Klicken
+                    "            elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
+                    "            setTimeout(function(el) {" +
+                    "              el.click();" +
+                    "              Android.onRefillClicked();" +
+                    "            }, 500, elements[i]);" +
+                    "            found = true;" +
+                    "            break;" +
+                    "          }" +
+                    "        }" +
+                    "        if (!found) {" +
+                    "          Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
+                    "        }" +
+                    "      }, delay);" +
+                    "    } else {" +
+                    "      Android.onStatus('⏳ Warte auf 0.15 GB (aktuell: ' + refillValue + ' GB)');" +
+                    "    }" +
+                    "  }" +
+                    "} catch(e) {" +
+                    "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                    "}" +
+                    "})();";
         webView.loadUrl(js);
     }
 
@@ -305,11 +308,27 @@ public class MainActivity extends AppCompatActivity {
     private void checkRefillDelayed() {
         if (!isRunning || !isLoggedIn) return;
 
-        int delay = random.nextInt(15000) + 15000;
+        // 🔥 Menschliches Verhalten: Zufällige Intervalle zwischen 15-45 Sekunden
+        int delay = random.nextInt(30000) + 15000;
+
+        // 🔥 Zufällig "Ablenkung" simulieren (längere Pause)
+        if (random.nextInt(10) == 0) {
+            delay += random.nextInt(30000) + 30000; // +30-60 Sekunden extra
+            tvStatus.setText("🧠 Kurze Ablenkung...");
+        }
+
+        // 🔥 "Lesen" simulieren (Variation)
+        if (random.nextInt(8) == 0) {
+            tvStatus.setText("📖 Seite wird gelesen...");
+        }
 
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn) {
-                webView.reload();
+                // 🔥 Zufällige kleine Pause vor dem Refresh
+                int refreshDelay = random.nextInt(1000) + 200;
+                mainHandler.postDelayed(() -> {
+                    webView.reload();
+                }, refreshDelay);
                 checkRefillDelayed();
             }
         }, delay);
@@ -329,6 +348,7 @@ public class MainActivity extends AppCompatActivity {
             isRunning = true;
             isLoggedIn = false;
             refillCount = 0;
+            checkCount = 0;
             tvRefillCount.setText("🔄 Refills: 0");
             tvStatus.setText("🔄 Starte...");
             tvStatus.setTextColor(Color.parseColor("#FFC107"));
