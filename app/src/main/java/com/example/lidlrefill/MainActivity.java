@@ -24,7 +24,7 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private Button btnStart, btnStop;
-    private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck;
+    private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvPhase;
     private ProgressBar progressStatus;
 
     private Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -36,6 +36,14 @@ public class MainActivity extends AppCompatActivity {
 
     private float currentRefillGb = 0.99f;
     private float currentInklusivGb = 25.0f;
+    private float lastRefillGb = 0.99f;
+    private int consecutiveNoChange = 0;
+
+    // Verbrauchsanalyse
+    private float consumptionRate = 0.01f;
+    private long lastCheckTime = 0;
+    private float lastVolumeForRate = 0.99f;
+    private boolean isFirstCheck = true;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -60,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
 
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
+
+                calculateConsumptionRate();
             });
         }
 
@@ -71,6 +81,18 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setText("✅ Refill #" + refillCount + " aktiviert!");
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
                 Toast.makeText(MainActivity.this, "✅ Refill #" + refillCount + " aktiviert!", Toast.LENGTH_SHORT).show();
+
+                // 🔥 Nach Refill: Volumen auf 1,00 GB setzen (Annahme)
+                currentRefillGb = 1.00f;
+                lastRefillGb = 1.00f;
+                consecutiveNoChange = 0;
+                tvRefill.setText("🔄 Refill: 1.00 GB");
+                tvPhase.setText("📍 Refill erfolgreich! Volumen: 1.00 GB");
+                tvNextCheck.setText("⏱️ Nächste Prüfung: in Kürze");
+
+                // 🔥 Wichtig: Sofort nach dem Refill die Seite neu laden,
+                // damit das neue Volumen erfasst wird
+                webView.reload();
             });
         }
 
@@ -83,9 +105,11 @@ public class MainActivity extends AppCompatActivity {
         public void onLoginDetected() {
             runOnUiThread(() -> {
                 isLoggedIn = true;
-                tvStatus.setText("✅ Eingeloggt! Überwache...");
+                tvStatus.setText("✅ Eingeloggt!");
                 tvStatus.setTextColor(Color.parseColor("#4CAF50"));
-                startMonitoring();
+                if (isRunning) {
+                    startMonitoring();
+                }
             });
         }
 
@@ -124,6 +148,7 @@ public class MainActivity extends AppCompatActivity {
         tvRefill = findViewById(R.id.tv_refill);
         tvRefillCount = findViewById(R.id.tv_refill_count);
         tvNextCheck = findViewById(R.id.tv_next_check);
+        tvPhase = findViewById(R.id.tv_phase);
         progressStatus = findViewById(R.id.progress_status);
     }
 
@@ -131,6 +156,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setVisibility(View.VISIBLE);
         webView.loadUrl(LIDL_URL);
         tvStatus.setText("🔄 Lade Lidl Connect...");
+        tvPhase.setText("📍 Warte auf Login");
     }
 
     // ==========================================
@@ -188,6 +214,33 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
+    // VERBRAUCHS-ANALYSE
+    // ==========================================
+
+    private void calculateConsumptionRate() {
+        if (isFirstCheck) {
+            isFirstCheck = false;
+            lastCheckTime = System.currentTimeMillis();
+            lastVolumeForRate = currentRefillGb;
+            return;
+        }
+
+        long timeDiff = System.currentTimeMillis() - lastCheckTime;
+        if (timeDiff < 60000) return;
+
+        float volumeDiff = lastVolumeForRate - currentRefillGb;
+        if (volumeDiff > 0) {
+            float minutes = timeDiff / 60000f;
+            consumptionRate = volumeDiff / minutes;
+            consumptionRate = Math.max(0.001f, Math.min(consumptionRate, 0.1f));
+            tvPhase.setText("📊 Verbrauch: " + String.format("%.3f", consumptionRate) + " GB/min");
+        }
+
+        lastCheckTime = System.currentTimeMillis();
+        lastVolumeForRate = currentRefillGb;
+    }
+
+    // ==========================================
     // REFILL ÜBERWACHUNG
     // ==========================================
 
@@ -239,31 +292,66 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // ADAPTIVE WARTEZEIT (menschlich & selten)
+    // ADAPTIVE WARTEZEIT (OHNE EXTRA LANGE PAUSE NACH REFILL!)
     // ==========================================
 
     private int calculateAdaptiveDelay() {
         float refill = currentRefillGb;
-
         int baseDelay;
 
+        // 1. Basis-Intervall basierend auf aktuellem Volumen
         if (refill > 0.80) {
-            baseDelay = random.nextInt(120) + 180; // 3-5 Minuten
+            baseDelay = random.nextInt(600) + 600; // 10-20 Minuten
         } else if (refill > 0.40) {
-            baseDelay = random.nextInt(90) + 120; // 2-3,5 Minuten
+            baseDelay = random.nextInt(300) + 300; // 5-10 Minuten
         } else if (refill > 0.15) {
-            baseDelay = random.nextInt(60) + 60; // 1-2 Minuten
+            baseDelay = random.nextInt(180) + 120; // 2-5 Minuten
         } else {
-            baseDelay = random.nextInt(20) + 20; // 20-40 Sekunden (nur wenn kritisch!)
+            baseDelay = random.nextInt(30) + 30; // 30-60 Sekunden
         }
 
-        // Große zufällige "menschliche" Variation
-        if (random.nextInt(3) == 0) {
-            baseDelay += random.nextInt(120) + 60; // +1-3 Minuten extra
+        // 2. Verbrauchsbasierte Anpassung
+        if (consumptionRate > 0.03) {
+            baseDelay = (int) (baseDelay * 0.7);
+        } else if (consumptionRate < 0.005) {
+            baseDelay = (int) (baseDelay * 1.5);
         }
 
-        return baseDelay;
+        // 3. Backoff bei unverändertem Volumen
+        if (Math.abs(currentRefillGb - lastRefillGb) < 0.01) {
+            consecutiveNoChange++;
+            if (consecutiveNoChange > 3) {
+                baseDelay = baseDelay * 2;
+                tvPhase.setText("📉 Keine Änderung → längere Pause");
+            }
+        } else {
+            consecutiveNoChange = 0;
+        }
+        lastRefillGb = currentRefillGb;
+
+        // 4. Menschliche Variation (+/- 30%)
+        double variation = 0.7 + (random.nextDouble() * 0.6);
+        int finalDelay = (int) (baseDelay * variation);
+
+        // 5. "Ablenkung" simulieren (10% Chance)
+        if (random.nextInt(10) == 0) {
+            finalDelay += random.nextInt(180) + 120;
+            tvPhase.setText("🧠 Kurze Ablenkung...");
+        }
+
+        // 6. "Lese"-Pause simulieren (selten)
+        if (random.nextInt(15) == 0) {
+            finalDelay += random.nextInt(120) + 60;
+            tvPhase.setText("📖 Seite wird gelesen...");
+        }
+
+        // 7. Begrenzung: mindestens 15 Sekunden, maximal 20 Minuten
+        return Math.max(15, Math.min(finalDelay, 1200));
     }
+
+    // ==========================================
+    // MONITORING
+    // ==========================================
 
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
@@ -279,19 +367,19 @@ public class MainActivity extends AppCompatActivity {
         // Nächste Prüfung anzeigen
         int minutes = delay / 60000;
         int seconds = (delay % 60000) / 1000;
-        tvNextCheck.setText("⏱️ Nächste Prüfung: " + minutes + "m " + seconds + "s");
-
-        String phaseText;
-        if (currentRefillGb > 0.80) {
-            phaseText = "🟢 Refill: " + String.format("%.2f", currentRefillGb) + " GB (voll)";
-        } else if (currentRefillGb > 0.40) {
-            phaseText = "🟡 Refill: " + String.format("%.2f", currentRefillGb) + " GB (mittel)";
-        } else if (currentRefillGb > 0.15) {
-            phaseText = "🟠 Refill: " + String.format("%.2f", currentRefillGb) + " GB (niedrig)";
+        if (minutes > 0) {
+            tvNextCheck.setText("⏱️ Nächste Prüfung: " + minutes + "m " + seconds + "s");
         } else {
-            phaseText = "🔴 Refill: " + String.format("%.2f", currentRefillGb) + " GB (kritisch!)";
+            tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
         }
-        tvStatus.setText(phaseText);
+
+        // Phase anzeigen
+        String phaseText = getPhaseText();
+        if (!tvPhase.getText().toString().contains("Ablenkung") &&
+            !tvPhase.getText().toString().contains("gelesen") &&
+            !tvPhase.getText().toString().contains("Verbrauch")) {
+            tvPhase.setText("📍 " + phaseText);
+        }
 
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn) {
@@ -299,6 +387,18 @@ public class MainActivity extends AppCompatActivity {
                 checkRefillDelayed();
             }
         }, delay);
+    }
+
+    private String getPhaseText() {
+        if (currentRefillGb > 0.80) {
+            return "🟢 Refill: " + String.format("%.2f", currentRefillGb) + " GB (voll)";
+        } else if (currentRefillGb > 0.40) {
+            return "🟡 Refill: " + String.format("%.2f", currentRefillGb) + " GB (mittel)";
+        } else if (currentRefillGb > 0.15) {
+            return "🟠 Refill: " + String.format("%.2f", currentRefillGb) + " GB (niedrig)";
+        } else {
+            return "🔴 Refill: " + String.format("%.2f", currentRefillGb) + " GB (kritisch!)";
+        }
     }
 
     // ==========================================
@@ -315,14 +415,18 @@ public class MainActivity extends AppCompatActivity {
             isRunning = true;
             refillCount = 0;
             checkCount = 0;
+            consecutiveNoChange = 0;
             currentRefillGb = 0.99f;
+            lastRefillGb = 0.99f;
+            isFirstCheck = true;
+            consumptionRate = 0.01f;
             tvRefillCount.setText("🔄 Refills: 0");
             tvStatus.setText("🔄 Starte Überwachung...");
             tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
             btnStart.setEnabled(false);
             btnStop.setEnabled(true);
 
-            checkAndClickRefill();
+            startMonitoring();
         });
 
         btnStop.setOnClickListener(v -> {
@@ -331,6 +435,7 @@ public class MainActivity extends AppCompatActivity {
             tvStatus.setText("⏹️ Gestoppt");
             tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
             tvNextCheck.setText("⏱️ --");
+            tvPhase.setText("📍 Gestoppt");
             btnStart.setEnabled(true);
             btnStop.setEnabled(false);
         });
@@ -352,7 +457,6 @@ public class MainActivity extends AppCompatActivity {
         if (webView != null) {
             webView.onResume();
         }
-        // Beim Zurückkehren prüfen, ob noch eingeloggt
         if (isRunning) {
             checkLoginStatus();
         }
