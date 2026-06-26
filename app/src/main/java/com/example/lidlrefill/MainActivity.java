@@ -201,6 +201,118 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#9C27B0"));
             });
         }
+
+        // 🔥 NEU: Holt die Position des Buttons für Touch-Simulation
+        @JavascriptInterface
+        public void onButtonPosition(float x, float y, float width, float height) {
+            runOnUiThread(() -> {
+                // Position für Touch-Geste speichern
+                buttonX = x;
+                buttonY = y;
+                buttonWidth = width;
+                buttonHeight = height;
+                performTouchClick();
+            });
+        }
+    }
+
+    // ==========================================
+    // TOUCH-SIMULATION
+    // ==========================================
+
+    private float buttonX = 0;
+    private float buttonY = 0;
+    private float buttonWidth = 0;
+    private float buttonHeight = 0;
+    private boolean isTouchPending = false;
+
+    private void performTouchClick() {
+        if (buttonX == 0 || buttonY == 0) return;
+
+        isTouchPending = true;
+
+        // Menschliche Verzögerung vor dem "Tippen" (200-800ms)
+        int delay = random.nextInt(600) + 200;
+
+        mainHandler.postDelayed(() -> {
+            if (webView == null) return;
+
+            // Zentrum des Buttons berechnen
+            float centerX = buttonX + buttonWidth / 2;
+            float centerY = buttonY + buttonHeight / 2;
+
+            // Zufällige Abweichung (wie bei einem echten Finger-Tipp)
+            float touchX = centerX + (random.nextFloat() - 0.5f) * buttonWidth * 0.3f;
+            float touchY = centerY + (random.nextFloat() - 0.5f) * buttonHeight * 0.3f;
+
+            // JavaScript für Touch-Event simulieren
+            String js = "javascript:(function() {" +
+                    "try {" +
+                    "  var x = " + touchX + ";" +
+                    "  var y = " + touchY + ";" +
+                    "  var element = document.elementFromPoint(x, y);" +
+                    "  if (element) {" +
+                    "    var rect = element.getBoundingClientRect();" +
+                    "    var touch = new Touch({" +
+                    "      identifier: Date.now()," +
+                    "      target: element," +
+                    "      clientX: x," +
+                    "      clientY: y," +
+                    "      radiusX: 10," +
+                    "      radiusY: 10," +
+                    "      rotationAngle: 0," +
+                    "      force: 1" +
+                    "    });" +
+                    "    var touchEvent = new TouchEvent('touchstart', {" +
+                    "      touches: [touch]," +
+                    "      targetTouches: [touch]," +
+                    "      changedTouches: [touch]," +
+                    "      bubbles: true," +
+                    "      cancelable: true" +
+                    "    });" +
+                    "    element.dispatchEvent(touchEvent);" +
+                    "    setTimeout(function() {" +
+                    "      var touchEnd = new TouchEvent('touchend', {" +
+                    "        touches: []," +
+                    "        targetTouches: []," +
+                    "        changedTouches: [touch]," +
+                    "        bubbles: true," +
+                    "        cancelable: true" +
+                    "      });" +
+                    "      element.dispatchEvent(touchEnd);" +
+                    "      Android.onRefillClicked();" +
+                    "    }, " + (random.nextInt(200) + 100) + ");" +
+                    "  } else {" +
+                    "    Android.onRefillNotFound();" +
+                    "  }" +
+                    "} catch(e) {" +
+                    "  Android.onStatus('⚠️ Touch-Fehler: ' + e.message);" +
+                    "}" +
+                    "})();";
+            webView.loadUrl(js);
+            isTouchPending = false;
+        }, delay);
+    }
+
+    private void findButtonForTouch() {
+        // JavaScript zum Finden der Button-Position
+        String js = "javascript:(function() {" +
+                "try {" +
+                "  var elements = document.querySelectorAll('button, div, a, span');" +
+                "  for(var i=0; i<elements.length; i++) {" +
+                "    var text = elements[i].innerText || elements[i].textContent || '';" +
+                "    if(text && text.includes('Refill aktivieren')) {" +
+                "      var rect = elements[i].getBoundingClientRect();" +
+                "      Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
+                "      return;" +
+                "    }" +
+                "  }" +
+                "  Android.onRefillNotFound();" +
+                "} catch(e) {" +
+                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
+                "}" +
+                "})();";
+        webView.loadUrl(js);
     }
 
     // ==========================================
@@ -330,7 +442,8 @@ public class MainActivity extends AppCompatActivity {
 
                     if (isLoggedIn && isRunning && !isWaitingForRefill && !isManualRefill) {
                         isRefreshing = false;
-                        checkAndClickRefill();
+                        // 🔥 NEU: Touch-basierte Refill-Prüfung
+                        checkAndClickRefillWithTouch();
                         updateNextCheckTime();
                     }
                 }
@@ -366,17 +479,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG
+    // REFILL ÜBERWACHUNG (MIT TOUCH)
     // ==========================================
 
-    private void checkAndClickRefill() {
-        if (!isLoggedIn || isWaitingForRefill || isManualRefill) {
+    private void checkAndClickRefillWithTouch() {
+        if (!isLoggedIn || isWaitingForRefill || isManualRefill || isTouchPending) {
             return;
         }
 
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
 
+        // 🔥 Zuerst Volumen prüfen, dann bei Zielerreichung Touch auslösen
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var pageText = document.body.innerText;" +
@@ -388,17 +502,15 @@ public class MainActivity extends AppCompatActivity {
                 "  if (refillMatch) {" +
                 "    var refillValue = parseFloat(refill);" +
                 "    if (refillValue <= " + TARGET_VOLUME + ") {" +
-                "      var delay = Math.floor(Math.random() * 3000) + 2000;" +
-                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Klicke...');" +
+                "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Tippe Button...');" +
                 "      setTimeout(function() {" +
                 "        var found = false;" +
                 "        var elements = document.querySelectorAll('button, div, a, span');" +
                 "        for(var i=0; i<elements.length; i++) {" +
                 "          var text = elements[i].innerText || elements[i].textContent || '';" +
                 "          if(text && text.includes('Refill aktivieren')) {" +
-                "            elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                "            setTimeout(function(el) { el.click(); }, 500);" +
-                "            Android.onRefillClicked();" +
+                "            var rect = elements[i].getBoundingClientRect();" +
+                "            Android.onButtonPosition(rect.left, rect.top, rect.width, rect.height);" +
                 "            found = true;" +
                 "            break;" +
                 "          }" +
@@ -406,7 +518,7 @@ public class MainActivity extends AppCompatActivity {
                 "        if (!found) {" +
                 "          Android.onRefillNotFound();" +
                 "        }" +
-                "      }, delay);" +
+                "      }, 500);" +
                 "    } else {" +
                 "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
                 "    }" +
@@ -419,7 +531,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // MANUELLER REFILL TEST
+    // MANUELLER REFILL TEST (MIT TOUCH)
     // ==========================================
 
     private void manualRefillTest() {
@@ -428,7 +540,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (isWaitingForRefill) {
+        if (isWaitingForRefill || isTouchPending) {
             Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -437,32 +549,8 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setText("🧪 Suche Refill-Button...");
         tvStatus.setTextColor(Color.parseColor("#9C27B0"));
 
-        String js = "javascript:(function() {" +
-                "try {" +
-                "  var found = false;" +
-                "  var elements = document.querySelectorAll('button, div, a, span');" +
-                "  for(var i=0; i<elements.length; i++) {" +
-                "    var text = elements[i].innerText || elements[i].textContent || '';" +
-                "    if(text && text.includes('Refill aktivieren')) {" +
-                "      elements[i].scrollIntoView({behavior: 'smooth', block: 'center'});" +
-                "      setTimeout(function(el) {" +
-                "        el.click();" +
-                "        Android.onRefillClicked();" +
-                "        Android.onManualRefillSuccess();" +
-                "      }, 500, elements[i]);" +
-                "      found = true;" +
-                "      break;" +
-                "    }" +
-                "  }" +
-                "  if (!found) {" +
-                "    Android.onRefillNotFound();" +
-                "    Android.onStatus('⚠️ Refill-Button nicht gefunden!');" +
-                "  }" +
-                "} catch(e) {" +
-                "  Android.onStatus('⚠️ Fehler: ' + e.message);" +
-                "}" +
-                "})();";
-        webView.loadUrl(js);
+        // 🔥 Button finden und Touch auslösen
+        findButtonForTouch();
     }
 
     // ==========================================
@@ -529,7 +617,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
         mainHandler.postDelayed(() -> {
             if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                checkAndClickRefill();
+                checkAndClickRefillWithTouch();
                 updateNextCheckTime();
             }
         }, 3000);
@@ -552,7 +640,7 @@ public class MainActivity extends AppCompatActivity {
 
                 mainHandler.postDelayed(() -> {
                     if (isLoggedIn && !isWaitingForRefill && !isManualRefill) {
-                        checkAndClickRefill();
+                        checkAndClickRefillWithTouch();
                         updateNextCheckTime();
                         tvStatus.setText("🔍 Prüfung nach manuellem Refresh");
                     } else if (isWaitingForRefill || isManualRefill) {
@@ -571,7 +659,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            if (isWaitingForRefill || isManualRefill) {
+            if (isWaitingForRefill || isManualRefill || isTouchPending) {
                 Toast.makeText(this, "⏳ Refill wird bereits verarbeitet...", Toast.LENGTH_SHORT).show();
                 return;
             }
