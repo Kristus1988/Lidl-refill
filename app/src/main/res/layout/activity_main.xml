@@ -125,34 +125,67 @@
                 android:textAlignment="textEnd" />
         </LinearLayout>
 
-        <!-- Buttons -->
+        <!-- 📝 Recorder Status -->
+        <TextView
+            android:id="@+id/tv_record_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="❌ Kein Button gespeichert"
+            android:textSize="12sp"
+            android:textColor="#B0BEC5"
+            android:gravity="center"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp" />
+
+        <!-- Buttons Reihe 1 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="6dp">
+            android:layout_marginTop="4dp">
+
+            <Button
+                android:id="@+id/btn_record_refill"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="📝 Refill-Recorder"
+                android:backgroundTint="#9C27B0"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="4dp" />
 
             <Button
                 android:id="@+id/btn_refill_test"
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="REFILL"
-                android:backgroundTint="#9C27B0"
+                android:text="⚡ REFILL"
+                android:backgroundTint="#E91E63"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:layout_marginEnd="4dp" />
+        </LinearLayout>
+
+        <!-- Buttons Reihe 2 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
 
             <Button
                 android:id="@+id/btn_refresh"
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="🔄"
+                android:text="🔄 Refresh"
                 android:backgroundTint="#FF9800"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp"
+                android:textSize="11sp"
+                android:textStyle="bold"
                 android:layout_marginEnd="4dp" />
 
             <Button
@@ -160,10 +193,11 @@
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="▶️"
+                android:text="▶️ Start"
                 android:backgroundTint="#4CAF50"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp"
+                android:textSize="11sp"
+                android:textStyle="bold"
                 android:layout_marginEnd="4dp" />
 
             <Button
@@ -171,10 +205,11 @@
                 android:layout_width="0dp"
                 android:layout_height="44dp"
                 android:layout_weight="1"
-                android:text="⏹️"
+                android:text="⏹️ Stop"
                 android:backgroundTint="#F44336"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp" />
+                android:textSize="11sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView
