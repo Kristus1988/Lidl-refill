@@ -1,6 +1,7 @@
 package com.example.lidlrefill;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -205,20 +206,25 @@ public class MainActivity extends AppCompatActivity {
             );
         } catch (GeneralSecurityException | IOException e) {
             e.printStackTrace();
+            // Fallback: Normale SharedPreferences
             sharedPreferences = getSharedPreferences("prefs", Context.MODE_PRIVATE);
         }
     }
     
     private void loadSavedData() {
-        etUsername.setText(sharedPreferences.getString("username", ""));
-        etPassword.setText(sharedPreferences.getString("password", ""));
+        if (sharedPreferences != null) {
+            etUsername.setText(sharedPreferences.getString("username", ""));
+            etPassword.setText(sharedPreferences.getString("password", ""));
+        }
     }
     
     private void saveData() {
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putString("username", etUsername.getText().toString());
-        editor.putString("password", etPassword.getText().toString());
-        editor.apply();
+        if (sharedPreferences != null) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("username", etUsername.getText().toString());
+            editor.putString("password", etPassword.getText().toString());
+            editor.apply();
+        }
     }
     
     private void updateDisplayNumber() {
