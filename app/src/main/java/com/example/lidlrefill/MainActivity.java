@@ -34,6 +34,9 @@ public class MainActivity extends AppCompatActivity {
     private Random random = new Random();
     private int checkCount = 0;
 
+    // 🔥 NEU: Zielvolumen auf 0.35 GB erhöht (früherer Refill)
+    private static final float TARGET_VOLUME = 0.35f;
+
     private float currentRefillGb = 0.99f;
     private float currentInklusivGb = 25.0f;
     private float lastRefillGb = 0.99f;
@@ -44,7 +47,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean isFirstCheck = true;
     private float consumptionRate = 0.05f;
 
-    private boolean isWaitingForRefill = false; // 🔥 NEU: Warten auf Refill-Bestätigung
+    private boolean isWaitingForRefill = false;
+    private int countdownSeconds = 0;
+    private Runnable countdownRunnable;
 
     private static final String LIDL_URL = "https://kundenkonto.lidl-connect.de/mein-lidl-connect.html";
 
@@ -70,6 +75,11 @@ public class MainActivity extends AppCompatActivity {
                 tvVolume.setText("📦 Inklusiv: " + inklusiv + " GB / 25 GB");
                 tvRefill.setText("🔄 Refill: " + refill + " GB");
 
+                // 🔥 Nach einem Refill die Wartezeit neu berechnen
+                if (isWaitingForRefill) {
+                    updateNextCheckTime();
+                }
+
                 calculateConsumptionRate();
             });
         }
@@ -77,20 +87,34 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void onRefillClicked() {
             runOnUiThread(() -> {
-                // 🔥 Refill wurde geklickt – jetzt warten wir 2-3 Sekunden
                 isWaitingForRefill = true;
-                tvStatus.setText("⏳ Refill geklickt! Warte 2-3 Sekunden...");
-                tvStatus.setTextColor(Color.parseColor("#FF9800"));
+                refillCount++;
+                tvRefillCount.setText("🔄 Refills: " + refillCount);
 
-                // 🔥 Nach 2-3 Sekunden Seite neu laden und Volumen prüfen
-                int delay = random.nextInt(1000) + 2000; // 2000-3000 ms
+                tvStatus.setText("✅ Refill #" + refillCount + " aktiviert!");
+                tvStatus.setTextColor(Color.parseColor("#4CAF50"));
+                Toast.makeText(MainActivity.this, "✅ Refill #" + refillCount + " aktiviert!", Toast.LENGTH_SHORT).show();
+
+                // 🔥 Nach Refill: Volumen auf 1.00 GB setzen
+                currentRefillGb = 1.00f;
+                lastRefillGb = 1.00f;
+                consecutiveNoChange = 0;
+                tvRefill.setText("🔄 Refill: 1.00 GB");
+                lastVolumeForRate = 1.00f;
+                isFirstCheck = true;
+
+                // 🔥 Wartezeit nach Refill anpassen
+                updateNextCheckTime();
+
+                // Warte 3 Sekunden, dann Seite neu laden
+                int delay = random.nextInt(1000) + 2000;
+                tvStatus.setText("⏳ Refill verarbeitet. Warte " + (delay/1000) + "s...");
+
                 mainHandler.postDelayed(() -> {
                     if (webView != null) {
                         webView.reload();
                         tvStatus.setText("🔄 Seite wird neu geladen...");
                         isWaitingForRefill = false;
-
-                        // Nach dem Neuladen wird onPageFinished aufgerufen und prüft das Volumen
                     }
                 }, delay);
             });
@@ -103,6 +127,8 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.setTextColor(Color.parseColor("#FF5722"));
                 Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
                 isWaitingForRefill = false;
+                // Bei Fehler trotzdem Countdown starten
+                updateNextCheckTime();
             });
         }
 
@@ -147,6 +173,40 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
+    }
+
+    // ==========================================
+    // COUNTDOWN-LOGIK
+    // ==========================================
+
+    private void startCountdown(int seconds) {
+        // Alten Countdown stoppen
+        if (countdownRunnable != null) {
+            mainHandler.removeCallbacks(countdownRunnable);
+        }
+
+        countdownSeconds = seconds;
+        tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
+
+        countdownRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!isRunning || !isLoggedIn) return;
+
+                countdownSeconds--;
+                if (countdownSeconds > 0) {
+                    tvNextCheck.setText("⏱️ Nächste Prüfung: " + countdownSeconds + "s");
+                    mainHandler.postDelayed(this, 1000);
+                } else {
+                    tvNextCheck.setText("⏱️ Prüfung jetzt!");
+                    // Prüfung ausführen
+                    if (isRunning && isLoggedIn && !isWaitingForRefill) {
+                        webView.reload();
+                    }
+                }
+            }
+        };
+        mainHandler.post(countdownRunnable);
     }
 
     // ==========================================
@@ -269,7 +329,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // REFILL ÜBERWACHUNG (mit blauem Button)
+    // REFILL ÜBERWACHUNG (mit TARGET_VOLUME = 0.35)
     // ==========================================
 
     private void checkAndClickRefill() {
@@ -278,7 +338,6 @@ public class MainActivity extends AppCompatActivity {
         checkCount++;
         tvStatus.setText("🔍 Prüfung #" + checkCount);
 
-        // 🔥 Jetzt mit genauer Erkennung des blauen Buttons
         String js = "javascript:(function() {" +
                 "try {" +
                 "  var pageText = document.body.innerText;" +
@@ -289,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
                 "  Android.onVolumeUpdate(inklusiv, refill);" +
                 "  if (refillMatch) {" +
                 "    var refillValue = parseFloat(refill);" +
-                "    if (refillValue <= 0.15) {" +
+                "    if (refillValue <= " + TARGET_VOLUME + ") {" +
                 "      var delay = Math.floor(Math.random() * 3000) + 2000;" +
                 "      Android.onStatus('🎯 Ziel: ' + refillValue + ' GB → Klicke...');" +
                 "      setTimeout(function() {" +
@@ -310,7 +369,7 @@ public class MainActivity extends AppCompatActivity {
                 "        }" +
                 "      }, delay);" +
                 "    } else {" +
-                "      Android.onStatus('⏳ Warte auf 0.15 GB (aktuell: ' + refillValue + ' GB)');" +
+                "      Android.onStatus('⏳ Warte auf " + TARGET_VOLUME + " GB (aktuell: ' + refillValue + ' GB)');" +
                 "    }" +
                 "  }" +
                 "} catch(e) {" +
@@ -363,18 +422,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // ==========================================
-    // WARTEZEIT ANPASSEN
+    // WARTEZEIT ANPASSEN (mit Countdown)
     // ==========================================
 
     private void updateNextCheckTime() {
-        int delay = calculateAdaptiveDelay() * 1000;
-        int minutes = delay / 60000;
-        int seconds = (delay % 60000) / 1000;
-        if (minutes > 0) {
-            tvNextCheck.setText("⏱️ Nächste Prüfung: " + minutes + "m " + seconds + "s");
-        } else {
-            tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
-        }
+        int delay = calculateAdaptiveDelay();
+        startCountdown(delay);
     }
 
     // ==========================================
@@ -385,6 +438,7 @@ public class MainActivity extends AppCompatActivity {
         float refill = currentRefillGb;
         int baseDelay;
 
+        // 🔥 Größere Intervalle für längeres Warten
         if (refill > 0.80) {
             baseDelay = random.nextInt(600) + 900; // 15-25 Minuten
         } else if (refill > 0.40) {
@@ -430,34 +484,12 @@ public class MainActivity extends AppCompatActivity {
     private void startMonitoring() {
         tvStatus.setText("🔍 Überwache Volumen...");
         tvStatus.setTextColor(Color.parseColor("#4FC3F7"));
-        checkRefillDelayed();
+        // 🔥 Sofort Countdown für erste Prüfung starten
+        updateNextCheckTime();
     }
 
     private void checkRefillDelayed() {
-        if (!isRunning || !isLoggedIn || isWaitingForRefill) return;
-
-        int delay = calculateAdaptiveDelay() * 1000;
-
-        int minutes = delay / 60000;
-        int seconds = (delay % 60000) / 1000;
-        if (minutes > 0) {
-            tvNextCheck.setText("⏱️ Nächste Prüfung: " + minutes + "m " + seconds + "s");
-        } else {
-            tvNextCheck.setText("⏱️ Nächste Prüfung: " + seconds + "s");
-        }
-
-        if (consumptionRate > 0.03) {
-            tvStatus.setText("⚡ " + String.format("%.2f", consumptionRate) + " GB/min | ⏱️ " + (delay/1000) + "s");
-        } else {
-            tvStatus.setText("🐢 " + String.format("%.2f", consumptionRate) + " GB/min | ⏱️ " + (delay/1000) + "s");
-        }
-
-        mainHandler.postDelayed(() -> {
-            if (isRunning && isLoggedIn && !isWaitingForRefill) {
-                webView.reload();
-                checkRefillDelayed();
-            }
-        }, delay);
+        // Wird nicht mehr benötigt – Countdown übernimmt die Steuerung
     }
 
     // ==========================================
@@ -465,10 +497,8 @@ public class MainActivity extends AppCompatActivity {
     // ==========================================
 
     private void setupButtons() {
-        // 🧪 MANUELLER REFILL TEST
         btnRefillTest.setOnClickListener(v -> manualRefillTest());
 
-        // 🔄 MANUELLER REFRESH
         btnRefresh.setOnClickListener(v -> {
             if (webView != null) {
                 webView.reload();
@@ -519,6 +549,9 @@ public class MainActivity extends AppCompatActivity {
 
         btnStop.setOnClickListener(v -> {
             isRunning = false;
+            if (countdownRunnable != null) {
+                mainHandler.removeCallbacks(countdownRunnable);
+            }
             mainHandler.removeCallbacksAndMessages(null);
             tvStatus.setText("⏹️ Gestoppt");
             tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
