@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@android:color/transparent">
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="10dp"
+        android:background="@android:color/transparent">
+
+        <!-- Shape (Kreis oder Rechteck) -->
+        <View
+            android:id="@+id/shape_view"
+            android:layout_width="160dp"
+            android:layout_height="160dp"
+            android:background="@drawable/circle_shape"
+            android:alpha="0.5"/>
+
+        <!-- Koordinaten-Anzeige -->
+        <TextView
+            android:id="@+id/tv_coords"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📍 0, 0"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:background="#CC000000"
+            android:padding="4dp"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="5dp"
+            android:layout_below="@id/shape_view"/>
+
+        <!-- Status-Text -->
+        <TextView
+            android:id="@+id/tv_overlay_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔵 KREIS"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:background="#CC000000"
+            android:padding="6dp"
+            android:layout_centerInParent="true"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- Schließen-Button -->
+        <Button
+            android:id="@+id/btn_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:text="✕"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:background="#DD000000"
+            android:padding="0dp"
+            android:elevation="5dp"/>
+
+    </RelativeLayout>
+
+</LinearLayout>
