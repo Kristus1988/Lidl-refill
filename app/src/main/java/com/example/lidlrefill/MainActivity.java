@@ -41,9 +41,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_BUTTON_HEIGHT = "button_height";
     private static final String KEY_IS_RECORDED = "is_recorded";
 
-    private static final String LIDL_APP_PACKAGE = "com.example.lidlconnect"; // Passe an!
-    // Echter Package-Name der Lidl Connect App:
-    // "de.lidlconnect.app" oder "com.lidlconnect.app"
+    // ✅ RICHTIGER PACKAGE-NAME der Lidl Connect App
+    private static final String LIDL_APP_PACKAGE = "de.lidlconnect.android";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
