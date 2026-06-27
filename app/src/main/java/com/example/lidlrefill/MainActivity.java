@@ -4,16 +4,22 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -21,14 +27,11 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnStart, btnStop, btnOpenApp, btnOpenSettings, btnDetectApp, btnSwitchToLidl;
+    private Button btnStart, btnStop, btnOpenApp, btnOpenSettings, btnStartRecording;
     private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvServiceStatus;
     private ProgressBar progressStatus;
 
@@ -40,37 +43,40 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "RefillRecorderPrefs";
     private static final String KEY_REFILL_COUNT = "refill_count";
-    private static final String KEY_SELECTED_APP = "selected_app_package";
-    private static final String KEY_APP_NAME = "selected_app_name";
+    private static final String KEY_BUTTON_X = "button_x";
+    private static final String KEY_BUTTON_Y = "button_y";
+    private static final String KEY_VOLUME_X = "volume_x";
+    private static final String KEY_VOLUME_Y = "volume_y";
+    private static final String KEY_IS_RECORDED = "is_recorded";
 
-    private String selectedAppPackage = null;
-    private String selectedAppName = null;
+    // Gespeicherte Positionen
+    private float buttonX = 0, buttonY = 0;
+    private float volumeX = 0, volumeY = 0;
+    private boolean isRecorded = false;
+
+    // Overlay für Position-Recorder
+    private WindowManager windowManager;
+    private FrameLayout overlayView;
+    private ImageView circleMarker;
+    private ImageView rectMarker;
+    private boolean isRecordingMode = false;
+    private int recordingType = 0; // 1 = Button, 2 = Volume
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
         initViews();
         setupButtons();
         checkAccessibilityService();
+        loadSavedPositions();
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         refillCount = prefs.getInt(KEY_REFILL_COUNT, 0);
-        selectedAppPackage = prefs.getString(KEY_SELECTED_APP, null);
-        selectedAppName = prefs.getString(KEY_APP_NAME, null);
         tvRefillCount.setText("🔄 Refills: " + refillCount);
-
-        if (selectedAppPackage != null) {
-            btnOpenApp.setText("📱 Lidl App öffnen ✓");
-            if (selectedAppName != null) {
-                tvServiceStatus.setText("✅ " + selectedAppName + " ausgewählt");
-            } else {
-                tvServiceStatus.setText("✅ App ausgewählt: " + selectedAppPackage);
-            }
-            tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
-            tvServiceStatus.setVisibility(View.VISIBLE);
-        }
     }
 
     private void initViews() {
@@ -78,8 +84,7 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnOpenApp = findViewById(R.id.btn_open_app);
         btnOpenSettings = findViewById(R.id.btn_open_settings);
-        btnDetectApp = findViewById(R.id.btn_detect_app);
-        btnSwitchToLidl = findViewById(R.id.btn_switch_to_lidl);
+        btnStartRecording = findViewById(R.id.btn_start_recording);
         tvStatus = findViewById(R.id.tv_status);
         tvVolume = findViewById(R.id.tv_volume);
         tvRefill = findViewById(R.id.tv_refill);
@@ -95,21 +100,27 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        btnSwitchToLidl.setOnClickListener(v -> {
-            openLidlApp();
-        });
-
-        btnDetectApp.setOnClickListener(v -> {
-            showAllInstalledApps();
-        });
-
-        btnOpenApp.setOnClickListener(v -> {
-            if (selectedAppPackage != null) {
-                openSelectedApp();
-            } else {
-                Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_SHORT).show();
-                showAllInstalledApps();
+        // Position-Recorder starten
+        btnStartRecording.setOnClickListener(v -> {
+            if (!isServiceEnabled) {
+                Toast.makeText(this, "⚠️ Bitte zuerst Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                return;
             }
+
+            // Frage welchen Marker platzieren
+            new AlertDialog.Builder(this)
+                .setTitle("📌 Position aufnehmen")
+                .setMessage("Wähle, was du aufnehmen möchtest:")
+                .setPositiveButton("🟢 Refill-Button", (d, w) -> startOverlay(1))
+                .setNegativeButton("🔵 Volumen anzeige", (d, w) -> startOverlay(2))
+                .setNeutralButton("Abbrechen", null)
+                .show();
+        });
+
+        // Lidl App öffnen
+        btnOpenApp.setOnClickListener(v -> {
+            openLidlApp();
         });
 
         btnStart.setOnClickListener(v -> {
@@ -119,9 +130,8 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            if (selectedAppPackage == null) {
-                Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_LONG).show();
-                showAllInstalledApps();
+            if (!isRecorded) {
+                Toast.makeText(this, "⚠️ Bitte zuerst Positionen aufnehmen!", Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -133,7 +143,10 @@ public class MainActivity extends AppCompatActivity {
 
             Intent serviceIntent = new Intent(this, RefillAccessibilityService.class);
             serviceIntent.putExtra("action", "start_monitoring");
-            serviceIntent.putExtra("target_package", selectedAppPackage);
+            serviceIntent.putExtra("button_x", buttonX);
+            serviceIntent.putExtra("button_y", buttonY);
+            serviceIntent.putExtra("volume_x", volumeX);
+            serviceIntent.putExtra("volume_y", volumeY);
             startService(serviceIntent);
 
             updateNextCheckTime();
@@ -155,58 +168,168 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    private void showAllInstalledApps() {
-        try {
-            PackageManager pm = getPackageManager();
-            List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-            
-            // Nach App-Namen sortieren
-            Collections.sort(apps, (a, b) -> {
-                String nameA = pm.getApplicationLabel(a).toString();
-                String nameB = pm.getApplicationLabel(b).toString();
-                return nameA.compareToIgnoreCase(nameB);
-            });
-            
-            // Array für den Dialog
-            String[] appNames = new String[apps.size()];
-            final String[] packageNames = new String[apps.size()];
-            
-            int index = 0;
-            for (ApplicationInfo info : apps) {
-                String pkg = info.packageName;
-                String appName = pm.getApplicationLabel(info).toString();
-                
-                // Eigene App überspringen
-                if (pkg.equals(getPackageName())) continue;
-                
-                appNames[index] = "📱 " + appName + "\n   " + pkg;
-                packageNames[index] = pkg;
-                index++;
-            }
-            
-            // Dialog mit allen Apps
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("📱 Alle installierten Apps (" + index + ")");
-            builder.setItems(appNames, (dialog, which) -> {
-                String selectedPackage = packageNames[which];
-                String appName = getAppName(selectedPackage);
-                selectApp(selectedPackage, appName);
-                Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
-            });
-            builder.setNegativeButton("Abbrechen", null);
-            builder.setNeutralButton("📱 Play Store", (d, w) -> {
-                try {
-                    Intent playStoreIntent = new Intent(Intent.ACTION_VIEW);
-                    playStoreIntent.setData(android.net.Uri.parse("market://details?id=de.lidlconnect.android"));
-                    startActivity(playStoreIntent);
-                } catch (Exception e) {
-                    // Ignorieren
+    // 📌 OVERLAY MIT MARKER
+    private void startOverlay(int type) {
+        recordingType = type;
+
+        // Overlay erstellen
+        overlayView = new FrameLayout(this);
+        overlayView.setBackgroundColor(Color.parseColor("#88000000"));
+
+        // Marker erstellen
+        if (type == 1) {
+            // 🟢 Kreis für Refill-Button
+            circleMarker = new ImageView(this);
+            circleMarker.setImageDrawable(getDrawable(R.drawable.circle_marker));
+            circleMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(120, 120);
+            params.gravity = Gravity.CENTER;
+            overlayView.addView(circleMarker, params);
+
+            // Touch-Listener für Ziehen
+            circleMarker.setOnTouchListener(new View.OnTouchListener() {
+                private float initialX, initialY;
+                private float touchX, touchY;
+
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            initialX = v.getX();
+                            initialY = v.getY();
+                            touchX = event.getRawX();
+                            touchY = event.getRawY();
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            float deltaX = event.getRawX() - touchX;
+                            float deltaY = event.getRawY() - touchY;
+                            v.setX(initialX + deltaX);
+                            v.setY(initialY + deltaY);
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                            // Position speichern (relativ zum Bildschirm)
+                            float centerX = v.getX() + v.getWidth() / 2;
+                            float centerY = v.getY() + v.getHeight() / 2;
+                            
+                            buttonX = centerX / getWindowManager().getDefaultDisplay().getWidth();
+                            buttonY = centerY / getWindowManager().getDefaultDisplay().getHeight();
+                            
+                            savePositions();
+                            Toast.makeText(MainActivity.this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
+                            removeOverlay();
+                            return true;
+                    }
+                    return false;
                 }
             });
-            builder.show();
-                
-        } catch (Exception e) {
-            Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        } else {
+            // 🔵 Rechteck für Volumen
+            rectMarker = new ImageView(this);
+            rectMarker.setImageDrawable(getDrawable(R.drawable.rect_marker));
+            rectMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(200, 80);
+            params.gravity = Gravity.CENTER;
+            overlayView.addView(rectMarker, params);
+
+            rectMarker.setOnTouchListener(new View.OnTouchListener() {
+                private float initialX, initialY;
+                private float touchX, touchY;
+
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            initialX = v.getX();
+                            initialY = v.getY();
+                            touchX = event.getRawX();
+                            touchY = event.getRawY();
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            float deltaX = event.getRawX() - touchX;
+                            float deltaY = event.getRawY() - touchY;
+                            v.setX(initialX + deltaX);
+                            v.setY(initialY + deltaY);
+                            return true;
+                        case MotionEvent.ACTION_UP:
+                            float centerX = v.getX() + v.getWidth() / 2;
+                            float centerY = v.getY() + v.getHeight() / 2;
+                            
+                            volumeX = centerX / getWindowManager().getDefaultDisplay().getWidth();
+                            volumeY = centerY / getWindowManager().getDefaultDisplay().getHeight();
+                            
+                            savePositions();
+                            Toast.makeText(MainActivity.this, "✅ Volumen-Position gespeichert!", Toast.LENGTH_SHORT).show();
+                            removeOverlay();
+                            return true;
+                    }
+                    return false;
+                }
+            });
+        }
+
+        // Overlay anzeigen
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                        WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+
+        // Berechtigung prüfen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "⚠️ Bitte Overlay-Berechtigung aktivieren!", Toast.LENGTH_LONG).show();
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+                return;
+            }
+        }
+
+        windowManager.addView(overlayView, params);
+        Toast.makeText(this, "📌 Ziehe den Marker an die richtige Stelle", Toast.LENGTH_LONG).show();
+    }
+
+    private void removeOverlay() {
+        if (overlayView != null && windowManager != null) {
+            try {
+                windowManager.removeView(overlayView);
+                overlayView = null;
+            } catch (Exception e) {
+                // Ignorieren
+            }
+        }
+    }
+
+    private void savePositions() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putFloat(KEY_BUTTON_X, buttonX);
+        editor.putFloat(KEY_BUTTON_Y, buttonY);
+        editor.putFloat(KEY_VOLUME_X, volumeX);
+        editor.putFloat(KEY_VOLUME_Y, volumeY);
+        editor.putBoolean(KEY_IS_RECORDED, true);
+        editor.apply();
+        
+        isRecorded = true;
+        tvServiceStatus.setText("✅ Positionen gespeichert!");
+        tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
+        tvServiceStatus.setVisibility(View.VISIBLE);
+    }
+
+    private void loadSavedPositions() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        isRecorded = prefs.getBoolean(KEY_IS_RECORDED, false);
+        if (isRecorded) {
+            buttonX = prefs.getFloat(KEY_BUTTON_X, 0);
+            buttonY = prefs.getFloat(KEY_BUTTON_Y, 0);
+            volumeX = prefs.getFloat(KEY_VOLUME_X, 0);
+            volumeY = prefs.getFloat(KEY_VOLUME_Y, 0);
+            tvServiceStatus.setText("✅ Positionen gespeichert!");
+            tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
+            tvServiceStatus.setVisibility(View.VISIBLE);
         }
     }
 
@@ -241,54 +364,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private String getAppName(String packageName) {
-        try {
-            PackageManager pm = getPackageManager();
-            ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
-            return pm.getApplicationLabel(info).toString();
-        } catch (Exception e) {
-            return packageName;
-        }
-    }
-
-    private void selectApp(String packageName, String appName) {
-        selectedAppPackage = packageName;
-        selectedAppName = appName;
-        
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit()
-            .putString(KEY_SELECTED_APP, packageName)
-            .putString(KEY_APP_NAME, appName)
-            .apply();
-        
-        btnOpenApp.setText("📱 Lidl App öffnen ✓");
-        
-        String displayName = appName != null ? appName : packageName;
-        tvServiceStatus.setText("✅ Ausgewählt: " + displayName);
-        tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
-        tvServiceStatus.setVisibility(View.VISIBLE);
-        Toast.makeText(this, "✅ Ausgewählt: " + displayName, Toast.LENGTH_LONG).show();
-    }
-
-    private void openSelectedApp() {
-        if (selectedAppPackage == null) {
-            Toast.makeText(this, "⚠️ Keine App ausgewählt!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        try {
-            Intent launchIntent = getPackageManager().getLaunchIntentForPackage(selectedAppPackage);
-            if (launchIntent != null) {
-                startActivity(launchIntent);
-                Toast.makeText(this, "📱 Öffne Lidl App", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "⚠️ App kann nicht gestartet werden", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception e) {
-            Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
     private void checkAccessibilityService() {
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(
@@ -318,7 +393,10 @@ public class MainActivity extends AppCompatActivity {
             if (isRunning && isServiceEnabled) {
                 Intent serviceIntent = new Intent(this, RefillAccessibilityService.class);
                 serviceIntent.putExtra("action", "check_refill");
-                serviceIntent.putExtra("target_package", selectedAppPackage);
+                serviceIntent.putExtra("button_x", buttonX);
+                serviceIntent.putExtra("button_y", buttonY);
+                serviceIntent.putExtra("volume_x", volumeX);
+                serviceIntent.putExtra("volume_y", volumeY);
                 startService(serviceIntent);
                 updateNextCheckTime();
             }
@@ -329,5 +407,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkAccessibilityService();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        removeOverlay();
     }
 }
