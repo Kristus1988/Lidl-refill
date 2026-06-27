@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Lidl Refill</string>
+    <string name="accessibility_service_description">Lidl Refill Automatisierung – Findet und klickt automatisch den Refill-Button in der Lidl Connect App.</string>
 </resources>
