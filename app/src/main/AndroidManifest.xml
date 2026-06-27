@@ -2,21 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ALLE notwendigen Berechtigungen -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.INTERNET" />
-    
-    <!-- Für System-Apps und Sperrbildschirm -->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
-    <!-- Für Android 10+ -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" 
         tools:ignore="QueryAllPackagesPermission" />
 
@@ -40,7 +32,6 @@
             </intent-filter>
         </activity>
         
-        <!-- Accessibility Service für ALLE Apps -->
         <service
             android:name=".OverlayService"
             android:exported="true"
@@ -54,21 +45,10 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
         
-        <!-- Floating Service für Overlay -->
         <service
             android:name=".FloatingButtonService"
             android:exported="false"
             android:process=":overlay" />
-            
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="false"
-            android:process=":remote">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
         
     </application>
 </manifest>
