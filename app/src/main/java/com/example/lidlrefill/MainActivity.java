@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -19,12 +20,12 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 
 import java.util.List;
 
@@ -149,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
 
         btnToggleService.setText("⏹️ Service stoppen");
-        btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_red_dark));
+        btnToggleService.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark)));
         tvStatus.setText("🟢 Läuft");
         tvStatus.setTextColor(Color.parseColor("#4CAF50"));
         Toast.makeText(this, "▶️ Service gestartet!", Toast.LENGTH_SHORT).show();
@@ -164,7 +165,7 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
 
         btnToggleService.setText("▶️ Service starten");
-        btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_blue_light));
+        btnToggleService.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_blue_light)));
         tvStatus.setText("🔴 Gestoppt");
         tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
         Toast.makeText(this, "⏹️ Service gestoppt!", Toast.LENGTH_SHORT).show();
@@ -174,12 +175,12 @@ public class MainActivity extends AppCompatActivity {
         isServiceRunning = prefs.getBoolean(KEY_SERVICE_RUNNING, false);
         if (isServiceRunning) {
             btnToggleService.setText("⏹️ Service stoppen");
-            btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_red_dark));
+            btnToggleService.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark)));
             tvStatus.setText("🟢 Läuft");
             tvStatus.setTextColor(Color.parseColor("#4CAF50"));
         } else {
             btnToggleService.setText("▶️ Service starten");
-            btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_blue_light));
+            btnToggleService.setBackgroundTintList(ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_blue_light)));
             tvStatus.setText("🔴 Gestoppt");
             tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
         }
@@ -192,7 +193,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Marker als benutzerdefinierter View
         markerView = new View(this) {
             private Paint paint = new Paint();
             private Paint borderPaint = new Paint();
@@ -212,7 +212,6 @@ public class MainActivity extends AppCompatActivity {
                 int padding = 10;
 
                 if (recordingType == 1) {
-                    // 🟢 Kreis
                     paint.setColor(Color.argb(150, 255, 87, 34));
                     borderPaint.setColor(Color.parseColor("#4CAF50"));
                     float cx = w / 2f;
@@ -221,7 +220,6 @@ public class MainActivity extends AppCompatActivity {
                     canvas.drawCircle(cx, cy, radius, paint);
                     canvas.drawCircle(cx, cy, radius, borderPaint);
                 } else {
-                    // 🔵 Rechteck
                     paint.setColor(Color.argb(150, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
