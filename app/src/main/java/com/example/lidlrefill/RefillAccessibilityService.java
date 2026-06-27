@@ -35,6 +35,7 @@ public class RefillAccessibilityService extends AccessibilityService {
     private boolean isMonitoring = false;
     private int refillCount = 0;
 
+    // Positionen aus MainActivity
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
     private float swipeStartX = 0, swipeStartY = 0;
@@ -78,6 +79,7 @@ public class RefillAccessibilityService extends AccessibilityService {
             return;
         }
 
+        // 1. Volumen auslesen
         float volume = readVolumeAtPosition(root);
         if (volume > 0) {
             currentVolume = volume;
@@ -86,14 +88,15 @@ public class RefillAccessibilityService extends AccessibilityService {
             Log.d(TAG, "📊 Volumen: " + volume + " GB");
         }
 
+        // 2. Refill ausführen wenn nötig
         if (shouldClick()) {
             clickRefillAtPosition(root);
         }
     }
 
-    // ✅ SWIPE-GESTE
+    // ✅ SWIPE-GESTE MIT GESPEICHERTEN POSITIONEN
     private void performSwipeRefresh() {
-        Log.d(TAG, "🔄 Führe Swipe-Geste aus");
+        Log.d(TAG, "🔄 Führe Swipe-Geste aus (Pull-to-Refresh)");
 
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = getResources().getDisplayMetrics().heightPixels;
@@ -107,7 +110,7 @@ public class RefillAccessibilityService extends AccessibilityService {
 
         long baseTime = System.currentTimeMillis();
 
-        // ACTION_DOWN
+        // 1. ACTION_DOWN
         MotionEvent downEvent = MotionEvent.obtain(
                 baseTime,
                 baseTime + 10,
@@ -117,7 +120,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         dispatchGestureEvent(downEvent);
         downEvent.recycle();
 
-        // ACTION_MOVE (in Schritten)
+        // 2. ACTION_MOVE (in Schritten)
         int steps = 20;
         for (int i = 0; i <= steps; i++) {
             float progress = (float) i / steps;
@@ -139,7 +142,7 @@ public class RefillAccessibilityService extends AccessibilityService {
             } catch (InterruptedException ignored) {}
         }
 
-        // ACTION_UP
+        // 3. ACTION_UP
         MotionEvent upEvent = MotionEvent.obtain(
                 baseTime,
                 baseTime + 310,
@@ -159,6 +162,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         root.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     }
 
+    // 📍 VOLUMEN AN POSITION AUSLESEN
     private float readVolumeAtPosition(AccessibilityNodeInfo root) {
         try {
             int x = (int) (volumeX * getResources().getDisplayMetrics().widthPixels);
@@ -171,7 +175,7 @@ public class RefillAccessibilityService extends AccessibilityService {
                 String text = node.getText().toString();
                 float value = extractVolume(text);
                 if (value > 0) {
-                    Log.d(TAG, "✅ Volumen: " + value + " GB");
+                    Log.d(TAG, "✅ Volumen an Position (" + x + "," + y + "): " + value + " GB");
                     return value;
                 }
             }
@@ -181,6 +185,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         return 0;
     }
 
+    // 📍 REFILL AN POSITION KLICKEN
     private void clickRefillAtPosition(AccessibilityNodeInfo root) {
         try {
             int x = (int) (buttonX * getResources().getDisplayMetrics().widthPixels);
@@ -192,7 +197,7 @@ public class RefillAccessibilityService extends AccessibilityService {
             if (node != null && node.isClickable()) {
                 node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                 executeRefill();
-                Log.d(TAG, "✅ Refill-Button geklickt");
+                Log.d(TAG, "✅ Refill-Button geklickt an Position (" + x + "," + y + ")");
                 return;
             }
 
@@ -201,7 +206,7 @@ public class RefillAccessibilityService extends AccessibilityService {
                 if (n.isClickable()) {
                     n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                     executeRefill();
-                    Log.d(TAG, "✅ Refill-Button via Text gefunden");
+                    Log.d(TAG, "✅ Refill-Button via Text gefunden und geklickt");
                     return;
                 }
             }
@@ -210,6 +215,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         }
     }
 
+    // ✅ SCROLLEN ZU POSITION
     private void scrollToPosition(AccessibilityNodeInfo root, int targetX, int targetY) {
         if (isScrollingToPosition) return;
         isScrollingToPosition = true;
@@ -225,7 +231,8 @@ public class RefillAccessibilityService extends AccessibilityService {
                 }
             }
 
-            for (int i = 0; i < 15; i++) {
+            int maxScrolls = 15;
+            for (int i = 0; i < maxScrolls; i++) {
                 root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
                 try { Thread.sleep(400); } catch (InterruptedException ignored) {}
 
@@ -248,6 +255,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         isScrollingToPosition = false;
     }
 
+    // 🔍 NODE AN POSITION FINDEN
     private AccessibilityNodeInfo findNodeAt(AccessibilityNodeInfo root, int x, int y) {
         return findNodeRecursive(root, x, y);
     }
@@ -347,6 +355,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         }, 120000);
     }
 
+    // ✅ OVERLAY
     private void showOverlay() {
         if (isOverlayVisible) return;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
