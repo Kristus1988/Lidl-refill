@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.RectF;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -40,11 +41,14 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_BUTTON_Y = "button_y";
     private static final String KEY_VOLUME_X = "volume_x";
     private static final String KEY_VOLUME_Y = "volume_y";
+    private static final String KEY_VOLUME_WIDTH = "volume_width";
+    private static final String KEY_VOLUME_HEIGHT = "volume_height";
     private static final String KEY_IS_RECORDED = "is_recorded";
     private static final String KEY_SERVICE_RUNNING = "service_running";
 
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
+    private float volumeWidth = 0.25f, volumeHeight = 0.10f; // Standardgröße für OCR
     private boolean isRecorded = false;
     private boolean isServiceRunning = false;
 
@@ -52,6 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private View markerView;
     private int recordingType = 0;
     private boolean isMarkerVisible = false;
+
+    // MediaProjection für OCR
+    private static final int REQUEST_MEDIA_PROJECTION = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -138,6 +145,21 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // MediaProjection Berechtigung prüfen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            MediaProjectionManager projectionManager = 
+                (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+            if (projectionManager != null) {
+                startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION);
+                return;
+            }
+        }
+
+        // Fallback: Service ohne MediaProjection starten
+        startMonitoringService();
+    }
+
+    private void startMonitoringService() {
         isServiceRunning = true;
         prefs.edit().putBoolean(KEY_SERVICE_RUNNING, true).apply();
 
@@ -147,6 +169,8 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("button_y", buttonY);
         intent.putExtra("volume_x", volumeX);
         intent.putExtra("volume_y", volumeY);
+        intent.putExtra("volume_width", volumeWidth);
+        intent.putExtra("volume_height", volumeHeight);
         startService(intent);
 
         btnToggleService.setText("⏹️ Service stoppen");
@@ -186,7 +210,31 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ✅ FLOATING MARKER (ECHES OVERLAY WIE BEIM AUTOKLICKER!)
+    // ✅ MediaProjection Ergebnis
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_MEDIA_PROJECTION) {
+            if (resultCode == RESULT_OK) {
+                Toast.makeText(this, "✅ Screenshot-Berechtigung erteilt!", Toast.LENGTH_SHORT).show();
+                // MediaProjection an Service übergeben
+                Intent intent = new Intent(this, RefillAccessibilityService.class);
+                intent.putExtra("action", "media_projection");
+                intent.putExtra("resultCode", resultCode);
+                intent.putExtra("data", data);
+                startService(intent);
+                
+                // Dann Service starten
+                startMonitoringService();
+            } else {
+                Toast.makeText(this, "⚠️ Screenshot-Berechtigung verweigert!", Toast.LENGTH_LONG).show();
+                // Trotzdem Service starten (OCR funktioniert dann nicht)
+                startMonitoringService();
+            }
+        }
+    }
+
+    // ✅ FLOATING MARKER
     private void showFloatingMarker() {
         if (isMarkerVisible) {
             removeMarker();
@@ -228,7 +276,7 @@ public class MainActivity extends AppCompatActivity {
                     textPaint.setTextAlign(Paint.Align.CENTER);
                     canvas.drawText("REFILL", cx, cy + 8, textPaint);
                 } else {
-                    // 🔵 Rechteck für Volumen (VERGRÖSSERT!)
+                    // 🔵 Rechteck für Volumen
                     paint.setColor(Color.argb(180, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
@@ -244,9 +292,20 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // ✅ GRÖSSEN FÜR MARKER (VERGRÖSSERT!)
-        int size = (recordingType == 1) ? 120 : 340;    // Rechteck 340px breit
-        int height = (recordingType == 1) ? 120 : 120;  // Rechteck 120px hoch
+        // Marker-Größen
+        int size = (recordingType == 1) ? 120 : 340;
+        int height = (recordingType == 1) ? 120 : 120;
+
+        // Marker speichert auch die Größe für OCR
+        if (recordingType == 2) {
+            volumeWidth = (float) size / windowManager.getDefaultDisplay().getWidth();
+            volumeHeight = (float) height / windowManager.getDefaultDisplay().getHeight();
+            // Speichern für später
+            prefs.edit()
+                .putFloat(KEY_VOLUME_WIDTH, volumeWidth)
+                .putFloat(KEY_VOLUME_HEIGHT, volumeHeight)
+                .apply();
+        }
 
         markerView.setOnTouchListener(new View.OnTouchListener() {
             private float initialX, initialY;
@@ -329,6 +388,8 @@ public class MainActivity extends AppCompatActivity {
             .putFloat(KEY_BUTTON_Y, buttonY)
             .putFloat(KEY_VOLUME_X, volumeX)
             .putFloat(KEY_VOLUME_Y, volumeY)
+            .putFloat(KEY_VOLUME_WIDTH, volumeWidth)
+            .putFloat(KEY_VOLUME_HEIGHT, volumeHeight)
             .putBoolean(KEY_IS_RECORDED, true)
             .apply();
         isRecorded = true;
@@ -343,6 +404,8 @@ public class MainActivity extends AppCompatActivity {
             buttonY = prefs.getFloat(KEY_BUTTON_Y, 0);
             volumeX = prefs.getFloat(KEY_VOLUME_X, 0);
             volumeY = prefs.getFloat(KEY_VOLUME_Y, 0);
+            volumeWidth = prefs.getFloat(KEY_VOLUME_WIDTH, 0.25f);
+            volumeHeight = prefs.getFloat(KEY_VOLUME_HEIGHT, 0.10f);
             tvServiceStatus.setText("✅ Positionen gespeichert!");
             tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
         }
