@@ -23,7 +23,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.List;
 import java.util.Random;
 
 public class RefillAccessibilityService extends AccessibilityService {
@@ -36,6 +35,7 @@ public class RefillAccessibilityService extends AccessibilityService {
     private boolean isMonitoring = false;
     private int refillCount = 0;
 
+    // ✅ DIE POSITIONEN AUF DEM DISPLAY (in %)
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
     private boolean isRecorded = false;
@@ -49,6 +49,7 @@ public class RefillAccessibilityService extends AccessibilityService {
     private static final float TARGET_VOLUME = 0.35f;
     private Random random = new Random();
 
+    // Overlay
     private WindowManager windowManager;
     private View overlayView;
     private TextView tvStatus, tvVolume, tvRefills, tvNext;
@@ -56,178 +57,64 @@ public class RefillAccessibilityService extends AccessibilityService {
     private boolean isOverlayVisible = false;
     private boolean isPaused = false;
 
-    // ✅ WIE AUTOKLICKER: SCROLLEN UND WARTEN
-    private boolean isScrolling = false;
-    private int scrollAttempts = 0;
-    private static final int MAX_SCROLL_ATTEMPTS = 5;
-
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (!isMonitoring || isPaused || !isRecorded) return;
 
         String pkg = event.getPackageName() != null ? event.getPackageName().toString() : "";
-        if (!pkg.toLowerCase().contains("lidl") && !pkg.toLowerCase().contains("connect")) return;
-
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) return;
-
-        // ✅ 1. ZUERST: Zum Unlimited Refill Bereich scrollen (WIE AUTOKLICKER!)
-        if (!isScrolling) {
-            scrollToUnlimitedRefill(root);
+        if (!pkg.toLowerCase().contains("lidl") && !pkg.toLowerCase().contains("connect")) {
             return;
         }
 
-        // ✅ 2. VOLUMEN AUSLESEN (wenn nicht am scrollen)
-        float volume = readVolume(root);
+        Log.d(TAG, "📱 Lidl App erkannt");
+
+        // ✅ Hauptlogik: Volumen auslesen und Refill ausführen
+        performActions();
+    }
+
+    private void performActions() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            Log.d(TAG, "⏳ Kein Root, warte...");
+            return;
+        }
+
+        // 1. Volumen auslesen (an der gespeicherten Position)
+        float volume = readVolumeAtPosition(root);
         if (volume > 0) {
             currentVolume = volume;
             updateOverlay();
             handleVolumeUpdate();
+            Log.d(TAG, "📊 Volumen: " + volume + " GB");
         }
 
-        // ✅ 3. REFILL PRÜFEN (mit Scroll-Fallback)
+        // 2. Refill ausführen wenn nötig
         if (shouldClick()) {
-            clickRefillWithScroll(root);
+            clickRefillAtPosition(root);
         }
     }
 
-    // ✅ SCROLLEN ZUM UNLIMITED REFILL BEREICH (WIE AUTOKLICKER!)
-    private void scrollToUnlimitedRefill(AccessibilityNodeInfo root) {
-        if (isScrolling) return;
-        isScrolling = true;
-        scrollAttempts = 0;
-
-        Log.d(TAG, "📜 Scrolle zum Unlimited Refill Bereich...");
-
-        // Suche nach "Unlimited Refill" Text
-        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Unlimited Refill");
-        if (!nodes.isEmpty()) {
-            // Scrolle zu diesem Element
-            AccessibilityNodeInfo target = nodes.get(0);
-            target.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-            Log.d(TAG, "📜 Zu 'Unlimited Refill' gescrollt");
-            
-            // Warten, bis der Inhalt geladen ist
-            handler.postDelayed(() -> {
-                isScrolling = false;
-                Log.d(TAG, "✅ Scrollen abgeschlossen, prüfe Inhalt");
-                // Erneut prüfen
-                AccessibilityNodeInfo newRoot = getRootInActiveWindow();
-                if (newRoot != null) {
-                    float volume = readVolume(newRoot);
-                    if (volume > 0) {
-                        currentVolume = volume;
-                        updateOverlay();
-                        handleVolumeUpdate();
-                    }
-                    if (shouldClick()) {
-                        clickRefillWithScroll(newRoot);
-                    }
-                }
-            }, 800);
-            return;
-        }
-
-        // Fallback: Suche nach "Unlimited"
-        List<AccessibilityNodeInfo> unlimitedNodes = root.findAccessibilityNodeInfosByText("Unlimited");
-        if (!unlimitedNodes.isEmpty()) {
-            unlimitedNodes.get(0).performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-            Log.d(TAG, "📜 Zu 'Unlimited' gescrollt");
-            handler.postDelayed(() -> {
-                isScrolling = false;
-            }, 800);
-            return;
-        }
-
-        // Fallback: Suche nach "Refill"
-        List<AccessibilityNodeInfo> refillNodes = root.findAccessibilityNodeInfosByText("Refill");
-        if (!refillNodes.isEmpty()) {
-            refillNodes.get(0).performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-            Log.d(TAG, "📜 Zu 'Refill' gescrollt");
-            handler.postDelayed(() -> {
-                isScrolling = false;
-            }, 800);
-            return;
-        }
-
-        // Fallback: Generisches Scrollen nach unten
-        root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-        Log.d(TAG, "📜 Generisches Scrollen nach unten");
-        handler.postDelayed(() -> {
-            isScrolling = false;
-        }, 800);
-    }
-
-    // ✅ KLICKEN MIT SCROLL-FALLBACK (WIE AUTOKLICKER!)
-    private void clickRefillWithScroll(AccessibilityNodeInfo root) {
-        // Zuerst versuchen, den Button an der gespeicherten Position zu finden
-        int x = (int) (buttonX * getResources().getDisplayMetrics().widthPixels);
-        int y = (int) (buttonY * getResources().getDisplayMetrics().heightPixels);
-        
-        AccessibilityNodeInfo node = findNodeAt(root, x, y);
-        if (node != null && node.isClickable()) {
-            node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-            executeRefill();
-            return;
-        }
-
-        // Suche nach "Refill aktivieren" Button
-        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Refill aktivieren");
-        for (AccessibilityNodeInfo n : nodes) {
-            if (n.isClickable()) {
-                n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                executeRefill();
-                return;
-            }
-        }
-
-        // Suche nach "GUTHABEN AUFLADEN" Button
-        List<AccessibilityNodeInfo> chargeNodes = root.findAccessibilityNodeInfosByText("GUTHABEN AUFLADEN");
-        for (AccessibilityNodeInfo n : chargeNodes) {
-            if (n.isClickable()) {
-                n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                executeRefill();
-                return;
-            }
-        }
-
-        // Wenn nichts gefunden: Scrolle und versuche es erneut
-        if (scrollAttempts < MAX_SCROLL_ATTEMPTS) {
-            scrollAttempts++;
-            Log.d(TAG, "🔄 Scroll-Versuch " + scrollAttempts + "/" + MAX_SCROLL_ATTEMPTS);
-            root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-            handler.postDelayed(() -> {
-                AccessibilityNodeInfo newRoot = getRootInActiveWindow();
-                if (newRoot != null) {
-                    clickRefillWithScroll(newRoot);
-                }
-            }, 500);
-        } else {
-            Log.d(TAG, "⚠️ Max Scroll-Versuche erreicht, Button nicht gefunden");
-            showToast("⚠️ Refill-Button nicht gefunden!");
-            scrollAttempts = 0;
-        }
-    }
-
-    private float readVolume(AccessibilityNodeInfo root) {
+    // ✅ VOLUMEN AN DER GESPEICHERTEN POSITION AUSLESEN
+    private float readVolumeAtPosition(AccessibilityNodeInfo root) {
         try {
+            // % in Pixel umrechnen
             int x = (int) (volumeX * getResources().getDisplayMetrics().widthPixels);
             int y = (int) (volumeY * getResources().getDisplayMetrics().heightPixels);
+
+            Log.d(TAG, "🔍 Suche Volumen an Position (" + x + "," + y + ")");
+
+            // 📜 ZUERST ZU DER POSITION SCROLLEN
+            scrollToPosition(root, x, y);
+
+            // Dann den Text an der Position lesen
             AccessibilityNodeInfo node = findNodeAt(root, x, y);
             if (node != null && node.getText() != null) {
                 String text = node.getText().toString();
                 float value = extractVolume(text);
                 if (value > 0) {
-                    Log.d(TAG, "📊 Volumen gelesen: " + value + " GB");
+                    Log.d(TAG, "✅ Volumen gefunden: " + value + " GB");
                     return value;
                 }
-            }
-            
-            // Fallback: Suche im gesamten Text
-            float fallback = findVolumeInText(root);
-            if (fallback > 0) {
-                Log.d(TAG, "📊 Volumen (Fallback): " + fallback + " GB");
-                return fallback;
             }
         } catch (Exception e) {
             Log.e(TAG, "Fehler beim Volumen-Auslesen: " + e.getMessage());
@@ -235,27 +122,90 @@ public class RefillAccessibilityService extends AccessibilityService {
         return 0;
     }
 
-    private float findVolumeInText(AccessibilityNodeInfo root) {
-        return findVolumeRecursive(root);
-    }
+    // ✅ REFILL AN DER GESPEICHERTEN POSITION KLICKEN
+    private void clickRefillAtPosition(AccessibilityNodeInfo root) {
+        try {
+            // % in Pixel umrechnen
+            int x = (int) (buttonX * getResources().getDisplayMetrics().widthPixels);
+            int y = (int) (buttonY * getResources().getDisplayMetrics().heightPixels);
 
-    private float findVolumeRecursive(AccessibilityNodeInfo node) {
-        if (node == null) return 0;
-        if (node.getText() != null) {
-            String text = node.getText().toString();
-            if (text.contains("GB") || text.contains("Gb")) {
-                float value = extractVolume(text);
-                if (value > 0) return value;
+            Log.d(TAG, "🔍 Suche Refill-Button an Position (" + x + "," + y + ")");
+
+            // 📜 ZUERST ZU DER POSITION SCROLLEN
+            scrollToPosition(root, x, y);
+
+            // Dann den Button an der Position finden und klicken
+            AccessibilityNodeInfo node = findNodeAt(root, x, y);
+            if (node != null && node.isClickable()) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                executeRefill();
+                Log.d(TAG, "✅ Refill-Button geklickt an Position (" + x + "," + y + ")");
+                return;
             }
+
+            // Fallback: Nach "Refill aktivieren" suchen (falls die Position nicht genau stimmt)
+            java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Refill aktivieren");
+            for (AccessibilityNodeInfo n : nodes) {
+                if (n.isClickable()) {
+                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    executeRefill();
+                    Log.d(TAG, "✅ Refill-Button via Text gefunden und geklickt");
+                    return;
+                }
+            }
+
+            Log.d(TAG, "⚠️ Kein Refill-Button an Position (" + x + "," + y + ") gefunden");
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Refill-Klick: " + e.getMessage());
         }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            float result = findVolumeRecursive(child);
-            if (result > 0) return result;
-        }
-        return 0;
     }
 
+    // ✅ SCROLLEN ZU EINER POSITION (DAS WICHTIGSTE!)
+    private void scrollToPosition(AccessibilityNodeInfo root, int targetX, int targetY) {
+        try {
+            // Prüfen ob die Position bereits sichtbar ist
+            AccessibilityNodeInfo node = findNodeAt(root, targetX, targetY);
+            if (node != null) {
+                Rect rect = new Rect();
+                node.getBoundsInScreen(rect);
+                if (rect.contains(targetX, targetY)) {
+                    Log.d(TAG, "📌 Position bereits sichtbar bei (" + targetX + "," + targetY + ")");
+                    return;
+                }
+            }
+
+            // Scrolle nach unten, bis die Position sichtbar ist
+            int maxScrolls = 15;
+            for (int i = 0; i < maxScrolls; i++) {
+                root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                Log.d(TAG, "📜 Scrolle nach unten, Versuch " + (i + 1) + "/" + maxScrolls);
+
+                // Kurz warten (der Inhalt muss nachladen)
+                try {
+                    Thread.sleep(400);
+                } catch (InterruptedException ignored) {}
+
+                // Prüfen ob die Position jetzt sichtbar ist
+                AccessibilityNodeInfo newRoot = getRootInActiveWindow();
+                if (newRoot != null) {
+                    node = findNodeAt(newRoot, targetX, targetY);
+                    if (node != null) {
+                        Rect rect = new Rect();
+                        node.getBoundsInScreen(rect);
+                        if (rect.contains(targetX, targetY)) {
+                            Log.d(TAG, "✅ Position gefunden nach " + (i + 1) + " Scrolls");
+                            return;
+                        }
+                    }
+                }
+            }
+            Log.d(TAG, "⚠️ Position nach " + maxScrolls + " Scrolls nicht gefunden");
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Scrollen: " + e.getMessage());
+        }
+    }
+
+    // 🔍 NODE AN POSITION FINDEN
     private AccessibilityNodeInfo findNodeAt(AccessibilityNodeInfo root, int x, int y) {
         return findNodeRecursive(root, x, y);
     }
@@ -308,7 +258,7 @@ public class RefillAccessibilityService extends AccessibilityService {
                     consumptionRate = diff / minutes;
                     if (consumptionRate > 0.001) {
                         isLearningPhase = false;
-                        showToast("✅ Verbrauch gelernt: " + String.format("%.3f", consumptionRate) + " GB/min");
+                        showToast("✅ Verbrauch: " + String.format("%.3f", consumptionRate) + " GB/min");
                     }
                 }
             }
@@ -321,16 +271,12 @@ public class RefillAccessibilityService extends AccessibilityService {
         if (consumptionRate > 0.001) {
             float remaining = currentVolume - TARGET_VOLUME;
             if (remaining <= 0) {
-                // Volumen unter Ziel, Refill wird beim nächsten Event ausgeführt
                 return;
             }
             float minutes = remaining / consumptionRate;
             int delay = (int) (minutes * 60 * (0.8 + random.nextDouble() * 0.4));
             delay = Math.max(30, Math.min(delay, 1800));
             updateOverlay();
-            handler.postDelayed(() -> {
-                // Beim nächsten Event wird geprüft
-            }, delay * 1000L);
         }
 
         lastVolume = currentVolume;
@@ -346,28 +292,22 @@ public class RefillAccessibilityService extends AccessibilityService {
         refillCount++;
         isWaitingForRefill = true;
         isLearningPhase = true;
-        isScrolling = false;
-        scrollAttempts = 0;
-        
+
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putInt(KEY_REFILL_COUNT, refillCount).apply();
-        
+
         Log.d(TAG, "✅ Refill #" + refillCount + " ausgeführt!");
         showToast("✅ Refill #" + refillCount + " ausgeführt!");
         updateOverlay();
-        
+
         handler.postDelayed(() -> {
             isWaitingForRefill = false;
             showToast("⏳ Prüfe neues Volumen...");
             updateOverlay();
-            // Nach Refill: neu scrollen
-            AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root != null) {
-                scrollToUnlimitedRefill(root);
-            }
         }, 120000);
     }
 
+    // Overlay
     private void showOverlay() {
         if (isOverlayVisible) return;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -399,21 +339,7 @@ public class RefillAccessibilityService extends AccessibilityService {
 
         btnRefresh.setOnClickListener(v -> {
             showToast("🔄 Aktualisiere...");
-            isScrolling = false;
-            AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root != null) {
-                scrollToUnlimitedRefill(root);
-                handler.postDelayed(() -> {
-                    float volume = readVolume(root);
-                    if (volume > 0) {
-                        currentVolume = volume;
-                        updateOverlay();
-                        showToast("📊 " + String.format("%.2f", volume) + " GB");
-                    } else {
-                        showToast("⚠️ Kein Volumen gefunden");
-                    }
-                }, 1000);
-            }
+            performActions();
         });
 
         overlayView.setOnTouchListener((v, event) -> {
@@ -496,8 +422,6 @@ public class RefillAccessibilityService extends AccessibilityService {
                 case "start_monitoring":
                     isMonitoring = true;
                     isPaused = false;
-                    isScrolling = false;
-                    scrollAttempts = 0;
                     buttonX = intent.getFloatExtra("button_x", 0);
                     buttonY = intent.getFloatExtra("button_y", 0);
                     volumeX = intent.getFloatExtra("volume_x", 0);
@@ -505,13 +429,9 @@ public class RefillAccessibilityService extends AccessibilityService {
                     isRecorded = buttonX > 0 && volumeX > 0;
                     if (isRecorded) {
                         showOverlay();
-                        // Sofort nach dem Start scrollen
                         handler.postDelayed(() -> {
-                            AccessibilityNodeInfo root = getRootInActiveWindow();
-                            if (root != null) {
-                                scrollToUnlimitedRefill(root);
-                            }
-                        }, 1000);
+                            performActions();
+                        }, 1500);
                     }
                     Log.d(TAG, "▶️ Monitoring gestartet");
                     break;
@@ -522,19 +442,8 @@ public class RefillAccessibilityService extends AccessibilityService {
                     Log.d(TAG, "⏹️ Gestoppt");
                     break;
                 case "refresh":
-                    isScrolling = false;
-                    AccessibilityNodeInfo root = getRootInActiveWindow();
-                    if (root != null) {
-                        scrollToUnlimitedRefill(root);
-                        handler.postDelayed(() -> {
-                            float volume = readVolume(root);
-                            if (volume > 0) {
-                                currentVolume = volume;
-                                updateOverlay();
-                                showToast("📊 " + String.format("%.2f", volume) + " GB");
-                            }
-                        }, 1000);
-                    }
+                    showToast("🔄 Aktualisiere...");
+                    performActions();
                     break;
             }
         }
