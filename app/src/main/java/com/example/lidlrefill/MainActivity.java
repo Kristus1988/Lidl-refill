@@ -186,7 +186,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ✅ MARKER ALS VIEW (OHNE EXTERNE DATEIEN)
+    // ✅ MARKER MIT VERGRÖSSERTEM RECHTECK
     private void showMarker() {
         if (isMarkerVisible) {
             removeMarker();
@@ -212,6 +212,7 @@ public class MainActivity extends AppCompatActivity {
                 int padding = 10;
 
                 if (recordingType == 1) {
+                    // 🟢 Kreis für Refill-Button
                     paint.setColor(Color.argb(150, 255, 87, 34));
                     borderPaint.setColor(Color.parseColor("#4CAF50"));
                     float cx = w / 2f;
@@ -220,6 +221,7 @@ public class MainActivity extends AppCompatActivity {
                     canvas.drawCircle(cx, cy, radius, paint);
                     canvas.drawCircle(cx, cy, radius, borderPaint);
                 } else {
+                    // 🔵 Rechteck für Volumen (VERGRÖSSERT!)
                     paint.setColor(Color.argb(150, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
@@ -229,8 +231,9 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        int size = (recordingType == 1) ? 80 : 140;
-        int height = (recordingType == 1) ? 80 : 50;
+        // ✅ GRÖSSEN FÜR MARKER
+        int size = (recordingType == 1) ? 80 : 240;    // Rechteck 240px breit
+        int height = (recordingType == 1) ? 80 : 90;   // Rechteck 90px hoch
 
         markerView.setOnTouchListener(new View.OnTouchListener() {
             private float initialX, initialY, touchX, touchY;
