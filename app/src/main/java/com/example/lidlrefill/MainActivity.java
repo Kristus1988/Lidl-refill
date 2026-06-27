@@ -1,6 +1,7 @@
 package com.example.lidlrefill;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -22,8 +23,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -101,9 +104,9 @@ public class MainActivity extends AppCompatActivity {
             openLidlApp();
         });
 
-        // 🔍 Lidl Connect App suchen (NICHT über ActivityManager!)
+        // 🔍 Alle offenen Apps anzeigen
         btnDetectApp.setOnClickListener(v -> {
-            detectLidlApp();
+            showAllRunningApps();
         });
 
         // Lidl App öffnen
@@ -111,8 +114,8 @@ public class MainActivity extends AppCompatActivity {
             if (selectedAppPackage != null) {
                 openSelectedApp();
             } else {
-                Toast.makeText(this, "⚠️ Bitte zuerst eine App erkennen!", Toast.LENGTH_SHORT).show();
-                detectLidlApp();
+                Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_SHORT).show();
+                showAllRunningApps();
             }
         });
 
@@ -125,8 +128,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (selectedAppPackage == null) {
-                Toast.makeText(this, "⚠️ Bitte zuerst die Lidl App erkennen!", Toast.LENGTH_LONG).show();
-                detectLidlApp();
+                Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_LONG).show();
+                showAllRunningApps();
                 return;
             }
 
@@ -161,90 +164,86 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    // 🔍 LIDL CONNECT APP SUCHEN (NUR ÜBER PACKAGE MANAGER)
-    private void detectLidlApp() {
-        PackageManager pm = getPackageManager();
-        List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-        
-        List<String> foundApps = new ArrayList<>();
-        List<String> foundPackages = new ArrayList<>();
-        
-        // Lidl Connect Package-Namen
-        String[] lidlPackages = {
-            "de.lidlconnect.android",
-            "de.lidl.connect",
-            "com.lidlconnect.app",
-            "com.lidlconnect.android"
-        };
-        
-        // 1. Direkt nach bekannten Package-Namen suchen
-        for (String pkg : lidlPackages) {
-            try {
-                ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
-                String name = pm.getApplicationLabel(info).toString();
-                foundApps.add("⭐ " + name + " (" + pkg + ")");
-                foundPackages.add(pkg);
-            } catch (Exception e) {
-                // Nicht gefunden
-            }
-        }
-        
-        // 2. Nach "Lidl Connect" im Namen suchen
-        for (ApplicationInfo info : apps) {
-            String appName = pm.getApplicationLabel(info).toString().toLowerCase();
-            String pkg = info.packageName.toLowerCase();
+    // 🔍 ALLE OFFENEN APPS ANZEIGEN
+    private void showAllRunningApps() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(100);
             
-            // Lidl Plus ausschließen
-            if (appName.contains("plus") || pkg.contains("plus")) {
-                continue;
-            }
+            // Set für eindeutige Apps (doppelte vermeiden)
+            Set<String> uniquePackages = new HashSet<>();
+            List<String> appList = new ArrayList<>();
+            List<String> packageList = new ArrayList<>();
             
-            if (appName.contains("lidl connect") || 
-                appName.contains("lidlconnect") ||
-                pkg.contains("lidlconnect") ||
-                pkg.contains("lidl.connect")) {
+            for (ActivityManager.RunningTaskInfo task : tasks) {
+                String pkg = task.topActivity.getPackageName();
                 
-                String name = pm.getApplicationLabel(info).toString();
-                // Nur hinzufügen, wenn nicht schon in der Liste
-                if (!foundPackages.contains(info.packageName)) {
-                    foundApps.add("📱 " + name + " (" + info.packageName + ")");
-                    foundPackages.add(info.packageName);
+                // Eigene App überspringen
+                if (pkg.equals(getPackageName())) continue;
+                
+                // Doppelte vermeiden
+                if (uniquePackages.contains(pkg)) continue;
+                uniquePackages.add(pkg);
+                
+                String appName = getAppName(pkg);
+                
+                // Lidl Connect hervorheben
+                if (isLidlApp(pkg, appName)) {
+                    appList.add("⭐ " + appName + " ⭐ (" + pkg + ")");
+                } else {
+                    appList.add("📱 " + appName + " (" + pkg + ")");
                 }
+                packageList.add(pkg);
             }
-        }
-        
-        // 3. Falls gefunden -> auswählen lassen
-        if (!foundApps.isEmpty()) {
+            
+            // Wenn keine Apps gefunden wurden
+            if (appList.isEmpty()) {
+                Toast.makeText(this, "⚠️ Keine offenen Apps gefunden!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Dialog mit allen offenen Apps
             new AlertDialog.Builder(this)
-                .setTitle("✅ Lidl Connect App gefunden!")
-                .setItems(foundApps.toArray(new String[0]), (dialog, which) -> {
-                    String pkg = foundPackages.get(which);
-                    String name = getAppName(pkg);
-                    selectApp(pkg, name);
-                    Toast.makeText(this, "✅ Ausgewählt: " + name, Toast.LENGTH_LONG).show();
+                .setTitle("📱 Wähle die Lidl Connect App aus")
+                .setMessage("Alle aktuell geöffneten Apps:\n(⭐ = Lidl App)")
+                .setItems(appList.toArray(new String[0]), (dialog, which) -> {
+                    String selectedPackage = packageList.get(which);
+                    String appName = getAppName(selectedPackage);
+                    selectApp(selectedPackage, appName);
+                    Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
                 })
                 .setNegativeButton("Abbrechen", null)
                 .show();
-        } else {
-            // 4. Nichts gefunden -> manuelle Eingabe
-            new AlertDialog.Builder(this)
-                .setTitle("⚠️ Lidl Connect nicht gefunden")
-                .setMessage("Die Lidl Connect App wurde nicht automatisch gefunden.\n\n" +
-                           "Mögliche Gründe:\n" +
-                           "• App ist nicht installiert\n" +
-                           "• App heißt anders\n\n" +
-                           "Möchtest du den Package-Namen manuell eingeben?")
-                .setPositiveButton("📝 Manuell eingeben", (d, w) -> showPackageInputDialog())
-                .setNegativeButton("Abbrechen", null)
-                .show();
+                
+        } catch (Exception e) {
+            Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private boolean isLidlApp(String packageName, String appName) {
+        if (packageName == null) return false;
+        
+        String pkgLower = packageName.toLowerCase();
+        String nameLower = appName != null ? appName.toLowerCase() : "";
+        
+        // Lidl Plus ausschließen
+        if (pkgLower.contains("plus") || nameLower.contains("plus")) {
+            return false;
+        }
+        
+        // Lidl Connect erkennen
+        return pkgLower.contains("lidlconnect") || 
+               pkgLower.contains("lidl.connect") ||
+               pkgLower.contains("lidl") && pkgLower.contains("connect") ||
+               nameLower.contains("lidl connect");
     }
 
     private void openLidlApp() {
         String[] possiblePackages = {
             "de.lidlconnect.android",
             "de.lidl.connect",
-            "com.lidlconnect.app"
+            "com.lidlconnect.app",
+            "com.lidlconnect.android"
         };
         
         for (String pkg : possiblePackages) {
@@ -278,39 +277,6 @@ public class MainActivity extends AppCompatActivity {
             return pm.getApplicationLabel(info).toString();
         } catch (Exception e) {
             return packageName;
-        }
-    }
-
-    private void showPackageInputDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("📝 Package-Namen eingeben");
-
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setHint("z.B. de.lidlconnect.android");
-        input.setText("de.lidlconnect.android");
-        builder.setView(input);
-
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            String pkg = input.getText().toString().trim();
-            if (!pkg.isEmpty()) {
-                if (isAppInstalled(pkg)) {
-                    String name = getAppName(pkg);
-                    selectApp(pkg, name);
-                } else {
-                    Toast.makeText(this, "⚠️ App nicht gefunden: " + pkg, Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-        builder.setNegativeButton("Abbrechen", null);
-        builder.show();
-    }
-
-    private boolean isAppInstalled(String packageName) {
-        try {
-            getPackageManager().getApplicationInfo(packageName, 0);
-            return true;
-        } catch (PackageManager.NameNotFoundException e) {
-            return false;
         }
     }
 
