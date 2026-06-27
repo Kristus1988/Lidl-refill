@@ -77,6 +77,19 @@ public class RefillAccessibilityService extends AccessibilityService {
             }, 500);
             return;
         }
+
+        // 3. Suche nach "Refill" (falls anders geschrieben)
+        List<AccessibilityNodeInfo> refillNodes = root.findAccessibilityNodeInfosByText("Refill");
+        for (AccessibilityNodeInfo node : refillNodes) {
+            if (node.isClickable()) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                refillCount++;
+                saveRefillCount();
+                showToast("✅ Refill #" + refillCount + " ausgeführt!");
+                Log.d(TAG, "✅ Refill #" + refillCount + " ausgeführt!");
+                return;
+            }
+        }
     }
 
     private void saveRefillCount() {
