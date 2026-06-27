@@ -43,21 +43,27 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_VOLUME_Y = "volume_y";
     private static final String KEY_VOLUME_WIDTH = "volume_width";
     private static final String KEY_VOLUME_HEIGHT = "volume_height";
+    private static final String KEY_SWIPE_START_X = "swipe_start_x";
+    private static final String KEY_SWIPE_START_Y = "swipe_start_y";
+    private static final String KEY_SWIPE_END_X = "swipe_end_x";
+    private static final String KEY_SWIPE_END_Y = "swipe_end_y";
     private static final String KEY_IS_RECORDED = "is_recorded";
     private static final String KEY_SERVICE_RUNNING = "service_running";
 
+    // Gespeicherte Positionen
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
-    private float volumeWidth = 0.25f, volumeHeight = 0.10f; // Standardgröße für OCR
+    private float volumeWidth = 0.25f, volumeHeight = 0.10f;
+    private float swipeStartX = 0.5f, swipeStartY = 0.15f;
+    private float swipeEndX = 0.5f, swipeEndY = 0.50f;
     private boolean isRecorded = false;
     private boolean isServiceRunning = false;
 
     private WindowManager windowManager;
     private View markerView;
-    private int recordingType = 0;
+    private int recordingType = 0; // 1=Refill, 2=Volumen, 3=Swipe
     private boolean isMarkerVisible = false;
 
-    // MediaProjection für OCR
     private static final int REQUEST_MEDIA_PROJECTION = 1001;
 
     @Override
@@ -109,7 +115,11 @@ public class MainActivity extends AppCompatActivity {
                     showFloatingMarker();
                     Toast.makeText(this, "📍 Ziehe Marker auf die Volumen-Anzeige", Toast.LENGTH_LONG).show();
                 })
-                .setNeutralButton("Abbrechen", null)
+                .setNeutralButton("🔄 Swipe-Geste", (d, w) -> {
+                    recordingType = 3;
+                    showFloatingMarker();
+                    Toast.makeText(this, "📍 Ziehe Marker für Swipe-Geste (Startpunkt)", Toast.LENGTH_LONG).show();
+                })
                 .show();
         });
 
@@ -145,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // MediaProjection Berechtigung prüfen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             MediaProjectionManager projectionManager = 
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
@@ -155,7 +164,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // Fallback: Service ohne MediaProjection starten
         startMonitoringService();
     }
 
@@ -171,6 +179,10 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra("volume_y", volumeY);
         intent.putExtra("volume_width", volumeWidth);
         intent.putExtra("volume_height", volumeHeight);
+        intent.putExtra("swipe_start_x", swipeStartX);
+        intent.putExtra("swipe_start_y", swipeStartY);
+        intent.putExtra("swipe_end_x", swipeEndX);
+        intent.putExtra("swipe_end_y", swipeEndY);
         startService(intent);
 
         btnToggleService.setText("⏹️ Service stoppen");
@@ -210,31 +222,26 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ✅ MediaProjection Ergebnis
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_MEDIA_PROJECTION) {
             if (resultCode == RESULT_OK) {
                 Toast.makeText(this, "✅ Screenshot-Berechtigung erteilt!", Toast.LENGTH_SHORT).show();
-                // MediaProjection an Service übergeben
                 Intent intent = new Intent(this, RefillAccessibilityService.class);
                 intent.putExtra("action", "media_projection");
                 intent.putExtra("resultCode", resultCode);
                 intent.putExtra("data", data);
                 startService(intent);
-                
-                // Dann Service starten
                 startMonitoringService();
             } else {
                 Toast.makeText(this, "⚠️ Screenshot-Berechtigung verweigert!", Toast.LENGTH_LONG).show();
-                // Trotzdem Service starten (OCR funktioniert dann nicht)
                 startMonitoringService();
             }
         }
     }
 
-    // ✅ FLOATING MARKER
+    // ✅ FLOATING MARKER - GANZ VORNE (TYPE_APPLICATION_OVERLAY)
     private void showFloatingMarker() {
         if (isMarkerVisible) {
             removeMarker();
@@ -262,49 +269,57 @@ public class MainActivity extends AppCompatActivity {
 
                 if (recordingType == 1) {
                     // 🟢 Kreis für Refill-Button
-                    paint.setColor(Color.argb(180, 255, 87, 34));
+                    paint.setColor(Color.argb(200, 255, 87, 34));
                     borderPaint.setColor(Color.parseColor("#4CAF50"));
                     float cx = w / 2f;
                     float cy = h / 2f;
                     float radius = Math.min(w, h) / 2f - padding;
                     canvas.drawCircle(cx, cy, radius, paint);
                     canvas.drawCircle(cx, cy, radius, borderPaint);
-                    
-                    Paint textPaint = new Paint();
-                    textPaint.setColor(Color.WHITE);
-                    textPaint.setTextSize(24);
-                    textPaint.setTextAlign(Paint.Align.CENTER);
-                    canvas.drawText("REFILL", cx, cy + 8, textPaint);
-                } else {
-                    // 🔵 Rechteck für Volumen
-                    paint.setColor(Color.argb(180, 33, 150, 243));
-                    borderPaint.setColor(Color.parseColor("#2196F3"));
-                    rect.set(padding, padding, w - padding, h - padding);
-                    canvas.drawRoundRect(rect, 12, 12, paint);
-                    canvas.drawRoundRect(rect, 12, 12, borderPaint);
-                    
                     Paint textPaint = new Paint();
                     textPaint.setColor(Color.WHITE);
                     textPaint.setTextSize(22);
                     textPaint.setTextAlign(Paint.Align.CENTER);
-                    canvas.drawText("VOLUMEN", w / 2f, h / 2f + 8, textPaint);
+                    canvas.drawText("REFILL", cx, cy + 8, textPaint);
+                } else if (recordingType == 2) {
+                    // 🔵 Rechteck für Volumen
+                    paint.setColor(Color.argb(200, 33, 150, 243));
+                    borderPaint.setColor(Color.parseColor("#2196F3"));
+                    rect.set(padding, padding, w - padding, h - padding);
+                    canvas.drawRoundRect(rect, 12, 12, paint);
+                    canvas.drawRoundRect(rect, 12, 12, borderPaint);
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(20);
+                    textPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("VOLUMEN", w / 2f, h / 2f + 7, textPaint);
+                } else {
+                    // 🟠 Pfeil für Swipe-Geste
+                    paint.setColor(Color.argb(200, 255, 152, 0));
+                    borderPaint.setColor(Color.parseColor("#FF9800"));
+                    rect.set(padding, padding, w - padding, h - padding);
+                    canvas.drawRoundRect(rect, 12, 12, paint);
+                    canvas.drawRoundRect(rect, 12, 12, borderPaint);
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(24);
+                    textPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("⬇️ SWIPE", w / 2f, h / 2f + 8, textPaint);
                 }
             }
         };
 
-        // Marker-Größen
-        int size = (recordingType == 1) ? 120 : 340;
-        int height = (recordingType == 1) ? 120 : 120;
-
-        // Marker speichert auch die Größe für OCR
-        if (recordingType == 2) {
-            volumeWidth = (float) size / windowManager.getDefaultDisplay().getWidth();
-            volumeHeight = (float) height / windowManager.getDefaultDisplay().getHeight();
-            // Speichern für später
-            prefs.edit()
-                .putFloat(KEY_VOLUME_WIDTH, volumeWidth)
-                .putFloat(KEY_VOLUME_HEIGHT, volumeHeight)
-                .apply();
+        // Größen für Marker
+        int size, height;
+        if (recordingType == 1) {
+            size = 120;
+            height = 120;
+        } else if (recordingType == 2) {
+            size = 340;
+            height = 120;
+        } else {
+            size = 180;
+            height = 180;
         }
 
         markerView.setOnTouchListener(new View.OnTouchListener() {
@@ -339,6 +354,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // ✅ WICHTIG: TYPE_APPLICATION_OVERLAY für GANZ VORNE!
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 size,
                 height,
@@ -346,7 +362,8 @@ public class MainActivity extends AppCompatActivity {
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                         WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
@@ -355,7 +372,6 @@ public class MainActivity extends AppCompatActivity {
 
         windowManager.addView(markerView, params);
         isMarkerVisible = true;
-        
         Toast.makeText(this, "📌 Marker erscheint über ALLEN Apps!", Toast.LENGTH_SHORT).show();
     }
 
@@ -374,10 +390,18 @@ public class MainActivity extends AppCompatActivity {
             buttonX = x;
             buttonY = y;
             Toast.makeText(this, "✅ Refill-Button gespeichert! (" + Math.round(x * 100) + "%, " + Math.round(y * 100) + "%)", Toast.LENGTH_LONG).show();
-        } else {
+        } else if (recordingType == 2) {
             volumeX = x;
             volumeY = y;
+            volumeWidth = 0.25f;
+            volumeHeight = 0.10f;
             Toast.makeText(this, "✅ Volumen gespeichert! (" + Math.round(x * 100) + "%, " + Math.round(y * 100) + "%)", Toast.LENGTH_LONG).show();
+        } else {
+            swipeStartX = x;
+            swipeStartY = y;
+            swipeEndX = x;
+            swipeEndY = Math.min(y + 0.35f, 0.90f);
+            Toast.makeText(this, "✅ Swipe-Geste gespeichert! (" + Math.round(x * 100) + "%, " + Math.round(y * 100) + "%)", Toast.LENGTH_LONG).show();
         }
         savePositions();
     }
@@ -390,10 +414,14 @@ public class MainActivity extends AppCompatActivity {
             .putFloat(KEY_VOLUME_Y, volumeY)
             .putFloat(KEY_VOLUME_WIDTH, volumeWidth)
             .putFloat(KEY_VOLUME_HEIGHT, volumeHeight)
+            .putFloat(KEY_SWIPE_START_X, swipeStartX)
+            .putFloat(KEY_SWIPE_START_Y, swipeStartY)
+            .putFloat(KEY_SWIPE_END_X, swipeEndX)
+            .putFloat(KEY_SWIPE_END_Y, swipeEndY)
             .putBoolean(KEY_IS_RECORDED, true)
             .apply();
         isRecorded = true;
-        tvServiceStatus.setText("✅ Positionen gespeichert!");
+        tvServiceStatus.setText("✅ Alle Positionen gespeichert!");
         tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
     }
 
@@ -406,7 +434,11 @@ public class MainActivity extends AppCompatActivity {
             volumeY = prefs.getFloat(KEY_VOLUME_Y, 0);
             volumeWidth = prefs.getFloat(KEY_VOLUME_WIDTH, 0.25f);
             volumeHeight = prefs.getFloat(KEY_VOLUME_HEIGHT, 0.10f);
-            tvServiceStatus.setText("✅ Positionen gespeichert!");
+            swipeStartX = prefs.getFloat(KEY_SWIPE_START_X, 0.5f);
+            swipeStartY = prefs.getFloat(KEY_SWIPE_START_Y, 0.15f);
+            swipeEndX = prefs.getFloat(KEY_SWIPE_END_X, 0.5f);
+            swipeEndY = prefs.getFloat(KEY_SWIPE_END_Y, 0.50f);
+            tvServiceStatus.setText("✅ Alle Positionen gespeichert!");
             tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
         }
     }
@@ -419,8 +451,7 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             new AlertDialog.Builder(this)
                 .setTitle("⚠️ Overlay-Berechtigung benötigt")
-                .setMessage("Um den Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.\n\n" +
-                           "Bitte aktiviere sie in den Einstellungen.")
+                .setMessage("Um den Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.")
                 .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
                     startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                             Uri.parse("package:" + getPackageName())));
