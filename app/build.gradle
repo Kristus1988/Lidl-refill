@@ -32,9 +32,19 @@ android {
 }
 
 dependencies {
+    // AndroidX
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    // ✅ Google ML Kit Text Recognition (OCR)
+    implementation 'com.google.mlkit:text-recognition:16.0.0'
+
+    // ✅ MediaProjection für Screenshots
+    implementation 'androidx.media:media:1.6.0'
+
+    // ✅ Für Bitmap-Verarbeitung
+    implementation 'androidx.core:core:1.12.0'
 }
