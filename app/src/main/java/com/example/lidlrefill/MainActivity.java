@@ -4,8 +4,11 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -45,7 +48,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isServiceRunning = false;
 
     private WindowManager windowManager;
-    private ImageView markerView;
+    private View markerView;
     private int recordingType = 0;
     private boolean isMarkerVisible = false;
 
@@ -73,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupButtons() {
-        // 📌 Position aufnehmen
         btnStartRecording.setOnClickListener(v -> {
             if (!isAccessibilityServiceEnabled()) {
                 Toast.makeText(this, "⚠️ Bitte Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
@@ -91,19 +93,18 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage("Wähle aus:")
                 .setPositiveButton("🟢 Refill-Button", (d, w) -> {
                     recordingType = 1;
-                    showMiniMarker();
+                    showMarker();
                     Toast.makeText(this, "📍 Auf Refill-Button ziehen", Toast.LENGTH_LONG).show();
                 })
                 .setNegativeButton("🔵 Volumen", (d, w) -> {
                     recordingType = 2;
-                    showMiniMarker();
+                    showMarker();
                     Toast.makeText(this, "📍 Auf Volumen-Anzeige ziehen", Toast.LENGTH_LONG).show();
                 })
                 .setNeutralButton("Abbrechen", null)
                 .show();
         });
 
-        // 🔄 Aktualisieren (Pull-to-Refresh)
         btnRefresh.setOnClickListener(v -> {
             if (isServiceRunning) {
                 Toast.makeText(this, "🔄 Aktualisiere...", Toast.LENGTH_SHORT).show();
@@ -115,7 +116,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ▶️ Start / ⏹️ Stop
         btnToggleService.setOnClickListener(v -> {
             if (isServiceRunning) {
                 stopService();
@@ -185,16 +185,51 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Marker-Funktionen
-    private void showMiniMarker() {
+    // ✅ MARKER ALS VIEW (OHNE EXTERNE DATEIEN)
+    private void showMarker() {
         if (isMarkerVisible) {
             removeMarker();
             return;
         }
 
-        markerView = new ImageView(this);
-        markerView.setImageResource(recordingType == 1 ? R.drawable.circle_marker : R.drawable.rect_marker);
-        markerView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        // Marker als benutzerdefinierter View
+        markerView = new View(this) {
+            private Paint paint = new Paint();
+            private Paint borderPaint = new Paint();
+            private RectF rect = new RectF();
+
+            {
+                paint.setStyle(Paint.Style.FILL);
+                borderPaint.setStyle(Paint.Style.STROKE);
+                borderPaint.setStrokeWidth(6);
+            }
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                int w = getWidth();
+                int h = getHeight();
+                int padding = 10;
+
+                if (recordingType == 1) {
+                    // 🟢 Kreis
+                    paint.setColor(Color.argb(150, 255, 87, 34));
+                    borderPaint.setColor(Color.parseColor("#4CAF50"));
+                    float cx = w / 2f;
+                    float cy = h / 2f;
+                    float radius = Math.min(w, h) / 2f - padding;
+                    canvas.drawCircle(cx, cy, radius, paint);
+                    canvas.drawCircle(cx, cy, radius, borderPaint);
+                } else {
+                    // 🔵 Rechteck
+                    paint.setColor(Color.argb(150, 33, 150, 243));
+                    borderPaint.setColor(Color.parseColor("#2196F3"));
+                    rect.set(padding, padding, w - padding, h - padding);
+                    canvas.drawRoundRect(rect, 12, 12, paint);
+                    canvas.drawRoundRect(rect, 12, 12, borderPaint);
+                }
+            }
+        };
 
         int size = (recordingType == 1) ? 80 : 140;
         int height = (recordingType == 1) ? 80 : 50;
@@ -216,8 +251,8 @@ public class MainActivity extends AppCompatActivity {
                         v.setY(initialY + event.getRawY() - touchY);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        float cx = v.getX() + v.getWidth() / 2;
-                        float cy = v.getY() + v.getHeight() / 2;
+                        float cx = v.getX() + v.getWidth() / 2f;
+                        float cy = v.getY() + v.getHeight() / 2f;
                         float xP = cx / windowManager.getDefaultDisplay().getWidth();
                         float yP = cy / windowManager.getDefaultDisplay().getHeight();
                         savePosition(xP, yP);
