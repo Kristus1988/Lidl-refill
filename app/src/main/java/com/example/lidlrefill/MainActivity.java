@@ -193,7 +193,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Marker als eigenständiger View (nicht in der Activity!)
         markerView = new View(this) {
             private Paint paint = new Paint();
             private Paint borderPaint = new Paint();
@@ -223,35 +222,32 @@ public class MainActivity extends AppCompatActivity {
                     canvas.drawCircle(cx, cy, radius, paint);
                     canvas.drawCircle(cx, cy, radius, borderPaint);
                     
-                    // Text "Refill"
                     Paint textPaint = new Paint();
                     textPaint.setColor(Color.WHITE);
-                    textPaint.setTextSize(20);
+                    textPaint.setTextSize(24);
                     textPaint.setTextAlign(Paint.Align.CENTER);
-                    canvas.drawText("REFILL", cx, cy + 7, textPaint);
+                    canvas.drawText("REFILL", cx, cy + 8, textPaint);
                 } else {
-                    // 🔵 Rechteck für Volumen
+                    // 🔵 Rechteck für Volumen (VERGRÖSSERT!)
                     paint.setColor(Color.argb(180, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
                     canvas.drawRoundRect(rect, 12, 12, paint);
                     canvas.drawRoundRect(rect, 12, 12, borderPaint);
                     
-                    // Text "VOLUMEN"
                     Paint textPaint = new Paint();
                     textPaint.setColor(Color.WHITE);
-                    textPaint.setTextSize(18);
+                    textPaint.setTextSize(22);
                     textPaint.setTextAlign(Paint.Align.CENTER);
-                    canvas.drawText("VOLUMEN", w / 2f, h / 2f + 6, textPaint);
+                    canvas.drawText("VOLUMEN", w / 2f, h / 2f + 8, textPaint);
                 }
             }
         };
 
-        // Größe des Markers
-        int size = (recordingType == 1) ? 100 : 240;
-        int height = (recordingType == 1) ? 100 : 90;
+        // ✅ GRÖSSEN FÜR MARKER (VERGRÖSSERT!)
+        int size = (recordingType == 1) ? 120 : 340;    // Rechteck 340px breit
+        int height = (recordingType == 1) ? 120 : 120;  // Rechteck 120px hoch
 
-        // Touch-Listener für Ziehen
         markerView.setOnTouchListener(new View.OnTouchListener() {
             private float initialX, initialY;
             private float touchX, touchY;
@@ -272,7 +268,6 @@ public class MainActivity extends AppCompatActivity {
                         v.setY(initialY + deltaY);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        // Position speichern (relativ zum Bildschirm)
                         float centerX = v.getX() + v.getWidth() / 2f;
                         float centerY = v.getY() + v.getHeight() / 2f;
                         float xPercent = centerX / windowManager.getDefaultDisplay().getWidth();
@@ -285,7 +280,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ✅ WICHTIG: TYPE_APPLICATION_OVERLAY für echtes Overlay!
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 size,
                 height,
@@ -300,7 +294,6 @@ public class MainActivity extends AppCompatActivity {
         params.x = 200;
         params.y = 300;
 
-        // ✅ Marker zum WindowManager hinzufügen (als eigenes Fenster!)
         windowManager.addView(markerView, params);
         isMarkerVisible = true;
         
