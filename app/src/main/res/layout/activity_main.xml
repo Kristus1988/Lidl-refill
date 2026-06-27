@@ -7,7 +7,7 @@
     android:gravity="center"
     android:padding="20dp">
 
-    <!-- Logo/Header -->
+    <!-- Logo -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -55,7 +55,7 @@
         android:gravity="center"
         android:layout_marginBottom="20dp" />
 
-    <!-- 🔵 Position aufnehmen (einziger Button!) -->
+    <!-- 📌 Position aufnehmen -->
     <Button
         android:id="@+id/btn_start_recording"
         android:layout_width="match_parent"
@@ -67,12 +67,24 @@
         android:textStyle="bold"
         android:layout_marginBottom="12dp" />
 
-    <!-- 📱 Lidl öffnen -->
+    <!-- 🔄 Aktualisieren (Pull-to-Refresh) -->
     <Button
-        android:id="@+id/btn_open_app"
+        android:id="@+id/btn_refresh"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:text="📱 Lidl öffnen"
+        android:text="🔄 Aktualisieren"
+        android:backgroundTint="#4CAF50"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
+
+    <!-- ▶️ Start / ⏹️ Stop -->
+    <Button
+        android:id="@+id/btn_toggle_service"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="▶️ Service starten"
         android:backgroundTint="#2196F3"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
@@ -82,7 +94,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="1. Position aufnehmen\n2. Lidl öffnen\n3. Start im Overlay"
+        android:text="1. Position aufnehmen\n2. Service starten\n3. Steuerung im Overlay"
         android:textSize="11sp"
         android:textColor="#546E7A"
         android:gravity="center"
