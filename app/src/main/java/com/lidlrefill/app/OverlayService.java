@@ -34,7 +34,6 @@ public class OverlayService extends AccessibilityService {
     private Button btnSwipeNow, btnRefillNow, btnOcrNow, btnStopAuto, btnStartAuto;
     private Button btnClose;
     
-    // Positionen
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
@@ -43,11 +42,9 @@ public class OverlayService extends AccessibilityService {
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
     
-    // Modi
     private enum Mode { NONE, SWIPE_PLACE, OCR_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // Drag & Drop
     private boolean isDragging = false;
     private float lastX, lastY;
     private float dragOffsetX, dragOffsetY;
@@ -56,6 +53,8 @@ public class OverlayService extends AccessibilityService {
     private Handler handler = new Handler(Looper.getMainLooper());
     private int screenWidth, screenHeight;
     private boolean isRunning = false;
+    private int swipeTapCount = 0;
+    private FrameLayout controlPanel;
     
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
@@ -72,7 +71,6 @@ public class OverlayService extends AccessibilityService {
         screenWidth = size.x;
         screenHeight = size.y;
         
-        // Standard-Swipe von oben nach unten
         swipeStart.set(screenWidth / 2, 100);
         swipeEnd.set(screenWidth / 2, screenHeight - 100);
         swipePlaced = true;
@@ -94,10 +92,8 @@ public class OverlayService extends AccessibilityService {
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
-        // Hauptcontainer
         FrameLayout mainContainer = new FrameLayout(this);
         
-        // Control Panel
         LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         View controlView = inflater.inflate(R.layout.overlay_layout, null);
         
@@ -112,7 +108,6 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // Schließen-Button (roter Kreis mit X)
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
@@ -135,16 +130,13 @@ public class OverlayService extends AccessibilityService {
             Toast.makeText(this, "Overlay geschlossen", Toast.LENGTH_SHORT).show();
         });
         
-        // Buttons einrichten
         setupButtons();
         
-        // Control Panel zum Container hinzufügen
         controlPanel = new FrameLayout(this);
         controlPanel.addView(controlView);
         mainContainer.addView(controlPanel);
         mainContainer.addView(btnClose);
         
-        // Overlay-Parameter
         int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
@@ -179,8 +171,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void setupButtons() {
-        // ============ DRAG & DROP PLATZIERUNG ============
-        
         btnSwipePlace.setOnClickListener(v -> {
             currentMode = Mode.SWIPE_PLACE;
             swipeTapCount = 0;
@@ -206,8 +196,6 @@ public class OverlayService extends AccessibilityService {
             activeVisual = refillVisual;
         });
         
-        // ============ SOFORT-AKTIONEN ============
-        
         btnSwipeNow.setOnClickListener(v -> {
             if (swipePlaced) {
                 updateStatus("🔄 Swipe wird ausgeführt...");
@@ -222,7 +210,7 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("🔄 Refill wird ausgeführt...");
                 clickRefillButton();
             } else {
-                Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();  // ← FIXED
             }
         });
         
@@ -231,7 +219,7 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("📷 OCR wird ausgeführt...");
                 performOcrNow();
             } else {
-                Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();  // ← FIXED
             }
         });
         
@@ -261,11 +249,11 @@ public class OverlayService extends AccessibilityService {
             return false;
         }
         if (!ocrPlaced) {
-            Toast.makeText(this, "❌ OCR nicht platziert", Toast.LENGTH_SHOW).show();
+            Toast.makeText(this, "❌ OCR nicht platziert", Toast.LENGTH_SHORT).show();
             return false;
         }
         if (!refillPlaced) {
-            Toast.makeText(this, "❌ Refill nicht platziert", Toast.LENGTH_SHOW).show();
+            Toast.makeText(this, "❌ Refill nicht platziert", Toast.LENGTH_SHORT).show();
             return false;
         }
         return true;
@@ -289,37 +277,29 @@ public class OverlayService extends AccessibilityService {
                     }
                     
                     if (isDragging && currentMode != Mode.NONE && activeVisual != null) {
-                        // VISUAL ZIEHEN
                         int newX = (int)(event.getRawX() - dragOffsetX);
                         int newY = (int)(event.getRawY() - dragOffsetY);
                         
-                        // Aktualisiere Visual-Position
                         WindowManager.LayoutParams visualParams = 
                             (WindowManager.LayoutParams) activeVisual.getLayoutParams();
                         visualParams.x = newX;
                         visualParams.y = newY;
                         windowManager.updateViewLayout(activeVisual, visualParams);
                         
-                        // Aktualisiere Koordinaten
                         updateCoordinates(newX, newY);
-                        
-                        // Live-Position anzeigen
                         updateStatus("📌 Position: (" + newX + ", " + newY + ")");
                     }
                     return true;
                     
                 case MotionEvent.ACTION_UP:
                     if (isDragging && currentMode != Mode.NONE && activeVisual != null) {
-                        // Position speichern
                         WindowManager.LayoutParams visualParams = 
                             (WindowManager.LayoutParams) activeVisual.getLayoutParams();
                         int finalX = visualParams.x;
                         int finalY = visualParams.y;
                         
-                        // Position je nach Modus speichern
                         savePosition(finalX, finalY);
                         
-                        // Visual ausblenden und Modus beenden
                         hideVisuals();
                         currentMode = Mode.NONE;
                         activeVisual = null;
@@ -341,24 +321,21 @@ public class OverlayService extends AccessibilityService {
                     swipeTapCount = 1;
                     updateStatus("🟡 Swipe Start bei (" + swipeStart.x + ", " + swipeStart.y + ") - Ziehe für Endpunkt");
                     Toast.makeText(this, "Startpunkt gesetzt! Ziehe nun für Endpunkt", Toast.LENGTH_SHORT).show();
-                    // Zeige wieder das Visual für den Endpunkt
                     showSwipeVisual();
                     activeVisual = swipeVisual;
-                    // Setze Offset für Endpunkt
                     dragOffsetX = 60;
                     dragOffsetY = 10;
                 } else {
                     swipeEnd.set(x + 60, y + 10);
                     swipePlaced = true;
                     swipeTapCount = 0;
-                    // Sicherstellen: Start oben, Ende unten
                     if (swipeStart.y > swipeEnd.y) {
                         int tempY = swipeStart.y;
                         swipeStart.y = swipeEnd.y;
                         swipeEnd.y = tempY;
                     }
                     updateStatus("✅ Swipe: (" + swipeStart.x + "," + swipeStart.y + ") → (" + swipeEnd.x + "," + swipeEnd.y + ")");
-                    Toast.makeText(this, "✅ Swipe platziert!\nOben (" + swipeStart.x + "," + swipeStart.y + ")\nUnten (" + swipeEnd.x + "," + swipeEnd.y + ")", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "✅ Swipe platziert!", Toast.LENGTH_LONG).show();
                     hideVisuals();
                     activeVisual = null;
                     currentMode = Mode.NONE;
@@ -370,25 +347,21 @@ public class OverlayService extends AccessibilityService {
                 ocrRect.set(x, y, x + rectSize, y + rectSize);
                 ocrPlaced = true;
                 updateStatus("✅ OCR-Rechteck bei (" + x + ", " + y + ")");
-                Toast.makeText(this, "✅ OCR-Rechteck platziert!\n(" + x + ", " + y + ")", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "✅ OCR-Rechteck platziert!", Toast.LENGTH_SHORT).show();
                 break;
                 
             case REFILL_PLACE:
                 refillButton.set(x + 40, y + 40);
                 refillPlaced = true;
                 updateStatus("✅ Refill-Button bei (" + refillButton.x + ", " + refillButton.y + ")");
-                Toast.makeText(this, "✅ Refill-Button platziert!\n(" + refillButton.x + ", " + refillButton.y + ")", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "✅ Refill-Button platziert!", Toast.LENGTH_SHORT).show();
                 break;
         }
     }
     
     // ============ VISUELLE HILFEN ============
     
-    private int swipeTapCount = 0;
-    private FrameLayout controlPanel;
-    
     private void createVisualHelpers() {
-        // Swipe-Visual (gelber Pfeil) - DRAG & DROP FÄHIG
         swipeVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -401,10 +374,8 @@ public class OverlayService extends AccessibilityService {
                 int w = getWidth();
                 int h = getHeight();
                 
-                // Linie von oben nach unten
                 canvas.drawLine(w/2, 0, w/2, h - 20, paint);
                 
-                // Pfeilspitze nach unten
                 Paint arrowPaint = new Paint();
                 arrowPaint.setColor(Color.YELLOW);
                 arrowPaint.setStyle(Paint.Style.FILL);
@@ -416,14 +387,12 @@ public class OverlayService extends AccessibilityService {
                 arrowPath.close();
                 canvas.drawPath(arrowPath, arrowPaint);
                 
-                // ⬇ Text
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.YELLOW);
                 textPaint.setTextSize(50);
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 canvas.drawText("⬇", w/2, h/3, textPaint);
                 
-                // "Ziehen" Hinweis
                 Paint hintPaint = new Paint();
                 hintPaint.setColor(Color.WHITE);
                 hintPaint.setTextSize(18);
@@ -432,7 +401,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // OCR-Visual (cyan Rechteck) - DRAG & DROP FÄHIG
         ocrVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -448,14 +416,12 @@ public class OverlayService extends AccessibilityService {
                 fillPaint.setStyle(Paint.Style.FILL);
                 canvas.drawRect(10, 10, getWidth()-10, getHeight()-10, fillPaint);
                 
-                // "OCR" Text
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
                 textPaint.setTextSize(30);
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 canvas.drawText("OCR", getWidth()/2, getHeight()/2 + 10, textPaint);
                 
-                // "Ziehen" Hinweis
                 Paint hintPaint = new Paint();
                 hintPaint.setColor(Color.WHITE);
                 hintPaint.setTextSize(16);
@@ -464,7 +430,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // Refill-Visual (roter Kreis mit R) - DRAG & DROP FÄHIG
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -487,7 +452,6 @@ public class OverlayService extends AccessibilityService {
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 canvas.drawText("R", size/2, size/2 + size * 0.2f, textPaint);
                 
-                // "Ziehen" Hinweis
                 Paint hintPaint = new Paint();
                 hintPaint.setColor(Color.WHITE);
                 hintPaint.setTextSize(14);
@@ -533,23 +497,20 @@ public class OverlayService extends AccessibilityService {
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = screenWidth / 2 - width / 2;
         params.y = screenHeight / 2 - height / 2;
-        params.elevation = 1000;
+        // params.elevation = 1000;  ← ENTFERNT!
         
-        // Größerer Touch-Bereich für einfaches Ziehen
         visual.setPadding(20, 20, 20, 20);
         visual.setClickable(true);
         
         visual.setLayoutParams(params);
         windowManager.addView(visual, params);
         
-        // Touch-Listener für das Visual
         visual.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     lastX = event.getRawX();
                     lastY = event.getRawY();
                     isDragging = true;
-                    // Offset speichern für präzises Ziehen
                     dragOffsetX = event.getRawX() - params.x;
                     dragOffsetY = event.getRawY() - params.y;
                     return true;
@@ -567,7 +528,6 @@ public class OverlayService extends AccessibilityService {
                 case MotionEvent.ACTION_UP:
                     if (isDragging) {
                         isDragging = false;
-                        // Position speichern
                         if (currentMode != Mode.NONE) {
                             savePosition(params.x, params.y);
                         }
