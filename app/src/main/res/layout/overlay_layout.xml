@@ -1,26 +1,27 @@
-<!-- app/src/main/res/layout/overlay_layout.xml -->
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#D0000000"
-    android:padding="8dp"
-    android:elevation="100dp">
+    android:background="#CC000000"
+    android:padding="10dp"
+    android:elevation="999dp"
+    android:clickable="true">
 
-    <!-- Status-Anzeige -->
+    <!-- Status-Anzeige mit Hintergrund -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🟢 Bereit"
+        android:text="✅ Bereit"
         android:textColor="#4CAF50"
         android:textSize="12sp"
         android:gravity="center"
-        android:padding="4dp"
-        android:background="#33000000"/>
+        android:padding="6dp"
+        android:background="#33000000"
+        android:layout_marginBottom="4dp"/>
 
-    <!-- Haupt-Buttons -->
+    <!-- Swipe-Button (immer von oben nach unten) -->
     <Button
         android:id="@+id/btnSwipe"
         android:layout_width="match_parent"
@@ -28,8 +29,10 @@
         android:text="⬇ Swipe platzieren"
         android:textColor="#FFFFFF"
         android:backgroundTint="#4CAF50"
-        android:layout_marginTop="4dp"/>
+        android:layout_marginTop="4dp"
+        android:textSize="13sp"/>
 
+    <!-- OCR-Button -->
     <Button
         android:id="@+id/btnOcr"
         android:layout_width="match_parent"
@@ -37,8 +40,10 @@
         android:text="📷 OCR-Rechteck"
         android:textColor="#FFFFFF"
         android:backgroundTint="#2196F3"
-        android:layout_marginTop="4dp"/>
+        android:layout_marginTop="4dp"
+        android:textSize="13sp"/>
 
+    <!-- Refill-Button -->
     <Button
         android:id="@+id/btnRefill"
         android:layout_width="match_parent"
@@ -46,8 +51,10 @@
         android:text="🔄 Refill-Button"
         android:textColor="#FFFFFF"
         android:backgroundTint="#FF9800"
-        android:layout_marginTop="4dp"/>
+        android:layout_marginTop="4dp"
+        android:textSize="13sp"/>
 
+    <!-- Start/Stop Button -->
     <Button
         android:id="@+id/btnStart"
         android:layout_width="match_parent"
@@ -55,7 +62,8 @@
         android:text="▶ Start"
         android:textColor="#FFFFFF"
         android:backgroundTint="#F44336"
-        android:layout_marginTop="4dp"/>
+        android:layout_marginTop="4dp"
+        android:textSize="13sp"/>
 
     <!-- Koordinaten-Anzeige -->
     <TextView
@@ -63,11 +71,22 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Pos: (0,0)"
-        android:textColor="#FFFFFF"
+        android:textColor="#CCCCCC"
         android:textSize="10sp"
         android:gravity="center"
-        android:padding="2dp"
+        android:padding="4dp"
         android:background="#44000000"
         android:layout_marginTop="4dp"/>
+
+    <!-- Swipe-Info -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⬇ Swipe immer von oben nach unten"
+        android:textColor="#FFEB3B"
+        android:textSize="9sp"
+        android:gravity="center"
+        android:padding="2dp"
+        android:layout_marginTop="2dp"/>
 
 </LinearLayout>
