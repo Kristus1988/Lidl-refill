@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,8 +23,10 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -160,26 +163,60 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAppPicker() {
-        // ALLE installierten Apps abrufen - OHNE JEDEN FILTER!
         PackageManager pm = getPackageManager();
-        List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         
-        // Nach App-Namen sortieren
-        Collections.sort(apps, (a, b) -> {
-            String nameA = pm.getApplicationLabel(a).toString();
-            String nameB = pm.getApplicationLabel(b).toString();
-            return nameA.compareToIgnoreCase(nameB);
-        });
+        // Methode 1: Alle Apps mit getInstalledApplications
+        List<ApplicationInfo> apps1 = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         
-        // Erstelle eine Liste mit App-Namen und Package-Namen
+        // Methode 2: Alle Apps mit QUERY_ALL_PACKAGES (findet auch System-Apps)
+        Intent mainIntent = new Intent(Intent.ACTION_MAIN);
+        mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> apps2 = pm.queryIntentActivities(mainIntent, 0);
+        
+        // Methode 3: Alle Apps mit PackageManager.GET_ACTIVITIES
+        List<ApplicationInfo> apps3 = pm.getInstalledApplications(PackageManager.GET_ACTIVITIES);
+        
+        // Alle Apps in einer Set sammeln (doppelte vermeiden)
+        Set<String> packageSet = new HashSet<>();
+        
+        // Von Methode 1
+        for (ApplicationInfo info : apps1) {
+            packageSet.add(info.packageName);
+        }
+        
+        // Von Methode 2
+        for (ResolveInfo info : apps2) {
+            packageSet.add(info.activityInfo.packageName);
+        }
+        
+        // Von Methode 3
+        for (ApplicationInfo info : apps3) {
+            packageSet.add(info.packageName);
+        }
+        
+        // In Liste umwandeln und sortieren
+        List<String> packageList = new ArrayList<>(packageSet);
+        Collections.sort(packageList);
+        
+        // App-Namen für die Anzeige ermitteln
         List<String> displayNames = new ArrayList<>();
         List<String> packageNames = new ArrayList<>();
         
-        // ✅ ALLE Apps anzeigen - OHNE Filter!
-        for (ApplicationInfo info : apps) {
-            String appName = pm.getApplicationLabel(info).toString();
-            displayNames.add(appName + " (" + info.packageName + ")");
-            packageNames.add(info.packageName);
+        for (String pkg : packageList) {
+            try {
+                ApplicationInfo info = pm.getApplicationInfo(pkg, 0);
+                String appName = pm.getApplicationLabel(info).toString();
+                
+                // Wenn es die Lidl Connect App ist, markieren
+                if (pkg.toLowerCase().contains("lidl") || pkg.toLowerCase().contains("connect")) {
+                    appName = "⭐ " + appName + " ⭐";
+                }
+                
+                displayNames.add(appName + " (" + pkg + ")");
+                packageNames.add(pkg);
+            } catch (Exception e) {
+                // App kann nicht abgerufen werden, überspringen
+            }
         }
         
         // Dialog mit App-Liste anzeigen
