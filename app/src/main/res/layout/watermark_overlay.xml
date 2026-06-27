@@ -3,13 +3,13 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@drawable/overlay_background"
+    android:background="#DD1E1E1E"
     android:padding="12dp"
     android:elevation="10dp"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="true"
+    android:minWidth="200dp">
 
-    <!-- Status + Refills -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -34,7 +34,6 @@
             android:textColor="#B0BEC5" />
     </LinearLayout>
 
-    <!-- Volumen + Countdown -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -60,7 +59,6 @@
             android:textColor="#FFB300" />
     </LinearLayout>
 
-    <!-- Buttons: Pause + Stop + Refresh -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
