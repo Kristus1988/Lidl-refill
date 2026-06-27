@@ -16,7 +16,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -28,7 +27,7 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnStartRecording, btnOpenApp;
+    private Button btnStartRecording, btnRefresh, btnToggleService;
     private TextView tvServiceStatus, tvStatus;
 
     private SharedPreferences prefs;
@@ -38,10 +37,12 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_VOLUME_X = "volume_x";
     private static final String KEY_VOLUME_Y = "volume_y";
     private static final String KEY_IS_RECORDED = "is_recorded";
+    private static final String KEY_SERVICE_RUNNING = "service_running";
 
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
     private boolean isRecorded = false;
+    private boolean isServiceRunning = false;
 
     private WindowManager windowManager;
     private ImageView markerView;
@@ -60,16 +61,19 @@ public class MainActivity extends AppCompatActivity {
         setupButtons();
         checkAccessibilityService();
         loadSavedPositions();
+        loadServiceState();
     }
 
     private void initViews() {
         btnStartRecording = findViewById(R.id.btn_start_recording);
-        btnOpenApp = findViewById(R.id.btn_open_app);
+        btnRefresh = findViewById(R.id.btn_refresh);
+        btnToggleService = findViewById(R.id.btn_toggle_service);
         tvServiceStatus = findViewById(R.id.tv_service_status);
         tvStatus = findViewById(R.id.tv_status);
     }
 
     private void setupButtons() {
+        // 📌 Position aufnehmen
         btnStartRecording.setOnClickListener(v -> {
             if (!isAccessibilityServiceEnabled()) {
                 Toast.makeText(this, "⚠️ Bitte Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
@@ -99,9 +103,89 @@ public class MainActivity extends AppCompatActivity {
                 .show();
         });
 
-        btnOpenApp.setOnClickListener(v -> openLidlApp());
+        // 🔄 Aktualisieren (Pull-to-Refresh)
+        btnRefresh.setOnClickListener(v -> {
+            if (isServiceRunning) {
+                Toast.makeText(this, "🔄 Aktualisiere...", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(this, RefillAccessibilityService.class);
+                intent.putExtra("action", "refresh");
+                startService(intent);
+            } else {
+                Toast.makeText(this, "⚠️ Service läuft nicht!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // ▶️ Start / ⏹️ Stop
+        btnToggleService.setOnClickListener(v -> {
+            if (isServiceRunning) {
+                stopService();
+            } else {
+                startService();
+            }
+        });
     }
 
+    private void startService() {
+        if (!isAccessibilityServiceEnabled()) {
+            Toast.makeText(this, "⚠️ Bitte Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            return;
+        }
+
+        if (!isRecorded) {
+            Toast.makeText(this, "⚠️ Bitte zuerst Positionen aufnehmen!", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        isServiceRunning = true;
+        prefs.edit().putBoolean(KEY_SERVICE_RUNNING, true).apply();
+
+        Intent intent = new Intent(this, RefillAccessibilityService.class);
+        intent.putExtra("action", "start_monitoring");
+        intent.putExtra("button_x", buttonX);
+        intent.putExtra("button_y", buttonY);
+        intent.putExtra("volume_x", volumeX);
+        intent.putExtra("volume_y", volumeY);
+        startService(intent);
+
+        btnToggleService.setText("⏹️ Service stoppen");
+        btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_red_dark));
+        tvStatus.setText("🟢 Läuft");
+        tvStatus.setTextColor(Color.parseColor("#4CAF50"));
+        Toast.makeText(this, "▶️ Service gestartet!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void stopService() {
+        isServiceRunning = false;
+        prefs.edit().putBoolean(KEY_SERVICE_RUNNING, false).apply();
+
+        Intent intent = new Intent(this, RefillAccessibilityService.class);
+        intent.putExtra("action", "stop_monitoring");
+        startService(intent);
+
+        btnToggleService.setText("▶️ Service starten");
+        btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_blue_light));
+        tvStatus.setText("🔴 Gestoppt");
+        tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
+        Toast.makeText(this, "⏹️ Service gestoppt!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void loadServiceState() {
+        isServiceRunning = prefs.getBoolean(KEY_SERVICE_RUNNING, false);
+        if (isServiceRunning) {
+            btnToggleService.setText("⏹️ Service stoppen");
+            btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_red_dark));
+            tvStatus.setText("🟢 Läuft");
+            tvStatus.setTextColor(Color.parseColor("#4CAF50"));
+        } else {
+            btnToggleService.setText("▶️ Service starten");
+            btnToggleService.setBackgroundTintColor(getColor(android.R.color.holo_blue_light));
+            tvStatus.setText("🔴 Gestoppt");
+            tvStatus.setTextColor(Color.parseColor("#B0BEC5"));
+        }
+    }
+
+    // Marker-Funktionen
     private void showMiniMarker() {
         if (isMarkerVisible) {
             removeMarker();
@@ -226,20 +310,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void openLidlApp() {
-        String[] packages = {"de.lidlconnect.android", "de.lidl.connect", "com.lidlconnect.app"};
-        for (String pkg : packages) {
-            try {
-                Intent intent = getPackageManager().getLaunchIntentForPackage(pkg);
-                if (intent != null) {
-                    startActivity(intent);
-                    return;
-                }
-            } catch (Exception ignored) {}
-        }
-        Toast.makeText(this, "⚠️ Lidl Connect nicht gefunden!", Toast.LENGTH_SHORT).show();
-    }
-
     private boolean isAccessibilityServiceEnabled() {
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         List<AccessibilityServiceInfo> list = am.getEnabledAccessibilityServiceList(
@@ -266,6 +336,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkAccessibilityService();
+        loadServiceState();
     }
 
     @Override
