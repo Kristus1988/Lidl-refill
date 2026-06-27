@@ -4,9 +4,11 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="#CC000000"
-    android:padding="8dp"
-    android:elevation="999dp">
+    android:padding="10dp"
+    android:elevation="999dp"
+    android:layout_marginTop="50dp">
 
+    <!-- Status -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
@@ -15,10 +17,11 @@
         android:textColor="#4CAF50"
         android:textSize="12sp"
         android:gravity="center"
-        android:padding="4dp"
+        android:padding="6dp"
         android:background="#33000000"
         android:layout_marginBottom="4dp"/>
 
+    <!-- Platzierung -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -34,7 +37,8 @@
         android:text="⬇ Swipe platzieren"
         android:textColor="#FFFFFF"
         android:backgroundTint="#4CAF50"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnOcrPlace"
@@ -43,7 +47,8 @@
         android:text="📷 OCR-Rechteck"
         android:textColor="#FFFFFF"
         android:backgroundTint="#2196F3"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnRefillPlace"
@@ -52,8 +57,10 @@
         android:text="🔄 Refill-Button"
         android:textColor="#FFFFFF"
         android:backgroundTint="#FF9800"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
+    <!-- Sofort-Aktionen -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -70,7 +77,8 @@
         android:text="⬇ Swipe jetzt"
         android:textColor="#FFFFFF"
         android:backgroundTint="#00E676"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnRefillNow"
@@ -79,7 +87,8 @@
         android:text="🔄 Refill jetzt"
         android:textColor="#FFFFFF"
         android:backgroundTint="#FF1744"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnOcrNow"
@@ -88,7 +97,8 @@
         android:text="📷 OCR jetzt"
         android:textColor="#FFFFFF"
         android:backgroundTint="#2979FF"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnStopAuto"
@@ -97,7 +107,8 @@
         android:text="⏹ Stop"
         android:textColor="#FFFFFF"
         android:backgroundTint="#D50000"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <Button
         android:id="@+id/btnStartAuto"
@@ -106,7 +117,8 @@
         android:text="▶ Start"
         android:textColor="#FFFFFF"
         android:backgroundTint="#F44336"
-        android:textSize="12sp"/>
+        android:textSize="12sp"
+        android:layout_marginTop="2dp"/>
 
     <TextView
         android:id="@+id/tvCoordinates"
