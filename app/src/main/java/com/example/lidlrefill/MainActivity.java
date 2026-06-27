@@ -99,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
             openLidlApp();
         });
 
-        // 🔍 ALLE Apps anzeigen (OHNE FILTER!)
         btnDetectApp.setOnClickListener(v -> {
             showAllInstalledApps();
         });
@@ -156,7 +155,6 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    // 🔍 ALLE INSTALLIERTEN APPS ANZEIGEN (OHNE FILTER!)
     private void showAllInstalledApps() {
         try {
             PackageManager pm = getPackageManager();
@@ -169,9 +167,11 @@ public class MainActivity extends AppCompatActivity {
                 return nameA.compareToIgnoreCase(nameB);
             });
             
-            List<String> appList = new ArrayList<>();
-            List<String> packageList = new ArrayList<>();
+            // Array für den Dialog
+            String[] appNames = new String[apps.size()];
+            final String[] packageNames = new String[apps.size()];
             
+            int index = 0;
             for (ApplicationInfo info : apps) {
                 String pkg = info.packageName;
                 String appName = pm.getApplicationLabel(info).toString();
@@ -179,36 +179,31 @@ public class MainActivity extends AppCompatActivity {
                 // Eigene App überspringen
                 if (pkg.equals(getPackageName())) continue;
                 
-                // ALLE Apps anzeigen - KEIN FILTER!
-                appList.add("📱 " + appName + " (" + pkg + ")");
-                packageList.add(pkg);
+                appNames[index] = "📱 " + appName + "\n   " + pkg;
+                packageNames[index] = pkg;
+                index++;
             }
             
-            if (appList.isEmpty()) {
-                Toast.makeText(this, "⚠️ Keine Apps gefunden!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            
-            new AlertDialog.Builder(this)
-                .setTitle("📱 Alle installierten Apps (" + appList.size() + ")")
-                .setMessage("🔍 Suche nach 'Lidl' oder 'Connect' in der Liste!")
-                .setItems(appList.toArray(new String[0]), (dialog, which) -> {
-                    String selectedPackage = packageList.get(which);
-                    String appName = getAppName(selectedPackage);
-                    selectApp(selectedPackage, appName);
-                    Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
-                })
-                .setNegativeButton("Abbrechen", null)
-                .setNeutralButton("📱 Play Store", (d, w) -> {
-                    try {
-                        Intent playStoreIntent = new Intent(Intent.ACTION_VIEW);
-                        playStoreIntent.setData(android.net.Uri.parse("market://details?id=de.lidlconnect.android"));
-                        startActivity(playStoreIntent);
-                    } catch (Exception e) {
-                        // Ignorieren
-                    }
-                })
-                .show();
+            // Dialog mit allen Apps
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("📱 Alle installierten Apps (" + index + ")");
+            builder.setItems(appNames, (dialog, which) -> {
+                String selectedPackage = packageNames[which];
+                String appName = getAppName(selectedPackage);
+                selectApp(selectedPackage, appName);
+                Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
+            });
+            builder.setNegativeButton("Abbrechen", null);
+            builder.setNeutralButton("📱 Play Store", (d, w) -> {
+                try {
+                    Intent playStoreIntent = new Intent(Intent.ACTION_VIEW);
+                    playStoreIntent.setData(android.net.Uri.parse("market://details?id=de.lidlconnect.android"));
+                    startActivity(playStoreIntent);
+                } catch (Exception e) {
+                    // Ignorieren
+                }
+            });
+            builder.show();
                 
         } catch (Exception e) {
             Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
