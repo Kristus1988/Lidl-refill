@@ -1,10 +1,6 @@
 package com.example.lidlrefill;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.app.ActivityManager;
-import android.app.AppOpsManager;
-import android.app.usage.UsageStats;
-import android.app.usage.UsageStatsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -27,11 +23,8 @@ import androidx.appcompat.app.AlertDialog;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -117,22 +110,9 @@ public class MainActivity extends AppCompatActivity {
             openLidlApp();
         });
 
-        // 🔍 Alle offenen Apps anzeigen (mit Usage Stats)
+        // 🔍 ALLE INSTALLIERTEN APPS ANZEIGEN
         btnDetectApp.setOnClickListener(v -> {
-            // Prüfen ob Usage Stats Berechtigung aktiv ist
-            if (!hasUsageStatsPermission()) {
-                new AlertDialog.Builder(this)
-                    .setTitle("⚠️ Berechtigung benötigt")
-                    .setMessage("Um alle offenen Apps zu erkennen, benötigt die App die Berechtigung 'Nutzungszugriff'.\n\n" +
-                               "Bitte aktiviere sie in den Einstellungen.")
-                    .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
-                        startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-                    })
-                    .setNegativeButton("Abbrechen", null)
-                    .show();
-                return;
-            }
-            showAllRunningApps();
+            showAllInstalledApps();
         });
 
         // Lidl App öffnen
@@ -141,11 +121,7 @@ public class MainActivity extends AppCompatActivity {
                 openSelectedApp();
             } else {
                 Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_SHORT).show();
-                if (hasUsageStatsPermission()) {
-                    showAllRunningApps();
-                } else {
-                    startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-                }
+                showAllInstalledApps();
             }
         });
 
@@ -159,11 +135,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (selectedAppPackage == null) {
                 Toast.makeText(this, "⚠️ Bitte zuerst eine App auswählen!", Toast.LENGTH_LONG).show();
-                if (hasUsageStatsPermission()) {
-                    showAllRunningApps();
-                } else {
-                    startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-                }
+                showAllInstalledApps();
                 return;
             }
 
@@ -198,103 +170,27 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    // 🔍 PRÜFEN OB USAGE STATS PERMISSION AKTIV IST
-    private boolean hasUsageStatsPermission() {
-        AppOpsManager appOps = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
-        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(), getPackageName());
-        return mode == AppOpsManager.MODE_ALLOWED;
-    }
-
-    // 🔍 ALLE OFFENEN APPS ANZEIGEN (MIT USAGE STATS)
-    private void showAllRunningApps() {
-        try {
-            UsageStatsManager usageStatsManager = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
-            long endTime = System.currentTimeMillis();
-            long startTime = endTime - 1000 * 60 * 5; // Letzte 5 Minuten
-
-            List<UsageStats> stats = usageStatsManager.queryUsageStats(
-                    UsageStatsManager.INTERVAL_DAILY, startTime, endTime);
-
-            if (stats == null || stats.isEmpty()) {
-                Toast.makeText(this, "⚠️ Keine App-Nutzungsdaten gefunden!", Toast.LENGTH_SHORT).show();
-                // Fallback: Alle installierten Apps anzeigen
-                showAllInstalledApps();
-                return;
-            }
-
-            // Nach letzter Nutzung sortieren (neueste zuerst)
-            Collections.sort(stats, new Comparator<UsageStats>() {
-                @Override
-                public int compare(UsageStats o1, UsageStats o2) {
-                    return Long.compare(o2.getLastTimeUsed(), o1.getLastTimeUsed());
-                }
-            });
-
-            // Eindeutige Apps sammeln
-            Set<String> uniquePackages = new HashSet<>();
-            List<String> appList = new ArrayList<>();
-            List<String> packageList = new ArrayList<>();
-
-            for (UsageStats stat : stats) {
-                String pkg = stat.getPackageName();
-
-                // Eigene App überspringen
-                if (pkg.equals(getPackageName())) continue;
-
-                // Doppelte vermeiden
-                if (uniquePackages.contains(pkg)) continue;
-                uniquePackages.add(pkg);
-
-                String appName = getAppName(pkg);
-
-                // Lidl Connect hervorheben
-                if (isLidlApp(pkg, appName)) {
-                    appList.add("⭐ " + appName + " ⭐ (" + pkg + ")");
-                } else {
-                    appList.add("📱 " + appName + " (" + pkg + ")");
-                }
-                packageList.add(pkg);
-            }
-
-            // Wenn keine Apps gefunden wurden -> alle installierten Apps anzeigen
-            if (appList.isEmpty()) {
-                showAllInstalledApps();
-                return;
-            }
-
-            // Dialog mit allen offenen Apps
-            new AlertDialog.Builder(this)
-                .setTitle("📱 Wähle die Lidl Connect App aus")
-                .setMessage("⭐ = Lidl App erkannt")
-                .setItems(appList.toArray(new String[0]), (dialog, which) -> {
-                    String selectedPackage = packageList.get(which);
-                    String appName = getAppName(selectedPackage);
-                    selectApp(selectedPackage, appName);
-                    Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
-                })
-                .setNegativeButton("Abbrechen", null)
-                .setNeutralButton("🔄 Alle Apps anzeigen", (d, w) -> showAllInstalledApps())
-                .show();
-
-        } catch (SecurityException e) {
-            Toast.makeText(this, "⚠️ Keine Berechtigung! Bitte in Einstellungen aktivieren.", Toast.LENGTH_LONG).show();
-            startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));
-        } catch (Exception e) {
-            Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            // Fallback: Alle installierten Apps anzeigen
-            showAllInstalledApps();
-        }
-    }
-
-    // 🔍 ALLE INSTALLIERTEN APPS ANZEIGEN (FALLBACK)
+    // 🔍 ALLE INSTALLIERTEN APPS ANZEIGEN
     private void showAllInstalledApps() {
         try {
             PackageManager pm = getPackageManager();
             List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
             
+            // Nach App-Namen sortieren
+            Collections.sort(apps, (a, b) -> {
+                String nameA = pm.getApplicationLabel(a).toString();
+                String nameB = pm.getApplicationLabel(b).toString();
+                return nameA.compareToIgnoreCase(nameB);
+            });
+            
             List<String> appList = new ArrayList<>();
             List<String> packageList = new ArrayList<>();
+            
+            // Lidl Connect zuerst anzeigen (wenn gefunden)
+            List<String> lidlApps = new ArrayList<>();
+            List<String> lidlPackages = new ArrayList<>();
+            List<String> otherApps = new ArrayList<>();
+            List<String> otherPackages = new ArrayList<>();
             
             for (ApplicationInfo info : apps) {
                 String pkg = info.packageName;
@@ -303,23 +199,41 @@ public class MainActivity extends AppCompatActivity {
                 // Eigene App überspringen
                 if (pkg.equals(getPackageName())) continue;
                 
-                // Lidl Connect hervorheben
+                // Lidl Connect erkennen
                 if (isLidlApp(pkg, appName)) {
-                    appList.add("⭐ " + appName + " ⭐ (" + pkg + ")");
+                    lidlApps.add("⭐ " + appName + " ⭐ (" + pkg + ")");
+                    lidlPackages.add(pkg);
                 } else {
-                    appList.add("📱 " + appName + " (" + pkg + ")");
+                    otherApps.add("📱 " + appName + " (" + pkg + ")");
+                    otherPackages.add(pkg);
                 }
-                packageList.add(pkg);
             }
+            
+            // Lidl Apps zuerst, dann alle anderen
+            appList.addAll(lidlApps);
+            packageList.addAll(lidlPackages);
+            appList.addAll(otherApps);
+            packageList.addAll(otherPackages);
             
             if (appList.isEmpty()) {
                 Toast.makeText(this, "⚠️ Keine Apps gefunden!", Toast.LENGTH_SHORT).show();
                 return;
             }
             
+            // Dialog mit allen Apps
+            String title = "📱 Alle installierten Apps";
+            String message = "⭐ = Lidl Connect App erkannt\n\n" +
+                           "Tipp: Scrolle nach 'LIDL Connect' oder 'de.lidlconnect.android'";
+            
+            if (lidlApps.isEmpty()) {
+                message = "⚠️ Lidl Connect nicht gefunden!\n\n" +
+                         "Bitte wähle die richtige App aus der Liste oder\n" +
+                         "installiere Lidl Connect aus dem Play Store.";
+            }
+            
             new AlertDialog.Builder(this)
-                .setTitle("📱 Alle installierten Apps")
-                .setMessage("⭐ = Lidl App erkannt")
+                .setTitle(title)
+                .setMessage(message)
                 .setItems(appList.toArray(new String[0]), (dialog, which) -> {
                     String selectedPackage = packageList.get(which);
                     String appName = getAppName(selectedPackage);
@@ -327,6 +241,15 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "✅ Ausgewählt: " + appName, Toast.LENGTH_LONG).show();
                 })
                 .setNegativeButton("Abbrechen", null)
+                .setNeutralButton("📱 Play Store", (d, w) -> {
+                    try {
+                        Intent playStoreIntent = new Intent(Intent.ACTION_VIEW);
+                        playStoreIntent.setData(android.net.Uri.parse("market://details?id=de.lidlconnect.android"));
+                        startActivity(playStoreIntent);
+                    } catch (Exception e) {
+                        // Ignorieren
+                    }
+                })
                 .show();
                 
         } catch (Exception e) {
@@ -349,7 +272,8 @@ public class MainActivity extends AppCompatActivity {
         return pkgLower.contains("lidlconnect") || 
                pkgLower.contains("lidl.connect") ||
                (pkgLower.contains("lidl") && pkgLower.contains("connect")) ||
-               nameLower.contains("lidl connect");
+               nameLower.contains("lidl connect") ||
+               nameLower.equals("lidl connect");
     }
 
     private void openLidlApp() {
