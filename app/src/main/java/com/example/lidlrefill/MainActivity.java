@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
@@ -27,6 +28,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 
+import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
@@ -49,18 +51,15 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_VOLUME_Y = "volume_y";
     private static final String KEY_IS_RECORDED = "is_recorded";
 
-    // Gespeicherte Positionen
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
     private boolean isRecorded = false;
 
-    // Overlay für Position-Recorder
     private WindowManager windowManager;
     private FrameLayout overlayView;
     private ImageView circleMarker;
     private ImageView rectMarker;
-    private boolean isRecordingMode = false;
-    private int recordingType = 0; // 1 = Button, 2 = Volume
+    private int recordingType = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // Position-Recorder starten
         btnStartRecording.setOnClickListener(v -> {
             if (!isServiceEnabled) {
                 Toast.makeText(this, "⚠️ Bitte zuerst Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
@@ -108,7 +106,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // Frage welchen Marker platzieren
             new AlertDialog.Builder(this)
                 .setTitle("📌 Position aufnehmen")
                 .setMessage("Wähle, was du aufnehmen möchtest:")
@@ -118,7 +115,6 @@ public class MainActivity extends AppCompatActivity {
                 .show();
         });
 
-        // Lidl App öffnen
         btnOpenApp.setOnClickListener(v -> {
             openLidlApp();
         });
@@ -168,25 +164,28 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    // 📌 OVERLAY MIT MARKER
     private void startOverlay(int type) {
         recordingType = type;
 
-        // Overlay erstellen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "⚠️ Bitte Overlay-Berechtigung aktivieren!", Toast.LENGTH_LONG).show();
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+                return;
+            }
+        }
+
         overlayView = new FrameLayout(this);
         overlayView.setBackgroundColor(Color.parseColor("#88000000"));
 
-        // Marker erstellen
         if (type == 1) {
-            // 🟢 Kreis für Refill-Button
             circleMarker = new ImageView(this);
-            circleMarker.setImageDrawable(getDrawable(R.drawable.circle_marker));
+            circleMarker.setImageResource(R.drawable.circle_marker);
             circleMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(120, 120);
             params.gravity = Gravity.CENTER;
             overlayView.addView(circleMarker, params);
 
-            // Touch-Listener für Ziehen
             circleMarker.setOnTouchListener(new View.OnTouchListener() {
                 private float initialX, initialY;
                 private float touchX, touchY;
@@ -207,7 +206,6 @@ public class MainActivity extends AppCompatActivity {
                             v.setY(initialY + deltaY);
                             return true;
                         case MotionEvent.ACTION_UP:
-                            // Position speichern (relativ zum Bildschirm)
                             float centerX = v.getX() + v.getWidth() / 2;
                             float centerY = v.getY() + v.getHeight() / 2;
                             
@@ -223,9 +221,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         } else {
-            // 🔵 Rechteck für Volumen
             rectMarker = new ImageView(this);
-            rectMarker.setImageDrawable(getDrawable(R.drawable.rect_marker));
+            rectMarker.setImageResource(R.drawable.rect_marker);
             rectMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(200, 80);
             params.gravity = Gravity.CENTER;
@@ -267,7 +264,6 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        // Overlay anzeigen
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -278,15 +274,6 @@ public class MainActivity extends AppCompatActivity {
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
-
-        // Berechtigung prüfen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "⚠️ Bitte Overlay-Berechtigung aktivieren!", Toast.LENGTH_LONG).show();
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
-                return;
-            }
-        }
 
         windowManager.addView(overlayView, params);
         Toast.makeText(this, "📌 Ziehe den Marker an die richtige Stelle", Toast.LENGTH_LONG).show();
