@@ -50,7 +50,6 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_IS_RECORDED = "is_recorded";
     private static final String KEY_SERVICE_RUNNING = "service_running";
 
-    // Gespeicherte Positionen
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
     private float volumeWidth = 0.25f, volumeHeight = 0.10f;
@@ -61,17 +60,20 @@ public class MainActivity extends AppCompatActivity {
 
     private WindowManager windowManager;
     private View markerView;
-    private int recordingType = 0; // 1=Refill, 2=Volumen, 3=Swipe
+    private int recordingType = 0;
     private boolean isMarkerVisible = false;
 
     private static final int REQUEST_MEDIA_PROJECTION = 1001;
+    private Context appContext; // Application-Kontext für Overlay!
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        // ✅ WICHTIG: Application-Kontext für Overlay (nicht an Activity gebunden!)
+        appContext = getApplicationContext();
+        windowManager = (WindowManager) appContext.getSystemService(WINDOW_SERVICE);
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
 
         initViews();
@@ -241,14 +243,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ✅ FLOATING MARKER - GANZ VORNE (TYPE_APPLICATION_OVERLAY)
+    // ✅ FLOATING MARKER - WIE AUTOKLICKER (UNBEDINGT VORNE!)
     private void showFloatingMarker() {
         if (isMarkerVisible) {
             removeMarker();
             return;
         }
 
-        markerView = new View(this) {
+        // ✅ WICHTIG: View mit Application-Kontext (nicht Activity!)
+        markerView = new View(appContext) {
             private Paint paint = new Paint();
             private Paint borderPaint = new Paint();
             private RectF rect = new RectF();
@@ -268,7 +271,6 @@ public class MainActivity extends AppCompatActivity {
                 int padding = 8;
 
                 if (recordingType == 1) {
-                    // 🟢 Kreis für Refill-Button
                     paint.setColor(Color.argb(200, 255, 87, 34));
                     borderPaint.setColor(Color.parseColor("#4CAF50"));
                     float cx = w / 2f;
@@ -282,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
                     textPaint.setTextAlign(Paint.Align.CENTER);
                     canvas.drawText("REFILL", cx, cy + 8, textPaint);
                 } else if (recordingType == 2) {
-                    // 🔵 Rechteck für Volumen
                     paint.setColor(Color.argb(200, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
@@ -294,7 +295,6 @@ public class MainActivity extends AppCompatActivity {
                     textPaint.setTextAlign(Paint.Align.CENTER);
                     canvas.drawText("VOLUMEN", w / 2f, h / 2f + 7, textPaint);
                 } else {
-                    // 🟠 Pfeil für Swipe-Geste
                     paint.setColor(Color.argb(200, 255, 152, 0));
                     borderPaint.setColor(Color.parseColor("#FF9800"));
                     rect.set(padding, padding, w - padding, h - padding);
@@ -309,7 +309,6 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // Größen für Marker
         int size, height;
         if (recordingType == 1) {
             size = 120;
@@ -354,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ✅ WICHTIG: TYPE_APPLICATION_OVERLAY für GANZ VORNE!
+        // ✅ WIE AUTOKLICKER: TYPE_APPLICATION_OVERLAY + FLAGs
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 size,
                 height,
@@ -370,6 +369,7 @@ public class MainActivity extends AppCompatActivity {
         params.x = 200;
         params.y = 300;
 
+        // ✅ WICHTIG: Über Application-Kontext hinzufügen (nicht Activity!)
         windowManager.addView(markerView, params);
         isMarkerVisible = true;
         Toast.makeText(this, "📌 Marker erscheint über ALLEN Apps!", Toast.LENGTH_SHORT).show();
