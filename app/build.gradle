@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'com.lidlrefill.app'
-    compileSdk 34
+    compileSdk 33  // ← Von 34 auf 33 geändert!
 
     defaultConfig {
         applicationId "com.lidlrefill.app"
         minSdk 24
-        targetSdk 34
+        targetSdk 33  // ← Von 34 auf 33 geändert!
         versionCode 1
         versionName "1.0"
     }
