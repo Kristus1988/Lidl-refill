@@ -49,7 +49,6 @@ public class RefillAccessibilityService extends AccessibilityService {
     private static final float TARGET_VOLUME = 0.35f;
     private Random random = new Random();
 
-    // Overlay
     private WindowManager windowManager;
     private View overlayView;
     private TextView tvStatus, tvVolume, tvRefills, tvNext;
@@ -231,12 +230,24 @@ public class RefillAccessibilityService extends AccessibilityService {
             isMonitoring = false;
             removeOverlay();
             showToast("⏹️ Gestoppt");
+            // MainActivity-Status aktualisieren
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean("service_running", false).apply();
         });
 
         btnRefresh.setOnClickListener(v -> {
             showToast("🔄 Aktualisiere...");
             AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root != null) handleLidlApp(root);
+            if (root != null) {
+                float volume = readVolume(root);
+                if (volume > 0) {
+                    currentVolume = volume;
+                    updateOverlay();
+                    showToast("📊 " + String.format("%.2f", volume) + " GB");
+                } else {
+                    showToast("⚠️ Kein Volumen gefunden");
+                }
+            }
         });
 
         overlayView.setOnTouchListener((v, event) -> {
@@ -301,18 +312,6 @@ public class RefillAccessibilityService extends AccessibilityService {
         }
     }
 
-    private void handleLidlApp(AccessibilityNodeInfo root) {
-        float volume = readVolume(root);
-        if (volume > 0) {
-            currentVolume = volume;
-            updateOverlay();
-            handleVolumeUpdate();
-        }
-        if (shouldClick()) {
-            clickRefill(root);
-        }
-    }
-
     private void showToast(String msg) {
         handler.post(() -> Toast.makeText(this, msg, Toast.LENGTH_SHORT).show());
     }
@@ -344,6 +343,17 @@ public class RefillAccessibilityService extends AccessibilityService {
                     handler.removeCallbacksAndMessages(null);
                     removeOverlay();
                     Log.d(TAG, "⏹️ Gestoppt");
+                    break;
+                case "refresh":
+                    AccessibilityNodeInfo root = getRootInActiveWindow();
+                    if (root != null) {
+                        float volume = readVolume(root);
+                        if (volume > 0) {
+                            currentVolume = volume;
+                            updateOverlay();
+                            showToast("📊 " + String.format("%.2f", volume) + " GB");
+                        }
+                    }
                     break;
             }
         }
