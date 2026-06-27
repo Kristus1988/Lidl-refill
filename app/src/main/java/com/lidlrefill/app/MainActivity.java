@@ -37,7 +37,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void requestAllPermissions() {
-        // 1. Overlay Permission
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -46,23 +45,14 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // 2. Accessibility Permission
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am != null) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         }
-        
-        // 3. Benachrichtigungen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(new String[]{
-                android.Manifest.permission.POST_NOTIFICATIONS
-            }, 3);
-        }
     }
     
     private boolean checkAllPermissions() {
-        // Overlay prüfen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, "❌ Overlay-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
@@ -70,7 +60,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // Accessibility prüfen
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             Toast.makeText(this, "❌ Accessibility-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
@@ -89,14 +78,5 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
         finish();
-    }
-    
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == OVERLAY_PERMISSION_REQUEST || 
-            requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
-            checkAllPermissions();
-        }
     }
 }
