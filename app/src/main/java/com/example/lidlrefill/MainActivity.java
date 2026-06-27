@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAppPicker() {
-        // ALLE installierten Apps abrufen (ohne Filter!)
+        // ALLE installierten Apps abrufen - OHNE JEDEN FILTER!
         PackageManager pm = getPackageManager();
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         
@@ -175,34 +175,11 @@ public class MainActivity extends AppCompatActivity {
         List<String> displayNames = new ArrayList<>();
         List<String> packageNames = new ArrayList<>();
         
+        // ✅ ALLE Apps anzeigen - OHNE Filter!
         for (ApplicationInfo info : apps) {
             String appName = pm.getApplicationLabel(info).toString();
-            
-            // System-Apps ausblenden (optional - für bessere Übersicht)
-            boolean isSystem = (info.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
-            
-            // Lidl Connect ist KEINE System-App! Also immer anzeigen.
-            // Aber: Wenn es eine System-App ist UND nicht "lidl" enthält, überspringen
-            if (isSystem && !appName.toLowerCase().contains("lidl") && 
-                !appName.toLowerCase().contains("connect") &&
-                !info.packageName.toLowerCase().contains("lidl")) {
-                continue;
-            }
-            
             displayNames.add(appName + " (" + info.packageName + ")");
             packageNames.add(info.packageName);
-        }
-        
-        // Falls trotzdem keine Apps gefunden wurden (z.B. weil alle ausgeblendet),
-        // zeige ALLE Apps an (ohne Filter)
-        if (displayNames.isEmpty()) {
-            displayNames.clear();
-            packageNames.clear();
-            for (ApplicationInfo info : apps) {
-                String appName = pm.getApplicationLabel(info).toString();
-                displayNames.add(appName + " (" + info.packageName + ")");
-                packageNames.add(info.packageName);
-            }
         }
         
         // Dialog mit App-Liste anzeigen
@@ -210,23 +187,7 @@ public class MainActivity extends AppCompatActivity {
         builder.setTitle("📱 Wähle die Lidl Connect App aus");
         builder.setItems(displayNames.toArray(new String[0]), (dialog, which) -> {
             String selectedPackage = packageNames.get(which);
-            
-            // Prüfen, ob es sich um eine Lidl App handelt (oder manuell bestätigen)
-            if (selectedPackage.toLowerCase().contains("lidl") || 
-                selectedPackage.toLowerCase().contains("connect") ||
-                selectedPackage.equals("de.lidlconnect.android") ||
-                selectedPackage.equals("de.lidl.connect")) {
-                selectApp(selectedPackage);
-            } else {
-                // Frage, ob der Nutzer trotzdem diese App auswählen möchte
-                new android.app.AlertDialog.Builder(this)
-                    .setTitle("⚠️ Bestätigung")
-                    .setMessage("Die ausgewählte App heißt nicht 'Lidl Connect'. Bist du sicher, dass es die richtige App ist?\n\n" + 
-                               selectedPackage)
-                    .setPositiveButton("Ja, das ist sie", (d, w) -> selectApp(selectedPackage))
-                    .setNegativeButton("Nein, nochmal suchen", (d, w) -> showAppPicker())
-                    .show();
-            }
+            selectApp(selectedPackage);
         });
         
         builder.setNegativeButton("Abbrechen", (dialog, which) -> dialog.dismiss());
