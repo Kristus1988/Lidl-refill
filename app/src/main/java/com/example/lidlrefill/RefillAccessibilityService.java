@@ -5,19 +5,12 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -30,15 +23,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.Text;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
-
-import java.nio.ByteBuffer;
 import java.util.Random;
 
 public class RefillAccessibilityService extends AccessibilityService {
@@ -51,9 +35,11 @@ public class RefillAccessibilityService extends AccessibilityService {
     private boolean isMonitoring = false;
     private int refillCount = 0;
 
+    // Positionen aus MainActivity
     private float buttonX = 0, buttonY = 0;
     private float volumeX = 0, volumeY = 0;
-    private float volumeWidth = 0, volumeHeight = 0;
+    private float swipeStartX = 0, swipeStartY = 0;
+    private float swipeEndX = 0, swipeEndY = 0;
     private boolean isRecorded = false;
 
     private float currentVolume = 0.0f;
@@ -65,33 +51,13 @@ public class RefillAccessibilityService extends AccessibilityService {
     private static final float TARGET_VOLUME = 0.35f;
     private Random random = new Random();
 
-    // ✅ OCR
-    private TextRecognizer textRecognizer;
-    private MediaProjectionManager projectionManager;
-    private MediaProjection mediaProjection;
-    private VirtualDisplay virtualDisplay;
-    private ImageReader imageReader;
-    private int screenWidth, screenHeight;
-    private boolean isOcrRunning = false;
-
-    // Overlay
     private WindowManager windowManager;
     private View overlayView;
     private TextView tvStatus, tvVolume, tvRefills, tvNext;
     private Button btnPause, btnStop, btnRefresh;
     private boolean isOverlayVisible = false;
     private boolean isPaused = false;
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-        projectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        
-        DisplayMetrics metrics = getResources().getDisplayMetrics();
-        screenWidth = metrics.widthPixels;
-        screenHeight = metrics.heightPixels;
-    }
+    private boolean isScrollingToPosition = false;
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -107,169 +73,124 @@ public class RefillAccessibilityService extends AccessibilityService {
     }
 
     private void performActions() {
-        // 1. Volumen per OCR auslesen
-        if (!isOcrRunning) {
-            readVolumeWithOcr();
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            Log.d(TAG, "⏳ Kein Root, warte...");
+            return;
         }
 
-        // 2. Refill ausführen wenn nötig
-        if (shouldClick()) {
-            clickRefillAtPosition();
-        }
-    }
-
-    // ✅ OCR: VOLUMEN AUSLESEN
-    private void readVolumeWithOcr() {
-        if (isOcrRunning) return;
-        isOcrRunning = true;
-
-        Log.d(TAG, "🔍 Starte OCR-Volumen-Erkennung...");
-
-        // Screenshot machen
-        takeScreenshot(bitmap -> {
-            if (bitmap == null) {
-                Log.e(TAG, "❌ Screenshot fehlgeschlagen");
-                isOcrRunning = false;
-                return;
-            }
-
-            // Rechteck-Bereich aus dem Screenshot ausschneiden
-            int x = (int) (volumeX * screenWidth);
-            int y = (int) (volumeY * screenHeight);
-            int width = (int) (volumeWidth * screenWidth);
-            int height = (int) (volumeHeight * screenHeight);
-            
-            // Sicherstellen, dass der Bereich nicht außerhalb des Bildes liegt
-            if (x < 0) x = 0;
-            if (y < 0) y = 0;
-            if (x + width > bitmap.getWidth()) width = bitmap.getWidth() - x;
-            if (y + height > bitmap.getHeight()) height = bitmap.getHeight() - y;
-            if (width <= 0 || height <= 0) {
-                Log.e(TAG, "❌ Ungültiger Bereich für OCR");
-                isOcrRunning = false;
-                return;
-            }
-
-            Bitmap cropBitmap = Bitmap.createBitmap(bitmap, x, y, width, height);
-            bitmap.recycle();
-
-            // OCR durchführen
-            InputImage image = InputImage.fromBitmap(cropBitmap, 0);
-            textRecognizer.process(image)
-                .addOnSuccessListener(this::onOcrSuccess)
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "❌ OCR fehlgeschlagen: " + e.getMessage());
-                    isOcrRunning = false;
-                });
-        });
-    }
-
-    private void onOcrSuccess(@NonNull Text text) {
-        isOcrRunning = false;
-        
-        String fullText = text.getText();
-        Log.d(TAG, "📝 OCR-Ergebnis: " + fullText);
-
-        // Nach Zahlen mit "GB" suchen
-        float volume = extractVolumeFromText(fullText);
+        // 1. Volumen auslesen
+        float volume = readVolumeAtPosition(root);
         if (volume > 0) {
             currentVolume = volume;
             updateOverlay();
             handleVolumeUpdate();
-            Log.d(TAG, "📊 Volumen per OCR: " + volume + " GB");
-            showToast("📊 " + String.format("%.2f", volume) + " GB");
-        } else {
-            Log.d(TAG, "⚠️ Kein Volumen im OCR-Text gefunden");
+            Log.d(TAG, "📊 Volumen: " + volume + " GB");
+        }
+
+        // 2. Refill ausführen wenn nötig
+        if (shouldClick()) {
+            clickRefillAtPosition(root);
         }
     }
 
-    private float extractVolumeFromText(String text) {
+    // ✅ SWIPE-GESTE MIT GESPEICHERTEN POSITIONEN
+    private void performSwipeRefresh() {
+        Log.d(TAG, "🔄 Führe Swipe-Geste aus (Pull-to-Refresh)");
+
+        int width = getResources().getDisplayMetrics().widthPixels;
+        int height = getResources().getDisplayMetrics().heightPixels;
+
+        int startX = (int) (swipeStartX * width);
+        int startY = (int) (swipeStartY * height);
+        int endX = (int) (swipeEndX * width);
+        int endY = (int) (swipeEndY * height);
+
+        Log.d(TAG, "📌 Swipe von (" + startX + "," + startY + ") nach (" + endX + "," + endY + ")");
+
+        // 1. ACTION_DOWN
+        MotionEvent downEvent = MotionEvent.obtain(
+                System.currentTimeMillis(),
+                System.currentTimeMillis() + 10,
+                MotionEvent.ACTION_DOWN,
+                startX, startY, 0
+        );
+        dispatchGestureEvent(downEvent);
+        downEvent.recycle();
+
+        // 2. ACTION_MOVE (in Schritten)
+        int steps = 20;
+        for (int i = 0; i <= steps; i++) {
+            float progress = (float) i / steps;
+            int currentX = startX + (int) ((endX - startX) * progress);
+            int currentY = startY + (int) ((endY - startY) * progress);
+
+            long eventTime = System.currentTimeMillis() + (300 * progress);
+            MotionEvent moveEvent = MotionEvent.obtain(
+                    System.currentTimeMillis(),
+                    eventTime,
+                    MotionEvent.ACTION_MOVE,
+                    currentX, currentY, 0
+            );
+            dispatchGestureEvent(moveEvent);
+            moveEvent.recycle();
+
+            try {
+                Thread.sleep(300 / steps);
+            } catch (InterruptedException ignored) {}
+        }
+
+        // 3. ACTION_UP
+        MotionEvent upEvent = MotionEvent.obtain(
+                System.currentTimeMillis(),
+                System.currentTimeMillis() + 10,
+                MotionEvent.ACTION_UP,
+                endX, endY, 0
+        );
+        dispatchGestureEvent(upEvent);
+        upEvent.recycle();
+
+        Log.d(TAG, "✅ Swipe-Geste ausgeführt");
+        showToast("🔄 Aktualisiert!");
+    }
+
+    private void dispatchGestureEvent(MotionEvent event) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        root.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    }
+
+    // 📍 VOLUMEN AN POSITION AUSLESEN
+    private float readVolumeAtPosition(AccessibilityNodeInfo root) {
         try {
-            // Suche nach "X,XX GB" oder "X.XX GB"
-            String[] parts = text.split(" ");
-            for (int i = 0; i < parts.length; i++) {
-                String part = parts[i].replace(",", ".").trim();
-                if (part.matches("\\d+(\\.\\d+)?")) {
-                    float value = Float.parseFloat(part);
-                    if (value > 0 && value < 100) {
-                        // Prüfen ob das nächste Wort "GB" ist
-                        if (i + 1 < parts.length && parts[i + 1].toUpperCase().contains("GB")) {
-                            return value;
-                        }
-                        // Oder ob "GB" im gleichen Wort ist
-                        if (part.toLowerCase().contains("gb")) {
-                            return value;
-                        }
-                    }
+            int x = (int) (volumeX * getResources().getDisplayMetrics().widthPixels);
+            int y = (int) (volumeY * getResources().getDisplayMetrics().heightPixels);
+
+            scrollToPosition(root, x, y);
+
+            AccessibilityNodeInfo node = findNodeAt(root, x, y);
+            if (node != null && node.getText() != null) {
+                String text = node.getText().toString();
+                float value = extractVolume(text);
+                if (value > 0) {
+                    Log.d(TAG, "✅ Volumen an Position (" + x + "," + y + "): " + value + " GB");
+                    return value;
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Extrahieren der Zahl: " + e.getMessage());
+            Log.e(TAG, "Fehler beim Volumen-Auslesen: " + e.getMessage());
         }
         return 0;
     }
 
-    // ✅ SCREENSHOT MIT MEDIAPROJECTION
-    private void takeScreenshot(OnBitmapReady callback) {
-        if (mediaProjection == null) {
-            Log.e(TAG, "❌ MediaProjection nicht initialisiert");
-            callback.onBitmapReady(null);
-            return;
-        }
-
-        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
-        virtualDisplay = mediaProjection.createVirtualDisplay(
-                "Screenshot",
-                screenWidth, screenHeight, 1,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.getSurface(), null, null
-        );
-
-        imageReader.setOnImageAvailableListener(reader -> {
-            Image image = reader.acquireLatestImage();
-            if (image != null) {
-                Bitmap bitmap = imageToBitmap(image);
-                image.close();
-                callback.onBitmapReady(bitmap);
-            } else {
-                callback.onBitmapReady(null);
-            }
-        }, handler);
-    }
-
-    private Bitmap imageToBitmap(Image image) {
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer buffer = planes[0].getBuffer();
-        int pixelStride = planes[0].getPixelStride();
-        int rowStride = planes[0].getRowStride();
-        int rowPadding = rowStride - pixelStride * screenWidth;
-
-        Bitmap bitmap = Bitmap.createBitmap(screenWidth + rowPadding / pixelStride, screenHeight, Bitmap.Config.ARGB_8888);
-        bitmap.copyPixelsFromBuffer(buffer);
-        return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
-    }
-
-    interface OnBitmapReady {
-        void onBitmapReady(Bitmap bitmap);
-    }
-
-    // ✅ REFILL KLICKEN (NUR PIXEL-KOORDINATE)
-    private void clickRefillAtPosition() {
+    // 📍 REFILL AN POSITION KLICKEN
+    private void clickRefillAtPosition(AccessibilityNodeInfo root) {
         try {
-            int x = (int) (buttonX * screenWidth);
-            int y = (int) (buttonY * screenHeight);
+            int x = (int) (buttonX * getResources().getDisplayMetrics().widthPixels);
+            int y = (int) (buttonY * getResources().getDisplayMetrics().heightPixels);
 
-            // Prüfen ob die Position sichtbar ist
-            AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root == null) {
-                Log.d(TAG, "⏳ Kein Root für Refill-Klick");
-                return;
-            }
-
-            // Scrolle zur Position
             scrollToPosition(root, x, y);
 
-            // Node an Position finden
             AccessibilityNodeInfo node = findNodeAt(root, x, y);
             if (node != null && node.isClickable()) {
                 node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
@@ -278,13 +199,12 @@ public class RefillAccessibilityService extends AccessibilityService {
                 return;
             }
 
-            // Fallback: Textsuche
             java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Refill aktivieren");
             for (AccessibilityNodeInfo n : nodes) {
                 if (n.isClickable()) {
                     n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                     executeRefill();
-                    Log.d(TAG, "✅ Refill-Button via Text gefunden");
+                    Log.d(TAG, "✅ Refill-Button via Text gefunden und geklickt");
                     return;
                 }
             }
@@ -295,20 +215,25 @@ public class RefillAccessibilityService extends AccessibilityService {
 
     // ✅ SCROLLEN ZU POSITION
     private void scrollToPosition(AccessibilityNodeInfo root, int targetX, int targetY) {
+        if (isScrollingToPosition) return;
+        isScrollingToPosition = true;
+
         try {
             AccessibilityNodeInfo node = findNodeAt(root, targetX, targetY);
             if (node != null) {
                 Rect rect = new Rect();
                 node.getBoundsInScreen(rect);
                 if (rect.contains(targetX, targetY)) {
+                    isScrollingToPosition = false;
                     return;
                 }
             }
 
-            for (int i = 0; i < 15; i++) {
+            int maxScrolls = 15;
+            for (int i = 0; i < maxScrolls; i++) {
                 root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
                 try { Thread.sleep(400); } catch (InterruptedException ignored) {}
-                
+
                 AccessibilityNodeInfo newRoot = getRootInActiveWindow();
                 if (newRoot != null) {
                     node = findNodeAt(newRoot, targetX, targetY);
@@ -316,12 +241,16 @@ public class RefillAccessibilityService extends AccessibilityService {
                         Rect rect = new Rect();
                         node.getBoundsInScreen(rect);
                         if (rect.contains(targetX, targetY)) {
+                            isScrollingToPosition = false;
                             return;
                         }
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Scrollen: " + e.getMessage());
+        }
+        isScrollingToPosition = false;
     }
 
     // 🔍 NODE AN POSITION FINDEN
@@ -342,6 +271,20 @@ public class RefillAccessibilityService extends AccessibilityService {
             if (result != null) return result;
         }
         return null;
+    }
+
+    private float extractVolume(String text) {
+        try {
+            String[] parts = text.split(" ");
+            for (String p : parts) {
+                p = p.replace(",", ".").trim();
+                if (p.matches("\\d+(\\.\\d+)?")) {
+                    float v = Float.parseFloat(p);
+                    if (v > 0 && v < 100) return v;
+                }
+            }
+        } catch (Exception ignored) {}
+        return 0;
     }
 
     private void handleVolumeUpdate() {
@@ -410,7 +353,7 @@ public class RefillAccessibilityService extends AccessibilityService {
         }, 120000);
     }
 
-    // Overlay
+    // ✅ OVERLAY
     private void showOverlay() {
         if (isOverlayVisible) return;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -442,7 +385,8 @@ public class RefillAccessibilityService extends AccessibilityService {
 
         btnRefresh.setOnClickListener(v -> {
             showToast("🔄 Aktualisiere...");
-            readVolumeWithOcr();
+            performSwipeRefresh();
+            handler.postDelayed(this::performActions, 1500);
         });
 
         overlayView.setOnTouchListener((v, event) -> {
@@ -529,16 +473,14 @@ public class RefillAccessibilityService extends AccessibilityService {
                     buttonY = intent.getFloatExtra("button_y", 0);
                     volumeX = intent.getFloatExtra("volume_x", 0);
                     volumeY = intent.getFloatExtra("volume_y", 0);
-                    volumeWidth = intent.getFloatExtra("volume_width", 0.15f);
-                    volumeHeight = intent.getFloatExtra("volume_height", 0.08f);
+                    swipeStartX = intent.getFloatExtra("swipe_start_x", 0.5f);
+                    swipeStartY = intent.getFloatExtra("swipe_start_y", 0.15f);
+                    swipeEndX = intent.getFloatExtra("swipe_end_x", 0.5f);
+                    swipeEndY = intent.getFloatExtra("swipe_end_y", 0.50f);
                     isRecorded = buttonX > 0 && volumeX > 0;
-                    
-                    // MediaProjection starten (Benötigt Berechtigung von MainActivity)
                     if (isRecorded) {
                         showOverlay();
-                        handler.postDelayed(() -> {
-                            performActions();
-                        }, 1500);
+                        handler.postDelayed(this::performActions, 1500);
                     }
                     Log.d(TAG, "▶️ Monitoring gestartet");
                     break;
@@ -546,28 +488,12 @@ public class RefillAccessibilityService extends AccessibilityService {
                     isMonitoring = false;
                     handler.removeCallbacksAndMessages(null);
                     removeOverlay();
-                    if (mediaProjection != null) {
-                        mediaProjection.stop();
-                        mediaProjection = null;
-                    }
-                    if (virtualDisplay != null) {
-                        virtualDisplay.release();
-                        virtualDisplay = null;
-                    }
                     Log.d(TAG, "⏹️ Gestoppt");
                     break;
                 case "refresh":
                     showToast("🔄 Aktualisiere...");
-                    performActions();
-                    break;
-                case "media_projection":
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        mediaProjection = projectionManager.getMediaProjection(
-                                intent.getIntExtra("resultCode", 0),
-                                intent.getParcelableExtra("data")
-                        );
-                        Log.d(TAG, "📷 MediaProjection initialisiert");
-                    }
+                    performSwipeRefresh();
+                    handler.postDelayed(this::performActions, 1500);
                     break;
             }
         }
