@@ -45,9 +45,7 @@ public class MainActivity extends AppCompatActivity {
     // Bekannte Package-Namen der Lidl Connect App
     private static final String[] KNOWN_LIDL_PACKAGES = {
         "de.lidlconnect.android",
-        "de.lidl.connect",
-        "com.lidlconnect.app",
-        "com.example.lidlconnect"
+        "de.lidl.connect"
     };
 
     @Override
