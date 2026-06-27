@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'com.lidlrefill.app'
-    compileSdk 33  // ← Von 34 auf 33 geändert!
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.lidlrefill.app"
         minSdk 24
-        targetSdk 33  // ← Von 34 auf 33 geändert!
+        targetSdk 33
         versionCode 1
         versionName "1.0"
     }
@@ -18,6 +18,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
         }
     }
     
