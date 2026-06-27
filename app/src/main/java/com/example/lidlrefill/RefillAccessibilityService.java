@@ -204,7 +204,6 @@ public class RefillAccessibilityService extends AccessibilityService {
         }, 120000);
     }
 
-    // Overlay
     private void showOverlay() {
         if (isOverlayVisible) return;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -230,7 +229,6 @@ public class RefillAccessibilityService extends AccessibilityService {
             isMonitoring = false;
             removeOverlay();
             showToast("⏹️ Gestoppt");
-            // MainActivity-Status aktualisieren
             getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putBoolean("service_running", false).apply();
         });
