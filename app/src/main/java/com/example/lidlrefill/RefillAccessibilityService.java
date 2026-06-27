@@ -66,6 +66,10 @@ public class RefillAccessibilityService extends AccessibilityService {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
 
+        // ✅ 1. ZUERST SCROLLEN (wie Autoklicker!)
+        scrollToRefillArea(root);
+
+        // ✅ 2. VOLUMEN AUSLESEN (nach dem Scrollen)
         float volume = readVolume(root);
         if (volume > 0) {
             currentVolume = volume;
@@ -73,8 +77,41 @@ public class RefillAccessibilityService extends AccessibilityService {
             handleVolumeUpdate();
         }
 
+        // ✅ 3. REFILL PRÜFEN UND KLICKEN
         if (shouldClick()) {
             clickRefill(root);
+        }
+    }
+
+    // ✅ AUTO-SCROLL ZUM UNLIMITED REFILL BEREICH
+    private void scrollToRefillArea(AccessibilityNodeInfo root) {
+        // Suche nach "Unlimited Refill" Text
+        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Unlimited Refill");
+        if (!nodes.isEmpty()) {
+            AccessibilityNodeInfo target = nodes.get(0);
+            // Scrolle zu diesem Element
+            target.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+            Log.d(TAG, "📜 Zum Unlimited Refill Bereich gescrollt");
+            
+            // Warte kurz, bis der Inhalt geladen ist
+            handler.postDelayed(() -> {
+                Log.d(TAG, "⏳ Warte auf Inhalt...");
+            }, 500);
+            return;
+        }
+
+        // Fallback: Suche nach "Refill" Text
+        List<AccessibilityNodeInfo> refillNodes = root.findAccessibilityNodeInfosByText("Refill");
+        if (!refillNodes.isEmpty()) {
+            refillNodes.get(0).performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+            Log.d(TAG, "📜 Zum Refill Bereich gescrollt");
+        }
+
+        // Fallback: Suche nach "Unlimited" Text
+        List<AccessibilityNodeInfo> unlimitedNodes = root.findAccessibilityNodeInfosByText("Unlimited");
+        if (!unlimitedNodes.isEmpty()) {
+            unlimitedNodes.get(0).performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+            Log.d(TAG, "📜 Zum Unlimited Bereich gescrollt");
         }
     }
 
@@ -84,9 +121,44 @@ public class RefillAccessibilityService extends AccessibilityService {
             int y = (int) (volumeY * getResources().getDisplayMetrics().heightPixels);
             AccessibilityNodeInfo node = findNodeAt(root, x, y);
             if (node != null && node.getText() != null) {
-                return extractVolume(node.getText().toString());
+                String text = node.getText().toString();
+                float value = extractVolume(text);
+                if (value > 0) {
+                    Log.d(TAG, "📊 Volumen gelesen: " + value + " GB");
+                    return value;
+                }
             }
-        } catch (Exception ignored) {}
+            
+            // Fallback: Suche im gesamten Text nach "GB"
+            float fallback = findVolumeInText(root);
+            if (fallback > 0) {
+                Log.d(TAG, "📊 Volumen (Fallback): " + fallback + " GB");
+                return fallback;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Volumen-Auslesen: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    private float findVolumeInText(AccessibilityNodeInfo root) {
+        return findVolumeRecursive(root);
+    }
+
+    private float findVolumeRecursive(AccessibilityNodeInfo node) {
+        if (node == null) return 0;
+        if (node.getText() != null) {
+            String text = node.getText().toString();
+            if (text.contains("GB") || text.contains("Gb")) {
+                float value = extractVolume(text);
+                if (value > 0) return value;
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            float result = findVolumeRecursive(child);
+            if (result > 0) return result;
+        }
         return 0;
     }
 
@@ -98,7 +170,9 @@ public class RefillAccessibilityService extends AccessibilityService {
         if (node == null) return null;
         Rect r = new Rect();
         node.getBoundsInScreen(r);
-        if (r.contains(x, y) && node.getText() != null && node.getText().length() > 0) return node;
+        if (r.contains(x, y) && node.getText() != null && node.getText().length() > 0) {
+            return node;
+        }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             AccessibilityNodeInfo result = findNodeRecursive(child, x, y);
@@ -157,7 +231,9 @@ public class RefillAccessibilityService extends AccessibilityService {
             int delay = (int) (minutes * 60 * (0.8 + random.nextDouble() * 0.4));
             delay = Math.max(30, Math.min(delay, 1800));
             updateOverlay();
-            handler.postDelayed(() -> {}, delay * 1000L);
+            handler.postDelayed(() -> {
+                // Prüfung beim nächsten Event
+            }, delay * 1000L);
         }
 
         lastVolume = currentVolume;
@@ -179,8 +255,19 @@ public class RefillAccessibilityService extends AccessibilityService {
             return;
         }
 
+        // Fallback: Suche nach "Refill aktivieren"
         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Refill aktivieren");
         for (AccessibilityNodeInfo n : nodes) {
+            if (n.isClickable()) {
+                n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                executeRefill();
+                return;
+            }
+        }
+
+        // Fallback: Suche nach "GUTHABEN AUFLADEN"
+        List<AccessibilityNodeInfo> chargeNodes = root.findAccessibilityNodeInfosByText("GUTHABEN AUFLADEN");
+        for (AccessibilityNodeInfo n : chargeNodes) {
             if (n.isClickable()) {
                 n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                 executeRefill();
@@ -237,14 +324,17 @@ public class RefillAccessibilityService extends AccessibilityService {
             showToast("🔄 Aktualisiere...");
             AccessibilityNodeInfo root = getRootInActiveWindow();
             if (root != null) {
-                float volume = readVolume(root);
-                if (volume > 0) {
-                    currentVolume = volume;
-                    updateOverlay();
-                    showToast("📊 " + String.format("%.2f", volume) + " GB");
-                } else {
-                    showToast("⚠️ Kein Volumen gefunden");
-                }
+                scrollToRefillArea(root);
+                handler.postDelayed(() -> {
+                    float volume = readVolume(root);
+                    if (volume > 0) {
+                        currentVolume = volume;
+                        updateOverlay();
+                        showToast("📊 " + String.format("%.2f", volume) + " GB");
+                    } else {
+                        showToast("⚠️ Kein Volumen gefunden");
+                    }
+                }, 500);
             }
         });
 
@@ -345,12 +435,15 @@ public class RefillAccessibilityService extends AccessibilityService {
                 case "refresh":
                     AccessibilityNodeInfo root = getRootInActiveWindow();
                     if (root != null) {
-                        float volume = readVolume(root);
-                        if (volume > 0) {
-                            currentVolume = volume;
-                            updateOverlay();
-                            showToast("📊 " + String.format("%.2f", volume) + " GB");
-                        }
+                        scrollToRefillArea(root);
+                        handler.postDelayed(() -> {
+                            float volume = readVolume(root);
+                            if (volume > 0) {
+                                currentVolume = volume;
+                                updateOverlay();
+                                showToast("📊 " + String.format("%.2f", volume) + " GB");
+                            }
+                        }, 500);
                     }
                     break;
             }
