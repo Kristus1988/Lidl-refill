@@ -160,7 +160,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAppPicker() {
-        // ALLE installierten Apps abrufen
+        // ALLE installierten Apps abrufen (ohne Filter!)
         PackageManager pm = getPackageManager();
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         
@@ -176,24 +176,26 @@ public class MainActivity extends AppCompatActivity {
         List<String> packageNames = new ArrayList<>();
         
         for (ApplicationInfo info : apps) {
-            // System-Apps ausblenden (optional)
-            if ((info.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
-                // System-Apps überspringen, aber Lidl Connect ist keine System-App!
-                // Deshalb: Nur überspringen, wenn es nicht "lidl" im Namen hat
-                String pkg = info.packageName.toLowerCase();
-                if (!pkg.contains("lidl") && !pkg.contains("connect")) {
-                    continue;
-                }
+            String appName = pm.getApplicationLabel(info).toString();
+            
+            // System-Apps ausblenden (optional - für bessere Übersicht)
+            boolean isSystem = (info.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
+            
+            // Lidl Connect ist KEINE System-App! Also immer anzeigen.
+            // Aber: Wenn es eine System-App ist UND nicht "lidl" enthält, überspringen
+            if (isSystem && !appName.toLowerCase().contains("lidl") && 
+                !appName.toLowerCase().contains("connect") &&
+                !info.packageName.toLowerCase().contains("lidl")) {
+                continue;
             }
             
-            String appName = pm.getApplicationLabel(info).toString();
             displayNames.add(appName + " (" + info.packageName + ")");
             packageNames.add(info.packageName);
         }
         
-        // Falls keine Apps gefunden wurden (z.B. weil alle ausgeblendet), zeige alle an
+        // Falls trotzdem keine Apps gefunden wurden (z.B. weil alle ausgeblendet),
+        // zeige ALLE Apps an (ohne Filter)
         if (displayNames.isEmpty()) {
-            // Alle Apps anzeigen (ohne Filter)
             displayNames.clear();
             packageNames.clear();
             for (ApplicationInfo info : apps) {
@@ -211,7 +213,9 @@ public class MainActivity extends AppCompatActivity {
             
             // Prüfen, ob es sich um eine Lidl App handelt (oder manuell bestätigen)
             if (selectedPackage.toLowerCase().contains("lidl") || 
-                selectedPackage.toLowerCase().contains("connect")) {
+                selectedPackage.toLowerCase().contains("connect") ||
+                selectedPackage.equals("de.lidlconnect.android") ||
+                selectedPackage.equals("de.lidl.connect")) {
                 selectApp(selectedPackage);
             } else {
                 // Frage, ob der Nutzer trotzdem diese App auswählen möchte
