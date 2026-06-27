@@ -1,6 +1,7 @@
 package com.example.lidlrefill;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -14,7 +15,6 @@ import android.provider.Settings;
 import android.view.View;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -22,11 +22,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AlertDialog;
 
+import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button btnStart, btnStop, btnOpenApp, btnOpenSettings, btnManualSelect;
+    private Button btnStart, btnStop, btnOpenApp, btnOpenSettings, btnDetectApp;
     private TextView tvStatus, tvVolume, tvRefill, tvRefillCount, tvNextCheck, tvServiceStatus;
     private ProgressBar progressStatus;
 
@@ -41,12 +42,6 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_SELECTED_APP = "selected_app_package";
 
     private String selectedAppPackage = null;
-
-    // Bekannte Package-Namen der Lidl Connect App
-    private static final String[] KNOWN_LIDL_PACKAGES = {
-        "de.lidlconnect.android",
-        "de.lidl.connect"
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnOpenApp = findViewById(R.id.btn_open_app);
         btnOpenSettings = findViewById(R.id.btn_open_settings);
-        btnManualSelect = findViewById(R.id.btn_manual_select);
+        btnDetectApp = findViewById(R.id.btn_detect_app);
         tvStatus = findViewById(R.id.tv_status);
         tvVolume = findViewById(R.id.tv_volume);
         tvRefill = findViewById(R.id.tv_refill);
@@ -94,16 +89,16 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        // Manuelle Auswahl der Lidl App
-        btnManualSelect.setOnClickListener(v -> showManualSelection());
+        // 🔍 Aktuelle App erkennen
+        btnDetectApp.setOnClickListener(v -> detectCurrentApp());
 
         // Lidl App öffnen
         btnOpenApp.setOnClickListener(v -> {
             if (selectedAppPackage != null) {
                 openSelectedApp();
             } else {
-                Toast.makeText(this, "⚠️ Bitte zuerst die Lidl App auswählen!", Toast.LENGTH_SHORT).show();
-                showManualSelection();
+                Toast.makeText(this, "⚠️ Bitte zuerst eine App erkennen oder auswählen!", Toast.LENGTH_SHORT).show();
+                detectCurrentApp();
             }
         });
 
@@ -116,8 +111,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (selectedAppPackage == null) {
-                Toast.makeText(this, "⚠️ Bitte zuerst die Lidl App auswählen!", Toast.LENGTH_LONG).show();
-                showManualSelection();
+                Toast.makeText(this, "⚠️ Bitte zuerst die Lidl App erkennen!", Toast.LENGTH_LONG).show();
+                detectCurrentApp();
                 return;
             }
 
@@ -154,29 +149,68 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
+    // 🔍 AKTUELLE APP ERKENNEN
+    private void detectCurrentApp() {
+        try {
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            List<ActivityManager.RunningTaskInfo> tasks = am.getRunningTasks(1);
+            
+            if (!tasks.isEmpty()) {
+                String packageName = tasks.get(0).topActivity.getPackageName();
+                String appName = getAppName(packageName);
+                
+                // Prüfen ob es eine Lidl App ist
+                if (packageName.toLowerCase().contains("lidl") || 
+                    packageName.toLowerCase().contains("connect") ||
+                    appName.toLowerCase().contains("lidl") ||
+                    appName.toLowerCase().contains("connect")) {
+                    
+                    // Lidl App erkannt!
+                    selectApp(packageName);
+                    Toast.makeText(this, "✅ Lidl App erkannt: " + appName, Toast.LENGTH_LONG).show();
+                    
+                } else {
+                    // Nicht die Lidl App
+                    new AlertDialog.Builder(this)
+                        .setTitle("⚠️ Nicht die Lidl App?")
+                        .setMessage("Erkannte App: " + appName + "\n\nPackage: " + packageName + 
+                                   "\n\nIst das die Lidl Connect App?")
+                        .setPositiveButton("✅ Ja, das ist sie", (d, w) -> selectApp(packageName))
+                        .setNegativeButton("❌ Nein, nochmal", (d, w) -> {})
+                        .setNeutralButton("📝 Manuell auswählen", (d, w) -> showManualSelection())
+                        .show();
+                }
+            } else {
+                Toast.makeText(this, "⚠️ Keine App im Vordergrund erkannt!", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "⚠️ Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String getAppName(String packageName) {
+        try {
+            PackageManager pm = getPackageManager();
+            ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
+            return pm.getApplicationLabel(info).toString();
+        } catch (Exception e) {
+            return packageName;
+        }
+    }
+
     private void showManualSelection() {
-        // Dialog mit Auswahlmöglichkeiten
-        String[] options = new String[KNOWN_LIDL_PACKAGES.length + 2];
-        System.arraycopy(KNOWN_LIDL_PACKAGES, 0, options, 0, KNOWN_LIDL_PACKAGES.length);
-        options[KNOWN_LIDL_PACKAGES.length] = "📝 Anderen Package-Namen eingeben";
-        options[KNOWN_LIDL_PACKAGES.length + 1] = "🔍 Package-Namen aus App-Liste suchen";
+        // Dialog mit Eingabeoptionen
+        String[] options = {
+            "📝 Package-Namen eingeben",
+            "🔍 Gefundene Lidl-Apps anzeigen"
+        };
 
         new AlertDialog.Builder(this)
             .setTitle("📱 Lidl Connect App auswählen")
             .setItems(options, (dialog, which) -> {
-                if (which < KNOWN_LIDL_PACKAGES.length) {
-                    // Bekannter Package-Name
-                    String pkg = KNOWN_LIDL_PACKAGES[which];
-                    if (isAppInstalled(pkg)) {
-                        selectApp(pkg);
-                    } else {
-                        Toast.makeText(this, "⚠️ App nicht gefunden: " + pkg, Toast.LENGTH_SHORT).show();
-                    }
-                } else if (which == KNOWN_LIDL_PACKAGES.length) {
-                    // Manuelle Eingabe
+                if (which == 0) {
                     showPackageInputDialog();
                 } else {
-                    // App-Liste anzeigen (nur Apps mit "Lidl" im Namen)
                     showFilteredAppList();
                 }
             })
@@ -188,7 +222,7 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("📝 Package-Namen eingeben");
 
-        final EditText input = new EditText(this);
+        final android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("z.B. de.lidlconnect.android");
         input.setText("de.lidlconnect.android");
         builder.setView(input);
@@ -209,7 +243,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showFilteredAppList() {
         PackageManager pm = getPackageManager();
-        java.util.List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         
         java.util.List<String> lidlApps = new java.util.ArrayList<>();
         java.util.List<String> lidlPackages = new java.util.ArrayList<>();
@@ -218,7 +252,6 @@ public class MainActivity extends AppCompatActivity {
             String appName = pm.getApplicationLabel(info).toString().toLowerCase();
             String pkg = info.packageName.toLowerCase();
             
-            // Suche nach "lidl" oder "connect" im Namen oder Package
             if (appName.contains("lidl") || appName.contains("connect") ||
                 pkg.contains("lidl") || pkg.contains("connect")) {
                 lidlApps.add(pm.getApplicationLabel(info).toString() + " (" + info.packageName + ")");
@@ -226,9 +259,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // Falls keine Lidl-App gefunden wurde, zeige alle Apps an
         if (lidlApps.isEmpty()) {
-            Toast.makeText(this, "⚠️ Keine Lidl-App gefunden! Bitte Package-Namen manuell eingeben.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "⚠️ Keine Lidl-App gefunden!", Toast.LENGTH_SHORT).show();
             showPackageInputDialog();
             return;
         }
@@ -255,13 +287,11 @@ public class MainActivity extends AppCompatActivity {
     private void selectApp(String packageName) {
         selectedAppPackage = packageName;
         
-        // In Preferences speichern
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit().putString(KEY_SELECTED_APP, packageName).apply();
         
         btnOpenApp.setText("📱 Lidl App öffnen ✓");
         
-        // App-Namen für Toast ermitteln
         try {
             PackageManager pm = getPackageManager();
             ApplicationInfo info = pm.getApplicationInfo(packageName, 0);
@@ -276,9 +306,6 @@ public class MainActivity extends AppCompatActivity {
             tvServiceStatus.setVisibility(View.VISIBLE);
             Toast.makeText(this, "✅ Ausgewählt: " + packageName, Toast.LENGTH_LONG).show();
         }
-        
-        // App direkt öffnen
-        openSelectedApp();
     }
 
     private void openSelectedApp() {
@@ -302,7 +329,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkAccessibilityService() {
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        java.util.List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(
+        List<AccessibilityServiceInfo> enabledServices = am.getEnabledAccessibilityServiceList(
                 AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
 
         for (AccessibilityServiceInfo info : enabledServices) {
@@ -322,7 +349,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateNextCheckTime() {
-        int delay = random.nextInt(120) + 60; // 60-180 Sekunden
+        int delay = random.nextInt(120) + 60;
         tvNextCheck.setText("⏱️ Nächste Prüfung in " + delay + "s");
 
         mainHandler.postDelayed(() -> {
