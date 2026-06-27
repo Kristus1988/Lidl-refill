@@ -14,7 +14,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
-import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -57,36 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean isRecorded = false;
 
     private WindowManager windowManager;
-    private FrameLayout overlayView;
-    private ImageView circleMarker;
-    private ImageView rectMarker;
-    private int recordingType = 0;
-
-    // ✅ OVERLAY-BERECHTIGUNG PRÜFEN
-    private boolean hasOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return Settings.canDrawOverlays(this);
-        }
-        return true;
-    }
-
-    // ✅ OVERLAY-BERECHTIGUNG ANFORDERN
-    private void requestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Dialog mit Erklärung
-            new AlertDialog.Builder(this)
-                .setTitle("⚠️ Overlay-Berechtigung benötigt")
-                .setMessage("Um die Position-Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.\n\n" +
-                           "Bitte aktiviere sie in den Einstellungen.")
-                .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:" + getPackageName()));
-                    startActivity(intent);
-                })
-                .setNegativeButton("Abbrechen", null)
-                .show();
-        }
-    }
+    private ImageView markerView;
+    private int recordingType = 0; // 1 = Button, 2 = Volume
+    private boolean isMarkerVisible = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,7 +105,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // ✅ Overlay-Berechtigung prüfen
             if (!hasOverlayPermission()) {
                 requestOverlayPermission();
                 return;
@@ -141,9 +112,21 @@ public class MainActivity extends AppCompatActivity {
 
             new AlertDialog.Builder(this)
                 .setTitle("📌 Position aufnehmen")
-                .setMessage("Wähle, was du aufnehmen möchtest:")
-                .setPositiveButton("🟢 Refill-Button", (d, w) -> startOverlay(1))
-                .setNegativeButton("🔵 Volumen anzeige", (d, w) -> startOverlay(2))
+                .setMessage("Wähle, was du aufnehmen möchtest:\n\n" +
+                           "1. Lidl App öffnen\n" +
+                           "2. Marker erscheint\n" +
+                           "3. Marker auf Button/Anzeige ziehen\n" +
+                           "4. Loslassen = speichern")
+                .setPositiveButton("🟢 Refill-Button", (d, w) -> {
+                    recordingType = 1;
+                    showMiniMarker();
+                    Toast.makeText(this, "📍 Ziehe den Marker auf den 'Refill aktivieren' Button", Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("🔵 Volumen anzeige", (d, w) -> {
+                    recordingType = 2;
+                    showMiniMarker();
+                    Toast.makeText(this, "📍 Ziehe den Marker auf die Volumen-Anzeige", Toast.LENGTH_LONG).show();
+                })
                 .setNeutralButton("Abbrechen", null)
                 .show();
         });
@@ -197,108 +180,69 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
-    // ✅ OVERLAY STARTEN (MIT BERECHTIGUNGSPRÜFUNG)
-    private void startOverlay(int type) {
-        recordingType = type;
-
-        // ✅ Nochmal prüfen (Sicherheitshalber)
-        if (!hasOverlayPermission()) {
-            requestOverlayPermission();
+    // ✅ MINI-MARKER (NUR EIN KLEINER PUNKT)
+    private void showMiniMarker() {
+        if (isMarkerVisible) {
+            removeMarker();
             return;
         }
 
-        overlayView = new FrameLayout(this);
-        overlayView.setBackgroundColor(Color.parseColor("#88000000"));
-
-        if (type == 1) {
-            circleMarker = new ImageView(this);
-            circleMarker.setImageResource(R.drawable.circle_marker);
-            circleMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(120, 120);
-            params.gravity = Gravity.CENTER;
-            overlayView.addView(circleMarker, params);
-
-            circleMarker.setOnTouchListener(new View.OnTouchListener() {
-                private float initialX, initialY;
-                private float touchX, touchY;
-
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    switch (event.getAction()) {
-                        case MotionEvent.ACTION_DOWN:
-                            initialX = v.getX();
-                            initialY = v.getY();
-                            touchX = event.getRawX();
-                            touchY = event.getRawY();
-                            return true;
-                        case MotionEvent.ACTION_MOVE:
-                            float deltaX = event.getRawX() - touchX;
-                            float deltaY = event.getRawY() - touchY;
-                            v.setX(initialX + deltaX);
-                            v.setY(initialY + deltaY);
-                            return true;
-                        case MotionEvent.ACTION_UP:
-                            float centerX = v.getX() + v.getWidth() / 2;
-                            float centerY = v.getY() + v.getHeight() / 2;
-                            
-                            buttonX = centerX / getWindowManager().getDefaultDisplay().getWidth();
-                            buttonY = centerY / getWindowManager().getDefaultDisplay().getHeight();
-                            
-                            savePositions();
-                            Toast.makeText(MainActivity.this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
-                            removeOverlay();
-                            return true;
-                    }
-                    return false;
-                }
-            });
+        // Marker erstellen
+        markerView = new ImageView(this);
+        
+        // Je nach Typ unterschiedliche Farbe
+        if (recordingType == 1) {
+            markerView.setImageResource(R.drawable.circle_marker);
         } else {
-            rectMarker = new ImageView(this);
-            rectMarker.setImageResource(R.drawable.rect_marker);
-            rectMarker.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(200, 80);
-            params.gravity = Gravity.CENTER;
-            overlayView.addView(rectMarker, params);
-
-            rectMarker.setOnTouchListener(new View.OnTouchListener() {
-                private float initialX, initialY;
-                private float touchX, touchY;
-
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    switch (event.getAction()) {
-                        case MotionEvent.ACTION_DOWN:
-                            initialX = v.getX();
-                            initialY = v.getY();
-                            touchX = event.getRawX();
-                            touchY = event.getRawY();
-                            return true;
-                        case MotionEvent.ACTION_MOVE:
-                            float deltaX = event.getRawX() - touchX;
-                            float deltaY = event.getRawY() - touchY;
-                            v.setX(initialX + deltaX);
-                            v.setY(initialY + deltaY);
-                            return true;
-                        case MotionEvent.ACTION_UP:
-                            float centerX = v.getX() + v.getWidth() / 2;
-                            float centerY = v.getY() + v.getHeight() / 2;
-                            
-                            volumeX = centerX / getWindowManager().getDefaultDisplay().getWidth();
-                            volumeY = centerY / getWindowManager().getDefaultDisplay().getHeight();
-                            
-                            savePositions();
-                            Toast.makeText(MainActivity.this, "✅ Volumen-Position gespeichert!", Toast.LENGTH_SHORT).show();
-                            removeOverlay();
-                            return true;
-                    }
-                    return false;
-                }
-            });
+            markerView.setImageResource(R.drawable.rect_marker);
         }
+        markerView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
+        // Marker-Größe
+        int size = (recordingType == 1) ? 80 : 140;
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(size, 
+                (recordingType == 1) ? size : 50);
+
+        // Touch-Listener für Ziehen
+        markerView.setOnTouchListener(new View.OnTouchListener() {
+            private float initialX, initialY;
+            private float touchX, touchY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = v.getX();
+                        initialY = v.getY();
+                        touchX = event.getRawX();
+                        touchY = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaX = event.getRawX() - touchX;
+                        float deltaY = event.getRawY() - touchY;
+                        v.setX(initialX + deltaX);
+                        v.setY(initialY + deltaY);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        // Position speichern
+                        float centerX = v.getX() + v.getWidth() / 2;
+                        float centerY = v.getY() + v.getHeight() / 2;
+                        
+                        float xPercent = centerX / getWindowManager().getDefaultDisplay().getWidth();
+                        float yPercent = centerY / getWindowManager().getDefaultDisplay().getHeight();
+                        
+                        savePosition(xPercent, yPercent);
+                        removeMarker();
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        // Overlay-Parameter
+        WindowManager.LayoutParams wmParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                         WindowManager.LayoutParams.TYPE_PHONE,
@@ -306,21 +250,39 @@ public class MainActivity extends AppCompatActivity {
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT
         );
-        params.gravity = Gravity.TOP | Gravity.START;
+        wmParams.gravity = Gravity.TOP | Gravity.START;
+        wmParams.x = 200;
+        wmParams.y = 300;
 
-        windowManager.addView(overlayView, params);
-        Toast.makeText(this, "📌 Ziehe den Marker an die richtige Stelle", Toast.LENGTH_LONG).show();
+        windowManager.addView(markerView, wmParams);
+        isMarkerVisible = true;
     }
 
-    private void removeOverlay() {
-        if (overlayView != null && windowManager != null) {
+    private void removeMarker() {
+        if (markerView != null && windowManager != null) {
             try {
-                windowManager.removeView(overlayView);
-                overlayView = null;
+                windowManager.removeView(markerView);
+                markerView = null;
+                isMarkerVisible = false;
             } catch (Exception e) {
                 // Ignorieren
             }
         }
+    }
+
+    private void savePosition(float xPercent, float yPercent) {
+        if (recordingType == 1) {
+            buttonX = xPercent;
+            buttonY = yPercent;
+            Toast.makeText(this, "✅ Refill-Button Position gespeichert! (" + 
+                    Math.round(xPercent * 100) + "%, " + Math.round(yPercent * 100) + "%)", Toast.LENGTH_LONG).show();
+        } else {
+            volumeX = xPercent;
+            volumeY = yPercent;
+            Toast.makeText(this, "✅ Volumen-Position gespeichert! (" + 
+                    Math.round(xPercent * 100) + "%, " + Math.round(yPercent * 100) + "%)", Toast.LENGTH_LONG).show();
+        }
+        savePositions();
     }
 
     private void savePositions() {
@@ -350,6 +312,29 @@ public class MainActivity extends AppCompatActivity {
             tvServiceStatus.setText("✅ Positionen gespeichert!");
             tvServiceStatus.setTextColor(Color.parseColor("#4CAF50"));
             tvServiceStatus.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private boolean hasOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Settings.canDrawOverlays(this);
+        }
+        return true;
+    }
+
+    private void requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            new AlertDialog.Builder(this)
+                .setTitle("⚠️ Overlay-Berechtigung benötigt")
+                .setMessage("Um die Position-Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.\n\n" +
+                           "Bitte aktiviere sie in den Einstellungen.")
+                .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                })
+                .setNegativeButton("Abbrechen", null)
+                .show();
         }
     }
 
@@ -427,16 +412,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkAccessibilityService();
-        
-        // Wenn Overlay-Berechtigung gerade aktiviert wurde, prüfen
-        if (hasOverlayPermission()) {
-            // Alles gut
-        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        removeOverlay();
+        removeMarker();
     }
 }
