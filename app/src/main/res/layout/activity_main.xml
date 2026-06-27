@@ -7,7 +7,6 @@
     android:gravity="center"
     android:padding="20dp">
 
-    <!-- Logo -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -32,7 +31,6 @@
         android:textColor="#78909C"
         android:layout_marginBottom="30dp" />
 
-    <!-- Status -->
     <TextView
         android:id="@+id/tv_service_status"
         android:layout_width="match_parent"
@@ -55,7 +53,6 @@
         android:gravity="center"
         android:layout_marginBottom="20dp" />
 
-    <!-- 📌 Position aufnehmen -->
     <Button
         android:id="@+id/btn_start_recording"
         android:layout_width="match_parent"
@@ -67,7 +64,6 @@
         android:textStyle="bold"
         android:layout_marginBottom="12dp" />
 
-    <!-- 🔄 Aktualisieren (Pull-to-Refresh) -->
     <Button
         android:id="@+id/btn_refresh"
         android:layout_width="match_parent"
@@ -79,7 +75,6 @@
         android:textStyle="bold"
         android:layout_marginBottom="12dp" />
 
-    <!-- ▶️ Start / ⏹️ Stop -->
     <Button
         android:id="@+id/btn_toggle_service"
         android:layout_width="match_parent"
@@ -90,7 +85,6 @@
         android:textSize="14sp"
         android:textStyle="bold" />
 
-    <!-- Info -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
