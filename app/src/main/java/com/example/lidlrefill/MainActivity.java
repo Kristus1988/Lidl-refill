@@ -94,13 +94,13 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage("Wähle aus:")
                 .setPositiveButton("🟢 Refill-Button", (d, w) -> {
                     recordingType = 1;
-                    showMarker();
-                    Toast.makeText(this, "📍 Auf Refill-Button ziehen", Toast.LENGTH_LONG).show();
+                    showFloatingMarker();
+                    Toast.makeText(this, "📍 Ziehe Marker auf den Refill-Button", Toast.LENGTH_LONG).show();
                 })
                 .setNegativeButton("🔵 Volumen", (d, w) -> {
                     recordingType = 2;
-                    showMarker();
-                    Toast.makeText(this, "📍 Auf Volumen-Anzeige ziehen", Toast.LENGTH_LONG).show();
+                    showFloatingMarker();
+                    Toast.makeText(this, "📍 Ziehe Marker auf die Volumen-Anzeige", Toast.LENGTH_LONG).show();
                 })
                 .setNeutralButton("Abbrechen", null)
                 .show();
@@ -186,13 +186,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ✅ MARKER MIT VERGRÖSSERTEM RECHTECK
-    private void showMarker() {
+    // ✅ FLOATING MARKER (ECHES OVERLAY WIE BEIM AUTOKLICKER!)
+    private void showFloatingMarker() {
         if (isMarkerVisible) {
             removeMarker();
             return;
         }
 
+        // Marker als eigenständiger View (nicht in der Activity!)
         markerView = new View(this) {
             private Paint paint = new Paint();
             private Paint borderPaint = new Paint();
@@ -202,6 +203,7 @@ public class MainActivity extends AppCompatActivity {
                 paint.setStyle(Paint.Style.FILL);
                 borderPaint.setStyle(Paint.Style.STROKE);
                 borderPaint.setStrokeWidth(6);
+                setWillNotDraw(false);
             }
 
             @Override
@@ -209,34 +211,50 @@ public class MainActivity extends AppCompatActivity {
                 super.onDraw(canvas);
                 int w = getWidth();
                 int h = getHeight();
-                int padding = 10;
+                int padding = 8;
 
                 if (recordingType == 1) {
                     // 🟢 Kreis für Refill-Button
-                    paint.setColor(Color.argb(150, 255, 87, 34));
+                    paint.setColor(Color.argb(180, 255, 87, 34));
                     borderPaint.setColor(Color.parseColor("#4CAF50"));
                     float cx = w / 2f;
                     float cy = h / 2f;
                     float radius = Math.min(w, h) / 2f - padding;
                     canvas.drawCircle(cx, cy, radius, paint);
                     canvas.drawCircle(cx, cy, radius, borderPaint);
+                    
+                    // Text "Refill"
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(20);
+                    textPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("REFILL", cx, cy + 7, textPaint);
                 } else {
-                    // 🔵 Rechteck für Volumen (VERGRÖSSERT!)
-                    paint.setColor(Color.argb(150, 33, 150, 243));
+                    // 🔵 Rechteck für Volumen
+                    paint.setColor(Color.argb(180, 33, 150, 243));
                     borderPaint.setColor(Color.parseColor("#2196F3"));
                     rect.set(padding, padding, w - padding, h - padding);
                     canvas.drawRoundRect(rect, 12, 12, paint);
                     canvas.drawRoundRect(rect, 12, 12, borderPaint);
+                    
+                    // Text "VOLUMEN"
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(18);
+                    textPaint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText("VOLUMEN", w / 2f, h / 2f + 6, textPaint);
                 }
             }
         };
 
-        // ✅ GRÖSSEN FÜR MARKER
-        int size = (recordingType == 1) ? 80 : 240;    // Rechteck 240px breit
-        int height = (recordingType == 1) ? 80 : 90;   // Rechteck 90px hoch
+        // Größe des Markers
+        int size = (recordingType == 1) ? 100 : 240;
+        int height = (recordingType == 1) ? 100 : 90;
 
+        // Touch-Listener für Ziehen
         markerView.setOnTouchListener(new View.OnTouchListener() {
-            private float initialX, initialY, touchX, touchY;
+            private float initialX, initialY;
+            private float touchX, touchY;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -248,15 +266,18 @@ public class MainActivity extends AppCompatActivity {
                         touchY = event.getRawY();
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        v.setX(initialX + event.getRawX() - touchX);
-                        v.setY(initialY + event.getRawY() - touchY);
+                        float deltaX = event.getRawX() - touchX;
+                        float deltaY = event.getRawY() - touchY;
+                        v.setX(initialX + deltaX);
+                        v.setY(initialY + deltaY);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        float cx = v.getX() + v.getWidth() / 2f;
-                        float cy = v.getY() + v.getHeight() / 2f;
-                        float xP = cx / windowManager.getDefaultDisplay().getWidth();
-                        float yP = cy / windowManager.getDefaultDisplay().getHeight();
-                        savePosition(xP, yP);
+                        // Position speichern (relativ zum Bildschirm)
+                        float centerX = v.getX() + v.getWidth() / 2f;
+                        float centerY = v.getY() + v.getHeight() / 2f;
+                        float xPercent = centerX / windowManager.getDefaultDisplay().getWidth();
+                        float yPercent = centerY / windowManager.getDefaultDisplay().getHeight();
+                        savePosition(xPercent, yPercent);
                         removeMarker();
                         return true;
                 }
@@ -264,20 +285,26 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // ✅ WICHTIG: TYPE_APPLICATION_OVERLAY für echtes Overlay!
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                size, height,
+                size,
+                height,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                         WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = 200;
         params.y = 300;
 
+        // ✅ Marker zum WindowManager hinzufügen (als eigenes Fenster!)
         windowManager.addView(markerView, params);
         isMarkerVisible = true;
+        
+        Toast.makeText(this, "📌 Marker erscheint über ALLEN Apps!", Toast.LENGTH_SHORT).show();
     }
 
     private void removeMarker() {
@@ -294,11 +321,11 @@ public class MainActivity extends AppCompatActivity {
         if (recordingType == 1) {
             buttonX = x;
             buttonY = y;
-            Toast.makeText(this, "✅ Refill-Button gespeichert!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "✅ Refill-Button gespeichert! (" + Math.round(x * 100) + "%, " + Math.round(y * 100) + "%)", Toast.LENGTH_LONG).show();
         } else {
             volumeX = x;
             volumeY = y;
-            Toast.makeText(this, "✅ Volumen gespeichert!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "✅ Volumen gespeichert! (" + Math.round(x * 100) + "%, " + Math.round(y * 100) + "%)", Toast.LENGTH_LONG).show();
         }
         savePositions();
     }
@@ -335,9 +362,10 @@ public class MainActivity extends AppCompatActivity {
     private void requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             new AlertDialog.Builder(this)
-                .setTitle("⚠️ Overlay-Berechtigung")
-                .setMessage("Bitte 'Über anderen Apps anzeigen' aktivieren.")
-                .setPositiveButton("Einstellungen", (d, w) -> {
+                .setTitle("⚠️ Overlay-Berechtigung benötigt")
+                .setMessage("Um den Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.\n\n" +
+                           "Bitte aktiviere sie in den Einstellungen.")
+                .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
                     startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                             Uri.parse("package:" + getPackageName())));
                 })
