@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -61,6 +62,32 @@ public class MainActivity extends AppCompatActivity {
     private ImageView rectMarker;
     private int recordingType = 0;
 
+    // ✅ OVERLAY-BERECHTIGUNG PRÜFEN
+    private boolean hasOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Settings.canDrawOverlays(this);
+        }
+        return true;
+    }
+
+    // ✅ OVERLAY-BERECHTIGUNG ANFORDERN
+    private void requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Dialog mit Erklärung
+            new AlertDialog.Builder(this)
+                .setTitle("⚠️ Overlay-Berechtigung benötigt")
+                .setMessage("Um die Position-Marker über der Lidl App anzeigen zu können, benötigt die App die Berechtigung 'Über anderen Apps anzeigen'.\n\n" +
+                           "Bitte aktiviere sie in den Einstellungen.")
+                .setPositiveButton("⚙️ Einstellungen öffnen", (d, w) -> {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                })
+                .setNegativeButton("Abbrechen", null)
+                .show();
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -103,6 +130,12 @@ public class MainActivity extends AppCompatActivity {
             if (!isServiceEnabled) {
                 Toast.makeText(this, "⚠️ Bitte zuerst Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                return;
+            }
+
+            // ✅ Overlay-Berechtigung prüfen
+            if (!hasOverlayPermission()) {
+                requestOverlayPermission();
                 return;
             }
 
@@ -164,15 +197,14 @@ public class MainActivity extends AppCompatActivity {
         btnStop.setEnabled(false);
     }
 
+    // ✅ OVERLAY STARTEN (MIT BERECHTIGUNGSPRÜFUNG)
     private void startOverlay(int type) {
         recordingType = type;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "⚠️ Bitte Overlay-Berechtigung aktivieren!", Toast.LENGTH_LONG).show();
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
-                return;
-            }
+        // ✅ Nochmal prüfen (Sicherheitshalber)
+        if (!hasOverlayPermission()) {
+            requestOverlayPermission();
+            return;
         }
 
         overlayView = new FrameLayout(this);
@@ -270,7 +302,8 @@ public class MainActivity extends AppCompatActivity {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                         WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
@@ -344,7 +377,7 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "⚠️ Lidl Connect nicht gefunden! Bitte installieren.", Toast.LENGTH_LONG).show();
         try {
             Intent playStoreIntent = new Intent(Intent.ACTION_VIEW);
-            playStoreIntent.setData(android.net.Uri.parse("market://details?id=de.lidlconnect.android"));
+            playStoreIntent.setData(Uri.parse("market://details?id=de.lidlconnect.android"));
             startActivity(playStoreIntent);
         } catch (Exception e) {
             // Ignorieren
@@ -394,6 +427,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkAccessibilityService();
+        
+        // Wenn Overlay-Berechtigung gerade aktiviert wurde, prüfen
+        if (hasOverlayPermission()) {
+            // Alles gut
+        }
     }
 
     @Override
