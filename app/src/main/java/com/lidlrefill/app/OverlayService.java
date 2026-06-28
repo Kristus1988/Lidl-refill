@@ -5,6 +5,9 @@ import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
@@ -28,7 +31,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
@@ -225,7 +227,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ CREATE OVERLAY - UNTEN RECHTS ============
+    // ============ CREATE OVERLAY ============
     
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -843,7 +845,6 @@ public class OverlayService extends AccessibilityService {
                                     processOcrResult(dataValue, resultText);
                                 } else {
                                     updateStatus("⚠️ Kein GB-Wert erkannt: " + resultText);
-                                    // Bei Fehler: erneut versuchen
                                     handler.postDelayed(() -> {
                                         if (isRunning) {
                                             performSwipeGesture();
@@ -854,7 +855,6 @@ public class OverlayService extends AccessibilityService {
                             .addOnFailureListener(e -> {
                                 updateStatus("❌ OCR Fehler: " + e.getMessage());
                                 Log.e("LidlRefill", "OCR Fehler: " + e.getMessage());
-                                // Bei Fehler: erneut versuchen
                                 handler.postDelayed(() -> {
                                     if (isRunning) {
                                         performSwipeGesture();
@@ -889,19 +889,16 @@ public class OverlayService extends AccessibilityService {
                 String valueStr = matcher.group(1).replace(",", ".");
                 double value = Double.parseDouble(valueStr);
                 
-                // Wenn MB, in GB umrechnen
                 String unit = matcher.group(2).toLowerCase();
                 if (unit.equals("mb")) {
                     value = value / 1024;
                 }
                 
-                // Begrenzung auf realistische Werte
                 if (value > 0 && value < 10) {
                     return value;
                 }
             }
             
-            // Fallback: Suche nach "GB" mit beliebigen Zahlen
             Pattern pattern2 = Pattern.compile("(\\d+[\\.\\,]?\\d*)\\s*GB", Pattern.CASE_INSENSITIVE);
             Matcher matcher2 = pattern2.matcher(text);
             if (matcher2.find()) {
@@ -1067,7 +1064,6 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("✅ Swipe #" + totalSwipes);
                 if (isRunning) {
                     handler.postDelayed(() -> {
-                        // Aktuelles Root-View für Screenshot holen
                         View rootView = getApplicationContext().getWindowManager().getCurrentFocus();
                         if (rootView != null) {
                             performRealOcr(rootView);
@@ -1149,7 +1145,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Screenshot des OCR-Bereichs erstellen
         Bitmap screenshot = Bitmap.createBitmap(
             ocrRect.width(), 
             ocrRect.height(), 
@@ -1252,7 +1247,6 @@ public class OverlayService extends AccessibilityService {
         }
         handler.removeCallbacksAndMessages(null);
         
-        // Google ML Kit OCR Ressourcen freigeben
         if (textRecognizer != null) {
             textRecognizer.close();
         }
