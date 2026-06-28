@@ -174,8 +174,6 @@ public class OverlayService extends AccessibilityService {
         refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
         refillButton.y = prefs.getInt(PREF_REFILL_Y, 500);
         refillPlaced = prefs.getBoolean(PREF_REFILL_PLACED, false);
-        
-        Log.d("LidlRefill", "📂 OCR geladen: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
     }
     
     private void savePositions() {
@@ -198,8 +196,6 @@ public class OverlayService extends AccessibilityService {
         editor.putBoolean(PREF_REFILL_PLACED, refillPlaced);
         
         editor.apply();
-        
-        Log.d("LidlRefill", "💾 OCR gespeichert: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
     }
     
     private void updateOcrVisualPosition() {
@@ -214,7 +210,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ CREATE OVERLAY - UNTEN RECHTS ============
+    // ============ CREATE OVERLAY ============
     
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -239,7 +235,6 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // Schließen-Button - ganz klein
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
@@ -269,7 +264,6 @@ public class OverlayService extends AccessibilityService {
         
         setupButtons();
         
-        // Overlay verschiebbar
         mainContainer.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -323,7 +317,6 @@ public class OverlayService extends AccessibilityService {
                 PixelFormat.TRANSLUCENT
         );
         
-        // ============ UNTEN RECHTS ============
         params.gravity = Gravity.BOTTOM | Gravity.END;
         params.x = 20;
         params.y = 20;
@@ -471,7 +464,6 @@ public class OverlayService extends AccessibilityService {
                 savePositions();
                 updateStatus("● OCR bei (" + x + ", " + y + ")");
                 Toast.makeText(this, "✅ OCR platziert! (" + x + ", " + y + ")", Toast.LENGTH_SHORT).show();
-                Log.d("LidlRefill", "✅ OCR platziert: " + ocrRect.left + "," + ocrRect.top);
                 break;
                 
             case REFILL_PLACE:
@@ -522,7 +514,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // OCR-Visual
+        // OCR-Visual - KORRIGIERT
         ocrVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -544,7 +536,7 @@ public class OverlayService extends AccessibilityService {
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
                 textPaint.setTextSize(36);
-                textPaint.setStyle(Paint.Style.BOLD);
+                textPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);  // ← KORRIGIERT
                 textPaint.setTextAlign(Paint.Align.CENTER);
                 canvas.drawText("📷 OCR", w/2, h/2 + 12, textPaint);
                 
@@ -609,6 +601,8 @@ public class OverlayService extends AccessibilityService {
         dragOffsetY = 40;
     }
     
+    // ============ addVisual - KORRIGIERT ============
+    
     private void addVisual(View visual, int width, int height) {
         if (visual == swipeVisual) {
             removeVisual(ocrVisual);
@@ -643,7 +637,8 @@ public class OverlayService extends AccessibilityService {
             params.y = screenHeight / 2 - height / 2;
         }
         
-        params.elevation = 1000;
+        // params.elevation = 1000;  // ← ENTFERNT
+        visual.setElevation(1000);  // ← STATTDESSEN
         
         visual.setLayoutParams(params);
         windowManager.addView(visual, params);
@@ -799,11 +794,6 @@ public class OverlayService extends AccessibilityService {
         totalWaitTime += waitTime;
         
         updateLearningStatus();
-        
-        Log.d("LidlRefill", "=== ZYKLUS " + cycleCount + " ===");
-        Log.d("LidlRefill", "📊 Stand: " + df.format(dataValue) + " GB");
-        Log.d("LidlRefill", "⚡ Verbrauch: " + df.format(consumptionRate) + " GB/min");
-        Log.d("LidlRefill", "⏱ Wartezeit: " + (waitTime/1000) + "s");
     }
     
     // ============ AUSFÜHRUNG ============
@@ -843,8 +833,6 @@ public class OverlayService extends AccessibilityService {
         
         double currentData = simulateRealisticData();
         long currentTime = System.currentTimeMillis();
-        
-        Log.d("LidlRefill", "📷 OCR: " + df.format(currentData) + " GB | Rechteck: " + ocrRect.left + "," + ocrRect.top);
         
         if (isFirstMeasurement) {
             lastDataValue = currentData;
@@ -1042,9 +1030,6 @@ public class OverlayService extends AccessibilityService {
             Toast.makeText(this, 
                 "📊 " + result + "\n📍 " + ocrRect.left + "," + ocrRect.top, 
                 Toast.LENGTH_LONG).show();
-            
-            Log.d("LidlRefill", "📷 Manuelles OCR: " + result);
-            Log.d("LidlRefill", "📷 Rechteck: " + ocrRect.left + "," + ocrRect.top);
         }, 1500);
     }
     
