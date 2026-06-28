@@ -62,7 +62,7 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
-    // ============ ULTIMATIVE EFFIZIENZ ============
+    // ============ ULTIMATIVE EFFIZIENZ VARIABLEN ============
     private List<Double> consumptionHistory = new ArrayList<>();
     private List<Long> actualWaitTimes = new ArrayList<>();
     private double averageConsumptionRate = 0;
@@ -72,24 +72,25 @@ public class OverlayService extends AccessibilityService {
     
     // ============ ULTIMATIVE PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
-    private static final double BUFFER_SAFETY = 0.10;        // 0.10 GB Puffer (erhöht)
-    private static final long MIN_WAIT_TIME = 120000;        // 2 Minuten (erhöht)
-    private static final long MAX_WAIT_TIME = 1800000;       // 30 Minuten (erhöht!)
-    private static final long INITIAL_WAIT_TIME = 600000;    // 10 Minuten (erhöht!)
+    private static final double BUFFER_SAFETY = 0.10;
+    private static final long MIN_WAIT_TIME = 120000;        // 2 Minuten
+    private static final long MAX_WAIT_TIME = 1800000;       // 30 Minuten
+    private static final long INITIAL_WAIT_TIME = 600000;    // 10 Minuten
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
+    
+    // ============ AKTUELLE WARTEZEIT (MUSS DEKLARIERT SEIN!) ============
+    private long currentWaitTime = INITIAL_WAIT_TIME;  // ← DAS WAR DER FEHLER!
     
     // Prognose
     private boolean isFirstMeasurement = true;
     private boolean isSecondMeasurement = true;
     private double predictedRefillTime = 0;
     private double confidenceLevel = 0;
-    private int skipCounter = 0;
     private boolean usePrediction = false;
     
     // Statistik
     private int totalSwipes = 0;
-    private int predictedSwipes = 0;
     private long totalWaitTime = 0;
     
     private DecimalFormat df = new DecimalFormat("0.000");
@@ -607,31 +608,24 @@ public class OverlayService extends AccessibilityService {
         
         // ============ ULTIMATIVE EFFIZIENZ ============
         
-        // 1. EXTREM lange Intervalle
         calculatedTime = Math.max(MIN_WAIT_TIME, calculatedTime);
         calculatedTime = Math.min(MAX_WAIT_TIME, calculatedTime);
         
-        // 2. Lerneffekt mit starker Gewichtung
         if (!actualWaitTimes.isEmpty() && actualWaitTimes.size() >= 2) {
             double avgWait = actualWaitTimes.stream()
                 .mapToLong(Long::longValue)
                 .average()
                 .orElse(calculatedTime);
             
-            // 80% Historie, 20% neu (maximale Stabilität)
             calculatedTime = (long)((calculatedTime * 0.2) + (avgWait * 0.8));
         }
         
-        // 3. PROGNOSE: Wenn wir genug Daten haben, extrapolieren
         if (consumptionHistory.size() >= 2 && confidenceLevel > 0.7) {
-            // Berechne ob wir direkt zum Refill springen können
             double estimatedTimeToRefill = remainingUntilRefill / consumptionRate;
-            if (estimatedTimeToRefill > 0 && estimatedTimeToRefill < 120) { // Unter 2 Stunden
-                // Wir können direkt bis zum Refill warten!
+            if (estimatedTimeToRefill > 0 && estimatedTimeToRefill < 120) {
                 usePrediction = true;
                 predictedRefillTime = estimatedTimeToRefill;
                 
-                // Wartezeit = Zeit bis Refill - Sicherheitspuffer
                 long predictionWait = (long)((estimatedTimeToRefill - 0.1) * 60000);
                 predictionWait = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, predictionWait));
                 
@@ -641,15 +635,12 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        // 4. Verbrauchsanpassung
         if (consumptionRate < 0.005) {
-            // Sehr langsamer Verbrauch - maximal warten
             calculatedTime = Math.min(MAX_WAIT_TIME, (long)(calculatedTime * 1.8));
         } else if (consumptionRate > 0.1) {
             calculatedTime = Math.max(MIN_WAIT_TIME, (long)(calculatedTime * 0.6));
         }
         
-        // 5. Sicherheitsbegrenzung
         calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
         
         currentWaitTime = calculatedTime;
@@ -662,7 +653,6 @@ public class OverlayService extends AccessibilityService {
         actualWaitTimes.add(waitTime);
         cycleCount++;
         
-        // Confidence-Level berechnen
         if (consumptionHistory.size() >= 3) {
             double variance = 0;
             double mean = calculateAverageConsumption();
@@ -722,7 +712,6 @@ public class OverlayService extends AccessibilityService {
         double currentData = simulateRealisticData();
         long currentTime = System.currentTimeMillis();
         
-        // ============ ERSTE MESSUNG ============
         if (isFirstMeasurement) {
             lastDataValue = currentData;
             lastDataTime = currentTime;
@@ -731,7 +720,6 @@ public class OverlayService extends AccessibilityService {
             updateStatus("📊 Start: " + df.format(currentData) + " GB");
             Toast.makeText(this, "📊 Start: " + df.format(currentData) + " GB", Toast.LENGTH_SHORT).show();
             
-            // 10 Minuten warten (EXTREM lang!)
             handler.postDelayed(() -> {
                 if (isRunning) {
                     performSwipeGesture();
@@ -740,19 +728,16 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ============ ZWEITE MESSUNG ============
         if (isSecondMeasurement) {
             double timeDiffMinutes = (currentTime - lastDataTime) / 60000.0;
             double dataDiff = lastDataValue - currentData;
             double consumptionRate = dataDiff / timeDiffMinutes;
             
             if (consumptionRate > 0.001) {
-                // Verbrauch erkannt - speichern
                 isSecondMeasurement = false;
                 lastDataValue = currentData;
                 lastDataTime = currentTime;
                 
-                // Ersten Lernzyklus
                 long waitTime = calculateUltimateWaitTime(currentData, consumptionRate);
                 learnFromCycle(currentData, consumptionRate, waitTime);
                 
@@ -762,13 +747,11 @@ public class OverlayService extends AccessibilityService {
                     "⚡ Verbrauch: " + df.format(consumptionRate) + " GB/min", 
                     Toast.LENGTH_LONG).show();
                 
-                // Prüfen ob Refill
                 if (currentData <= REFILL_THRESHOLD) {
                     triggerRefill(currentData);
                     return;
                 }
                 
-                // Warten und dann Prognose
                 handler.postDelayed(() -> {
                     if (isRunning) {
                         performSwipeGesture();
@@ -776,7 +759,6 @@ public class OverlayService extends AccessibilityService {
                 }, waitTime);
                 return;
             } else {
-                // Kein Verbrauch - nochmal warten
                 updateStatus("⚠️ Kein Verbrauch - warte länger");
                 handler.postDelayed(() -> {
                     if (isRunning) {
@@ -787,7 +769,6 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        // ============ NORMALE MESSUNGEN MIT PROGNOSE ============
         double timeDiffMinutes = (currentTime - lastDataTime) / 60000.0;
         double dataDiff = lastDataValue - currentData;
         double consumptionRate = dataDiff / timeDiffMinutes;
@@ -802,34 +783,27 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ============ PROGNOSE: Kann direkt Refill ausgelöst werden? ============
         if (usePrediction && confidenceLevel > 0.7) {
-            double predictedTime = predictedRefillTime * 60; // in Minuten
             double currentRemaining = currentData - REFILL_THRESHOLD;
-            
             if (currentRemaining < 0.05) {
-                // Sehr nah an Refill - direkt auslösen
-                updateStatus("🔮 PROGNOSE: Refill in ~" + Math.round(predictedTime) + "min");
+                updateStatus("🔮 PROGNOSE: Refill in ~" + Math.round(predictedRefillTime) + "min");
                 triggerRefill(currentData);
                 return;
             }
         }
         
-        // ============ NORMALE BERECHNUNG ============
         long waitTime = calculateUltimateWaitTime(currentData, consumptionRate);
         learnFromCycle(currentData, consumptionRate, waitTime);
         
-        // Prüfen ob Refill
         if (currentData <= REFILL_THRESHOLD) {
             triggerRefill(currentData);
             return;
         }
         
-        // ============ PROGNOSE FÜR DIESEN ZYKLUS ============
         double remainingToRefill = currentData - REFILL_THRESHOLD;
         double estimatedMinutes = remainingToRefill / consumptionRate;
         
-        if (estimatedMinutes > 0 && estimatedMinutes < 180) { // Unter 3 Stunden
+        if (estimatedMinutes > 0 && estimatedMinutes < 180) {
             usePrediction = true;
             predictedRefillTime = estimatedMinutes;
             updateStatus("🔮 Prognose: Refill in ~" + Math.round(estimatedMinutes) + "min");
@@ -837,7 +811,6 @@ public class OverlayService extends AccessibilityService {
             usePrediction = false;
         }
         
-        // Status anzeigen
         long waitSeconds = waitTime / 1000;
         long waitMinutes = waitSeconds / 60;
         String timeString = waitMinutes > 0 ? waitMinutes + "m " + (waitSeconds % 60) + "s" : waitSeconds + "s";
@@ -853,7 +826,6 @@ public class OverlayService extends AccessibilityService {
             (usePrediction ? "\n🔮 Prognose: " + Math.round(predictedRefillTime) + "min" : ""), 
             Toast.LENGTH_LONG).show();
         
-        // Warten
         handler.postDelayed(() -> {
             if (isRunning) {
                 performSwipeGesture();
@@ -864,7 +836,6 @@ public class OverlayService extends AccessibilityService {
         lastDataTime = currentTime;
     }
     
-    // ============ REFILL AUSLÖSEN ============
     private void triggerRefill(double currentData) {
         updateStatus("🔴 REFILL! (" + df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB)");
         Toast.makeText(this, 
@@ -879,7 +850,6 @@ public class OverlayService extends AccessibilityService {
                 clickRefillButton();
                 handler.postDelayed(() -> {
                     if (isRunning) {
-                        // Neustart
                         isFirstMeasurement = true;
                         isSecondMeasurement = true;
                         usePrediction = false;
@@ -893,13 +863,11 @@ public class OverlayService extends AccessibilityService {
         }, 1000);
     }
     
-    // ============ SIMULATION ============
     private double simulateRealisticData() {
         double baseValue;
         if (cycleCount == 0) {
             baseValue = 0.85 + (Math.random() * 0.15);
         } else {
-            // Sehr langsamer, gleichmäßiger Verbrauch
             double decrease = 0.005 + (Math.random() * 0.025);
             baseValue = Math.max(0.05, lastDataValue - decrease);
         }
