@@ -9,7 +9,6 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Status - KLEINER -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="wrap_content"
@@ -22,7 +21,7 @@
         android:layout_marginBottom="2dp"
         android:layout_gravity="center"/>
 
-    <!-- Runde Buttons - Etwas kleiner -->
+    <!-- Platzierungs-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -68,7 +67,7 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Aktions-Buttons - Etwas kleiner -->
+    <!-- Aktions-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -137,7 +136,7 @@
         android:padding="0dp"
         android:gravity="center"/>
 
-    <!-- Info - Kleiner -->
+    <!-- Info -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
