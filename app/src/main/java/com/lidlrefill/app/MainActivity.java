@@ -51,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // Beim Start Berechtigungsstatus prüfen
         updatePermissionStatus();
     }
     
@@ -61,73 +60,89 @@ public class MainActivity extends AppCompatActivity {
         
         // Overlay
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
-        status.append(overlayOk ? "✅" : "❌").append(" Overlay\n");
+        status.append(overlayOk ? "✅" : "❌").append(" Overlay (über Apps anzeigen)\n");
         
         // Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         boolean accOk = am != null && am.isEnabled();
-        status.append(accOk ? "✅" : "❌").append(" Accessibility\n");
+        status.append(accOk ? "✅" : "❌").append(" Accessibility (Touch-Steuerung)\n");
         
         // Storage
         boolean storageOk = checkStoragePermission();
         status.append(storageOk ? "✅" : "❌").append(" Speicher\n");
         
-        // MediaProjection (wird später geprüft)
-        status.append("⏳ MediaProjection (wird beim Start angefragt)");
+        // Honor/Huawei spezifisch
+        if (isHonorOrHuawei()) {
+            status.append("\n⚠️ HONOR/HUAWEI erkannt:\n");
+            status.append("→ Accessibility muss in den Einstellungen aktiviert werden\n");
+            status.append("→ Muster/Passwort kann erforderlich sein\n");
+            status.append("→ Bei Problemen: Einstellungen → Sicherheit → Geräteadministratoren");
+        }
         
         tvPermissionStatus.setText(status.toString());
+    }
+    
+    private boolean isHonorOrHuawei() {
+        String manufacturer = Build.MANUFACTURER.toLowerCase();
+        return manufacturer.contains("honor") || 
+               manufacturer.contains("huawei") ||
+               manufacturer.contains("hihonor");
     }
     
     private boolean checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
                 == PackageManager.PERMISSION_GRANTED;
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
-                == PackageManager.PERMISSION_GRANTED;
+        } else {
+            // Für Honor/Huawei: Speicherzugriff immer erlauben, da sie Scoped Storage verwenden
+            return true;
         }
-        return true;
     }
     
     private void requestAllPermissions() {
-        // 1. OVERLAY PERMISSION
+        // 1. OVERLAY PERMISSION - FÜR HONOR
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
+                // Für Honor: Direkt zu den Einstellungen
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName()));
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
             }
         }
         
-        // 2. ACCESSIBILITY PERMISSION
+        // 2. ACCESSIBILITY PERMISSION - FÜR HONOR
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
+            // Für Honor: Öffne Accessibility Einstellungen
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+            
+            // Honor-spezifischer Hinweis
+            Toast.makeText(this, 
+                "🔧 HONOR-HINWEIS:\n" +
+                "1. Scrolle zu 'Lidl Refill'\n" +
+                "2. 'An/Deaktivieren'\n" +
+                "3. Bei Muster/Passwort: Bitte eingeben\n" +
+                "4. Nach Aktivierung zurück zur App", 
+                Toast.LENGTH_LONG).show();
         }
         
-        // 3. STORAGE PERMISSION
-        requestStoragePermission();
-        
-        // 4. MEDIAPROJECTION wird beim Start angefragt
-    }
-    
-    private void requestStoragePermission() {
+        // 3. STORAGE PERMISSION - NUR BEI ANDROID 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+
             String[] permissions = {
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.POST_NOTIFICATIONS
             };
             ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Android 6-12
-            String[] permissions = {
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            };
-            ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
         }
+        
+        // 4. FÜR HONOR: In den Einstellungen "App oben entfernen" deaktivieren
+        Toast.makeText(this, 
+            "🔧 HONOR-HINWEIS:\n" +
+            "Falls Berechtigung nicht funktioniert:\n" +
+            "Einstellungen → Apps → Lidl Refill →\n" +
+            "'App oben entfernen' deaktivieren", 
+            Toast.LENGTH_LONG).show();
     }
     
     private void requestMediaProjection() {
@@ -141,22 +156,14 @@ public class MainActivity extends AppCompatActivity {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
         
-        // Overlay
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             missing.append("❌ Overlay-Berechtigung fehlt\n");
             allOk = false;
         }
         
-        // Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             missing.append("❌ Accessibility-Berechtigung fehlt\n");
-            allOk = false;
-        }
-        
-        // Storage
-        if (!checkStoragePermission()) {
-            missing.append("❌ Speicher-Berechtigung fehlt\n");
             allOk = false;
         }
         
@@ -203,9 +210,8 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, 
                     "❌ Screen-Capture Berechtigung benötigt!\n" +
-                    "Bitte erneut versuchen und \"Jetzt starten\" erlauben.", 
+                    "Bitte erneut versuchen.", 
                     Toast.LENGTH_LONG).show();
-                // Nochmal versuchen
                 requestMediaProjection();
             }
         }
@@ -228,7 +234,8 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, 
                     "⚠️ Speicher-Berechtigung verweigert!\n" +
-                    "OCR funktioniert möglicherweise nicht.", 
+                    "Für Honor/Huawei: Scoped Storage wird verwendet.\n" +
+                    "OCR funktioniert trotzdem über Screen-Capture.", 
                     Toast.LENGTH_LONG).show();
             }
             updatePermissionStatus();
@@ -238,7 +245,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Bei Rückkehr zur App Status aktualisieren
         updatePermissionStatus();
     }
 }
