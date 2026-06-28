@@ -4,132 +4,143 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="#CC000000"
-    android:padding="10dp"
+    android:padding="6dp"
     android:elevation="999dp"
-    android:layout_marginTop="50dp">
+    android:layout_marginTop="30dp">
 
-    <!-- Status -->
+    <!-- Status - klein -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="✅ Bereit"
         android:textColor="#4CAF50"
-        android:textSize="12sp"
-        android:gravity="center"
-        android:padding="6dp"
-        android:background="#33000000"
-        android:layout_marginBottom="4dp"/>
-
-    <!-- Platzierung -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="─── Platzierung ───"
-        android:textColor="#FFEB3B"
         android:textSize="10sp"
-        android:gravity="center"/>
+        android:gravity="center"
+        android:padding="3dp"
+        android:background="#33000000"
+        android:layout_marginBottom="2dp"/>
 
+    <!-- Platzierung - kleine Buttons -->
     <Button
         android:id="@+id/btnSwipePlace"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="⬇ Swipe platzieren"
+        android:layout_height="28dp"
+        android:text="⬇ Swipe"
         android:textColor="#FFFFFF"
         android:backgroundTint="#4CAF50"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        android:textSize="11sp"
+        android:padding="0dp"
+        android:layout_marginTop="1dp"/>
 
     <Button
         android:id="@+id/btnOcrPlace"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="📷 OCR-Rechteck"
+        android:layout_height="28dp"
+        android:text="📷 OCR"
         android:textColor="#FFFFFF"
         android:backgroundTint="#2196F3"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        android:textSize="11sp"
+        android:padding="0dp"
+        android:layout_marginTop="1dp"/>
 
     <Button
         android:id="@+id/btnRefillPlace"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔄 Refill-Button"
+        android:layout_height="28dp"
+        android:text="🔄 Refill"
         android:textColor="#FFFFFF"
         android:backgroundTint="#FF9800"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        android:textSize="11sp"
+        android:padding="0dp"
+        android:layout_marginTop="1dp"/>
 
-    <!-- Sofort-Aktionen -->
+    <!-- Sofort-Aktionen - kleine Buttons -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="─── Sofort-Aktionen ───"
+        android:text="─── Aktionen ───"
         android:textColor="#4FC3F7"
-        android:textSize="10sp"
+        android:textSize="8sp"
         android:gravity="center"
-        android:layout_marginTop="6dp"/>
+        android:layout_marginTop="3dp"/>
 
-    <Button
-        android:id="@+id/btnSwipeNow"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="⬇ Swipe jetzt"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#00E676"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        android:orientation="horizontal"
+        android:layout_marginTop="1dp">
 
-    <Button
-        android:id="@+id/btnRefillNow"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔄 Refill jetzt"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#FF1744"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        <Button
+            android:id="@+id/btnSwipeNow"
+            android:layout_width="0dp"
+            android:layout_height="26dp"
+            android:layout_weight="1"
+            android:text="⬇"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#00E676"
+            android:textSize="11sp"
+            android:padding="0dp"
+            android:layout_marginEnd="1dp"/>
 
-    <Button
-        android:id="@+id/btnOcrNow"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="📷 OCR jetzt"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#2979FF"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        <Button
+            android:id="@+id/btnRefillNow"
+            android:layout_width="0dp"
+            android:layout_height="26dp"
+            android:layout_weight="1"
+            android:text="🔄"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#FF1744"
+            android:textSize="11sp"
+            android:padding="0dp"
+            android:layout_marginEnd="1dp"/>
 
-    <Button
-        android:id="@+id/btnStopAuto"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="⏹ Stop"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#D50000"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        <Button
+            android:id="@+id/btnOcrNow"
+            android:layout_width="0dp"
+            android:layout_height="26dp"
+            android:layout_weight="1"
+            android:text="📷"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#2979FF"
+            android:textSize="11sp"
+            android:padding="0dp"
+            android:layout_marginEnd="1dp"/>
+
+        <Button
+            android:id="@+id/btnStopAuto"
+            android:layout_width="0dp"
+            android:layout_height="26dp"
+            android:layout_weight="1"
+            android:text="⏹"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#D50000"
+            android:textSize="11sp"
+            android:padding="0dp"/>
+    </LinearLayout>
 
     <Button
         android:id="@+id/btnStartAuto"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="28dp"
         android:text="▶ Start"
         android:textColor="#FFFFFF"
         android:backgroundTint="#F44336"
-        android:textSize="12sp"
-        android:layout_marginTop="2dp"/>
+        android:textSize="11sp"
+        android:padding="0dp"
+        android:layout_marginTop="1dp"/>
 
+    <!-- Koordinaten - klein -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Pos: (0,0)"
-        android:textColor="#CCCCCC"
-        android:textSize="10sp"
+        android:text="(0,0)"
+        android:textColor="#888888"
+        android:textSize="9sp"
         android:gravity="center"
-        android:padding="4dp"
-        android:background="#44000000"
-        android:layout_marginTop="4dp"/>
+        android:padding="2dp"
+        android:background="#22000000"
+        android:layout_marginTop="2dp"/>
 
 </LinearLayout>
