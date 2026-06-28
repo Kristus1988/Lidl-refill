@@ -3,7 +3,6 @@ package com.lidlrefill.app;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -96,8 +95,11 @@ public class OverlayService extends AccessibilityService {
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
-    private Rect ocrRect = new Rect(100, 100, 350, 280);
+    
+    // OCR-Rechteck: WENIGER BREIT (220px) 
+    private Rect ocrRect = new Rect(100, 100, 320, 280);
     private boolean ocrPlaced = false;
+    
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
     
@@ -135,12 +137,13 @@ public class OverlayService extends AccessibilityService {
     private long currentWaitTime = INITIAL_WAIT_TIME;
     private boolean isFirstMeasurement = true;
     private boolean isSecondMeasurement = true;
-    private double predictedRefillTime = 0;
-    private double confidenceLevel = 0;
-    private boolean usePrediction = false;
     private int totalSwipes = 0;
     private long totalWaitTime = 0;
     private DecimalFormat df = new DecimalFormat("0.000");
+    
+    // ============ OCR RETRY ============
+    private int ocrRetryCount = 0;
+    private static final int MAX_OCR_RETRIES = 3;
     
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
@@ -152,11 +155,9 @@ public class OverlayService extends AccessibilityService {
         super.onServiceConnected();
         Log.d(TAG, "Service connected");
         
-        // Google ML Kit initialisieren
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         
-        // Bildschirmgröße
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         Display display = wm.getDefaultDisplay();
         Point size = new Point();
@@ -166,11 +167,10 @@ public class OverlayService extends AccessibilityService {
         DisplayMetrics metrics = new DisplayMetrics();
         display.getMetrics(metrics);
         screenDensity = metrics.densityDpi;
-        Log.d(TAG, "Screen: " + screenWidth + "x" + screenHeight + " density: " + screenDensity);
+        Log.d(TAG, "Screen: " + screenWidth + "x" + screenHeight);
         
         loadPositions();
         
-        // Accessibility Service konfigurieren
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
                     AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
@@ -179,16 +179,14 @@ public class OverlayService extends AccessibilityService {
         info.packageNames = null;
         setServiceInfo(info);
         
-        // Overlay erstellen
         createOverlay();
         createVisualHelpers();
         
-        // MediaProjection einrichten
         if (sMediaProjection != null) {
             setupVirtualDisplay(sMediaProjection);
             Log.d(TAG, "VirtualDisplay eingerichtet");
         } else {
-            Log.w(TAG, "MediaProjection ist null - bitte in MainActivity berechtigen");
+            Log.w(TAG, "MediaProjection ist null");
         }
         
         updateStatus("● Bereit");
@@ -204,15 +202,10 @@ public class OverlayService extends AccessibilityService {
         }
         
         try {
-            if (imageReader != null) {
-                imageReader.close();
-            }
-            
+            if (imageReader != null) imageReader.close();
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
             
-            if (virtualDisplay != null) {
-                virtualDisplay.release();
-            }
+            if (virtualDisplay != null) virtualDisplay.release();
             
             virtualDisplay = projection.createVirtualDisplay(
                 "ScreenCapture",
@@ -228,21 +221,18 @@ public class OverlayService extends AccessibilityService {
             
         } catch (Exception e) {
             Log.e(TAG, "VirtualDisplay Fehler: " + e.getMessage());
-            Toast.makeText(this, "❌ Screen-Capture Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "❌ Screen-Capture Fehler", Toast.LENGTH_LONG).show();
         }
     }
     
     private Bitmap takeScreenshot() {
         if (!isScreenshotReady || imageReader == null) {
-            Log.w(TAG, "Screenshot nicht bereit");
             return null;
         }
         
         try {
             Image image = imageReader.acquireLatestImage();
-            if (image == null) {
-                return null;
-            }
+            if (image == null) return null;
             
             Image.Plane[] planes = image.getPlanes();
             ByteBuffer buffer = planes[0].getBuffer();
@@ -277,7 +267,7 @@ public class OverlayService extends AccessibilityService {
         
         ocrRect.left = prefs.getInt(PREF_OCR_LEFT, 100);
         ocrRect.top = prefs.getInt(PREF_OCR_TOP, 100);
-        ocrRect.right = prefs.getInt(PREF_OCR_RIGHT, 350);
+        ocrRect.right = prefs.getInt(PREF_OCR_RIGHT, 320);
         ocrRect.bottom = prefs.getInt(PREF_OCR_BOTTOM, 280);
         ocrPlaced = prefs.getBoolean(PREF_OCR_PLACED, false);
         
@@ -507,7 +497,7 @@ public class OverlayService extends AccessibilityService {
             if (isRunning) {
                 Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
             } else if (!isScreenshotReady) {
-                Toast.makeText(this, "⚠️ Screen-Capture nicht bereit!\nBitte neu starten.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "⚠️ Screen-Capture nicht bereit!", Toast.LENGTH_LONG).show();
             } else if (checkAllPlaced()) {
                 startAutomation();
             } else {
@@ -548,9 +538,10 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
                 break;
             case OCR_PLACE:
+                // OCR-Rechteck: WENIGER BREIT (220px)
                 ocrRect.left = x;
                 ocrRect.top = y;
-                ocrRect.right = x + 250;
+                ocrRect.right = x + 220;
                 ocrRect.bottom = y + 180;
                 ocrPlaced = true;
                 currentMode = Mode.NONE;
@@ -561,7 +552,7 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "✅ OCR platziert! (" + x + ", " + y + ")", Toast.LENGTH_SHORT).show();
                 break;
             case REFILL_PLACE:
-                refillButton.set(x + 40, y + 40);
+                refillButton.set(x + 50, y + 50);
                 refillPlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
@@ -637,6 +628,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
+        // REFILL-KREIS: GRÖSSER (100px)
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -665,8 +657,11 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); dragOffsetX = 50; dragOffsetY = 10; }
-    private void showOcrVisual() { addVisual(ocrVisual, 250, 180); dragOffsetX = 125; dragOffsetY = 90; }
-    private void showRefillVisual() { addVisual(refillVisual, 80, 80); dragOffsetX = 40; dragOffsetY = 40; }
+    
+    private void showOcrVisual() { addVisual(ocrVisual, 220, 180); dragOffsetX = 110; dragOffsetY = 90; }
+    
+    // REFILL-KREIS: GRÖSSER (100px)
+    private void showRefillVisual() { addVisual(refillVisual, 100, 100); dragOffsetX = 50; dragOffsetY = 50; }
     
     private void addVisual(View visual, int width, int height) {
         if (visual == swipeVisual) { removeVisual(ocrVisual); removeVisual(refillVisual); }
@@ -733,7 +728,6 @@ public class OverlayService extends AccessibilityService {
         if (full == null) return null;
         
         try {
-            // Sicherstellen, dass das Rechteck im Bild liegt
             int left = Math.max(0, ocrRect.left);
             int top = Math.max(0, ocrRect.top);
             int right = Math.min(screenWidth, ocrRect.right);
@@ -743,37 +737,56 @@ public class OverlayService extends AccessibilityService {
             
             if (width <= 0 || height <= 0) return null;
             
-            return Bitmap.createBitmap(full, left, top, width, height);
+            // BESSERE OCR-QUALITÄT: 2x Skalierung
+            Bitmap cropped = Bitmap.createBitmap(full, left, top, width, height);
+            Bitmap scaled = Bitmap.createScaledBitmap(cropped, width * 2, height * 2, true);
+            cropped.recycle();
+            return scaled;
+            
         } catch (Exception e) {
             Log.e(TAG, "OCR Area Fehler: " + e.getMessage());
             return null;
         } finally {
-            full.recycle();
+            if (full != null) full.recycle();
         }
     }
     
+    // ============ VERBESSERTES PARSING - 6 MUSTER ============
     private double parseDataFromText(String text) {
         if (text == null || text.isEmpty()) return 0;
         try {
-            Pattern pattern = Pattern.compile("(\\d+[\\.\\,]?\\d*)\\s*(GB|MB|Gb|Mb)", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(text);
-            if (matcher.find()) {
-                String valueStr = matcher.group(1).replace(",", ".");
-                double value = Double.parseDouble(valueStr);
-                String unit = matcher.group(2).toLowerCase();
-                if (unit.equals("mb")) value = value / 1024;
-                if (value > 0 && value < 10) return value;
+            String[] patterns = {
+                "(\\d+[\\.\\,]?\\d*)\\s*(GB|G)",
+                "(\\d+[\\.\\,]?\\d*)\\s*(MB|M)",
+                "(\\d+[\\.\\,]?\\d*)\\s*GB",
+                "(\\d+[\\.\\,]?\\d*)\\s*MB",
+                "(\\d+[\\.\\,]?\\d*)\\s*G",
+                "(\\d+[\\.\\,]?\\d*)\\s*M"
+            };
+            
+            for (String patternStr : patterns) {
+                Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+                Matcher matcher = pattern.matcher(text);
+                if (matcher.find()) {
+                    String valueStr = matcher.group(1).replace(",", ".");
+                    double value = Double.parseDouble(valueStr);
+                    String unit = matcher.group(2) != null ? matcher.group(2).toLowerCase() : "";
+                    
+                    if (unit.contains("m")) {
+                        value = value / 1024;
+                    }
+                    if (value > 0 && value < 10) {
+                        return value;
+                    }
+                }
             }
-            Pattern pattern2 = Pattern.compile("(\\d+[\\.\\,]?\\d*)\\s*GB", Pattern.CASE_INSENSITIVE);
-            Matcher matcher2 = pattern2.matcher(text);
-            if (matcher2.find()) {
-                String valueStr = matcher2.group(1).replace(",", ".");
-                double value = Double.parseDouble(valueStr);
-                if (value > 0 && value < 10) return value;
-            }
-        } catch (Exception e) { Log.e(TAG, "Parse Fehler: " + e.getMessage()); }
+        } catch (Exception e) {
+            Log.e(TAG, "Parse Fehler: " + e.getMessage());
+        }
         return 0;
     }
+    
+    // ============ OCR MIT RETRY ============
     
     private void performRealOcr() {
         if (!ocrPlaced || !isRunning || !isScreenshotReady) {
@@ -784,7 +797,7 @@ public class OverlayService extends AccessibilityService {
         Bitmap ocrBitmap = captureOcrArea();
         if (ocrBitmap == null) {
             updateStatus("⚠️ Screenshot fehlgeschlagen");
-            handler.postDelayed(() -> { if (isRunning) performSwipeGesture(); }, 5000);
+            retryOcr();
             return;
         }
         
@@ -794,28 +807,44 @@ public class OverlayService extends AccessibilityService {
                 String resultText = visionText.getText();
                 double dataValue = parseDataFromText(resultText);
                 ocrBitmap.recycle();
+                ocrRetryCount = 0;
                 
                 if (dataValue > 0) {
                     updateStatus("📊 " + resultText);
                     processOcrResult(dataValue, resultText);
                 } else {
-                    updateStatus("⚠️ Kein GB-Wert: " + resultText);
-                    handler.postDelayed(() -> { if (isRunning) performSwipeGesture(); }, 30000);
+                    updateStatus("⚠️ Kein GB-Wert");
+                    retryOcr();
                 }
             })
             .addOnFailureListener(e -> {
                 ocrBitmap.recycle();
                 updateStatus("❌ OCR Fehler");
                 Log.e(TAG, "OCR Fehler: " + e.getMessage());
-                handler.postDelayed(() -> { if (isRunning) performSwipeGesture(); }, 30000);
+                retryOcr();
             });
     }
     
-    // ============ LOGIK ============
+    private void retryOcr() {
+        ocrRetryCount++;
+        if (ocrRetryCount <= MAX_OCR_RETRIES) {
+            updateStatus("🔄 OCR Retry " + ocrRetryCount + "/" + MAX_OCR_RETRIES);
+            handler.postDelayed(() -> {
+                if (isRunning) performRealOcr();
+            }, 3000);
+        } else {
+            ocrRetryCount = 0;
+            updateStatus("⚠️ OCR fehlgeschlagen");
+            handler.postDelayed(() -> {
+                if (isRunning) performSwipeGesture();
+            }, 30000);
+        }
+    }
+    
+    // ============ VEREINFACHTE LOGIK ============
     
     private void processOcrResult(double currentData, String fullText) {
         long currentTime = System.currentTimeMillis();
-        Log.d(TAG, "OCR: " + currentData + " GB");
         
         if (isFirstMeasurement) {
             lastDataValue = currentData;
@@ -837,7 +866,7 @@ public class OverlayService extends AccessibilityService {
                 isSecondMeasurement = false;
                 lastDataValue = currentData;
                 lastDataTime = currentTime;
-                long waitTime = calculateUltimateWaitTime(currentData, consumptionRate);
+                long waitTime = calculateWaitTime(currentData, consumptionRate);
                 learnFromCycle(currentData, consumptionRate, waitTime);
                 
                 updateStatus("📊 2. Messung: " + df.format(currentData) + " GB");
@@ -862,23 +891,9 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        if (usePrediction && confidenceLevel > 0.7) {
-            double currentRemaining = currentData - REFILL_THRESHOLD;
-            if (currentRemaining < 0.05) {
-                updateStatus("🔮 Refill in ~" + Math.round(predictedRefillTime) + "min");
-                triggerRefill(currentData);
-                return;
-            }
-        }
-        
-        long waitTime = calculateUltimateWaitTime(currentData, consumptionRate);
+        long waitTime = calculateWaitTime(currentData, consumptionRate);
         learnFromCycle(currentData, consumptionRate, waitTime);
         if (currentData <= REFILL_THRESHOLD) { triggerRefill(currentData); return; }
-        
-        double remainingToRefill = currentData - REFILL_THRESHOLD;
-        double estimatedMinutes = remainingToRefill / consumptionRate;
-        if (estimatedMinutes > 0 && estimatedMinutes < 180) { usePrediction = true; predictedRefillTime = estimatedMinutes; updateStatus("🔮 " + Math.round(estimatedMinutes) + "min"); } 
-        else { usePrediction = false; }
         
         long waitSeconds = waitTime / 1000;
         long waitMinutes = waitSeconds / 60;
@@ -891,32 +906,23 @@ public class OverlayService extends AccessibilityService {
         lastDataTime = currentTime;
     }
     
-    // ============ BERECHNUNGEN ============
+    // ============ VEREINFACHTE WARTEZEIT ============
     
-    private long calculateUltimateWaitTime(double currentData, double consumptionRate) {
-        if (consumptionRate <= 0.001) return Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5));
+    private long calculateWaitTime(double currentData, double consumptionRate) {
+        if (consumptionRate <= 0.001) return MIN_WAIT_TIME * 2;
+        
         double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
         if (remainingUntilRefill <= 0) return 0;
+        
         long calculatedTime = (long)((remainingUntilRefill / consumptionRate) * 60000);
         calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
-        if (!actualWaitTimes.isEmpty() && actualWaitTimes.size() >= 2) {
+        
+        // Lerneffekt: 70% Historie, 30% neu
+        if (!actualWaitTimes.isEmpty()) {
             double avgWait = actualWaitTimes.stream().mapToLong(Long::longValue).average().orElse(calculatedTime);
-            calculatedTime = (long)((calculatedTime * 0.2) + (avgWait * 0.8));
+            calculatedTime = (long)((calculatedTime * 0.3) + (avgWait * 0.7));
         }
-        if (consumptionHistory.size() >= 2 && confidenceLevel > 0.7) {
-            double estimatedTimeToRefill = remainingUntilRefill / consumptionRate;
-            if (estimatedTimeToRefill > 0 && estimatedTimeToRefill < 120) {
-                usePrediction = true;
-                predictedRefillTime = estimatedTimeToRefill;
-                long predictionWait = (long)((estimatedTimeToRefill - 0.1) * 60000);
-                predictionWait = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, predictionWait));
-                if (predictionWait < calculatedTime) calculatedTime = predictionWait;
-            }
-        }
-        if (consumptionRate < 0.005) calculatedTime = Math.min(MAX_WAIT_TIME, (long)(calculatedTime * 1.8));
-        else if (consumptionRate > 0.1) calculatedTime = Math.max(MIN_WAIT_TIME, (long)(calculatedTime * 0.6));
-        calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
-        currentWaitTime = calculatedTime;
+        
         return calculatedTime;
     }
     
@@ -924,12 +930,11 @@ public class OverlayService extends AccessibilityService {
         consumptionHistory.add(consumptionRate);
         actualWaitTimes.add(waitTime);
         cycleCount++;
+        
         if (consumptionHistory.size() >= 3) {
             double variance = 0, mean = calculateAverageConsumption();
             for (double val : consumptionHistory) variance += Math.pow(val - mean, 2);
             variance /= consumptionHistory.size();
-            confidenceLevel = 1.0 / (1.0 + variance * 10);
-            confidenceLevel = Math.min(1.0, confidenceLevel);
         }
         averageConsumptionRate = calculateAverageConsumption();
         totalWaitTime += waitTime;
@@ -966,13 +971,13 @@ public class OverlayService extends AccessibilityService {
     
     private void triggerRefill(double currentData) {
         updateStatus("🔴 REFILL!");
-        Toast.makeText(this, "🔴 REFILL!\n" + df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB\n🔄 " + totalSwipes + " Swipes", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "🔴 REFILL!\n" + df.format(currentData) + " GB", Toast.LENGTH_LONG).show();
         handler.postDelayed(() -> {
             if (isRunning) {
                 clickRefillButton();
                 handler.postDelayed(() -> {
                     if (isRunning) {
-                        isFirstMeasurement = true; isSecondMeasurement = true; usePrediction = false;
+                        isFirstMeasurement = true; isSecondMeasurement = true;
                         lastDataTime = 0; lastDataValue = 0; currentWaitTime = INITIAL_WAIT_TIME;
                         performSwipeGesture();
                     }
@@ -992,8 +997,8 @@ public class OverlayService extends AccessibilityService {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ REFILL! (" + totalSwipes + " Swipes)");
-                Toast.makeText(OverlayService.this, "✅ REFILL!\n🔄 " + totalSwipes + " Swipes", Toast.LENGTH_LONG).show();
+                updateStatus("✅ REFILL!");
+                Toast.makeText(OverlayService.this, "✅ REFILL!", Toast.LENGTH_LONG).show();
             }
         }, null);
     }
@@ -1021,31 +1026,29 @@ public class OverlayService extends AccessibilityService {
             })
             .addOnFailureListener(e -> {
                 ocrBitmap.recycle();
-                updateStatus("❌ OCR Fehler: " + e.getMessage());
-                Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                updateStatus("❌ OCR Fehler");
+                Toast.makeText(OverlayService.this, "❌ OCR Fehler", Toast.LENGTH_LONG).show();
             });
     }
     
     private void startAutomation() {
         if (!isScreenshotReady) {
-            Toast.makeText(this, "⚠️ Screen-Capture nicht bereit!\nBitte App neu starten.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "⚠️ Screen-Capture nicht bereit!", Toast.LENGTH_LONG).show();
             return;
         }
         isRunning = true;
         isFirstMeasurement = true;
         isSecondMeasurement = true;
-        usePrediction = false;
         btnStartAuto.setText("▶");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
         updateStatus("🟢 Automatik");
-        Toast.makeText(this, "🚀 Automatik gestartet!\n📍 OCR: " + ocrRect.left + "," + ocrRect.top + "\n🔍 Google ML Kit OCR", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "🚀 Automatik gestartet!", Toast.LENGTH_LONG).show();
         
         lastDataTime = 0;
         lastDataValue = 0;
         currentWaitTime = INITIAL_WAIT_TIME;
         totalSwipes = 0;
         cycleCount = 0;
-        confidenceLevel = 0;
         
         handler.postDelayed(() -> { if (isRunning) performSwipeGesture(); }, 2000);
     }
@@ -1057,7 +1060,7 @@ public class OverlayService extends AccessibilityService {
         updateStatus("● Gestoppt");
         handler.removeCallbacksAndMessages(null);
         if (cycleCount > 0) {
-            Toast.makeText(this, "📊 Statistik:\n🔄 Swipes: " + totalSwipes + "\n📊 Zyklen: " + cycleCount + "\n⚡ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "📊 Statistik:\n🔄 Swipes: " + totalSwipes + "\n📊 Zyklen: " + cycleCount, Toast.LENGTH_LONG).show();
         }
     }
     
