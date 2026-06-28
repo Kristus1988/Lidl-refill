@@ -29,7 +29,6 @@ import android.util.Log;
 public class OverlayService extends AccessibilityService {
     private WindowManager windowManager;
     private FrameLayout floatingView;
-    private FrameLayout dragContainer;
     private TextView tvStatus, tvCoordinates;
     private Button btnSwipePlace, btnOcrPlace, btnRefillPlace;
     private Button btnSwipeNow, btnRefillNow, btnOcrNow, btnStopAuto, btnStartAuto;
@@ -44,11 +43,9 @@ public class OverlayService extends AccessibilityService {
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
     
-    // Modi
     private enum Mode { NONE, SWIPE_PLACE, OCR_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // Drag & Drop
     private boolean isDragging = false;
     private float lastX, lastY;
     private float dragOffsetX, dragOffsetY;
@@ -58,6 +55,8 @@ public class OverlayService extends AccessibilityService {
     private Handler handler = new Handler(Looper.getMainLooper());
     private int screenWidth, screenHeight;
     private boolean isRunning = false;
+    private boolean isOverlayDragging = false;
+    private float overlayDragX, overlayDragY;
     
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
@@ -68,46 +67,40 @@ public class OverlayService extends AccessibilityService {
     public void onServiceConnected() {
         super.onServiceConnected();
         
+        // Schneller Start - nur das Nötigste
         Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
         screenWidth = size.x;
         screenHeight = size.y;
         
-        // Standard-Swipe (Pfeil zeigt nach unten)
+        // Standard-Swipe
         swipeStart.set(screenWidth / 2, 100);
         swipeEnd.set(screenWidth / 2, screenHeight - 100);
         swipePlaced = true;
         
+        // Accessibility Service - minimal konfigurieren
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
-                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS |
                     AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
         info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.packageNames = null;
         setServiceInfo(info);
         
+        // Sofort Overlay erstellen
         createOverlay();
         createVisualHelpers();
-        updateStatus("✅ Bereit - Pfeil an gewünschte Stelle ziehen");
+        updateStatus("✅ Bereit");
     }
     
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
+        // Hauptcontainer
         FrameLayout mainContainer = new FrameLayout(this);
         
-        // Drag Container
-        dragContainer = new FrameLayout(this);
-        dragContainer.setLayoutParams(new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ));
-        dragContainer.setClickable(false);
-        dragContainer.setFocusable(false);
-        
-        // Control Panel
+        // Control Panel - KOMPAKT
         LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         View controlView = inflater.inflate(R.layout.overlay_layout, null);
         
@@ -122,19 +115,19 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // Schließen-Button
+        // Schließen-Button (kleiner)
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(20);
+        btnClose.setTextSize(16);
         btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.RED));
         btnClose.setPadding(0, 0, 0, 0);
         btnClose.setAllCaps(false);
         btnClose.setClickable(true);
         
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(80, 80);
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(60, 60);
         closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeParams.setMargins(0, 0, 10, 0);
+        closeParams.setMargins(0, 0, 5, 0);
         btnClose.setLayoutParams(closeParams);
         
         btnClose.setOnClickListener(v -> {
@@ -151,15 +144,55 @@ public class OverlayService extends AccessibilityService {
         
         setupButtons();
         
+        // Drag-Bereich für Overlay-Verschiebung (oberer Rand)
+        View dragHandle = new View(this);
+        dragHandle.setBackgroundColor(Color.argb(80, 255, 255, 255));
+        FrameLayout.LayoutParams dragParams = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, 30
+        );
+        dragParams.gravity = Gravity.TOP;
+        dragHandle.setLayoutParams(dragParams);
+        dragHandle.setClickable(true);
+        
+        // Touch-Listener für Overlay-Verschiebung
+        dragHandle.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    overlayDragX = event.getRawX();
+                    overlayDragY = event.getRawY();
+                    isOverlayDragging = true;
+                    return true;
+                    
+                case MotionEvent.ACTION_MOVE:
+                    if (isOverlayDragging && floatingView != null) {
+                        WindowManager.LayoutParams params = 
+                            (WindowManager.LayoutParams) floatingView.getLayoutParams();
+                        float deltaX = event.getRawX() - overlayDragX;
+                        float deltaY = event.getRawY() - overlayDragY;
+                        params.x += deltaX;
+                        params.y += deltaY;
+                        windowManager.updateViewLayout(floatingView, params);
+                        overlayDragX = event.getRawX();
+                        overlayDragY = event.getRawY();
+                        updateCoordinates(params.x, params.y);
+                    }
+                    return true;
+                    
+                case MotionEvent.ACTION_UP:
+                    isOverlayDragging = false;
+                    return true;
+            }
+            return false;
+        });
+        
         FrameLayout controlPanel = new FrameLayout(this);
         controlPanel.addView(controlView);
-        controlPanel.setClickable(true);
-        controlPanel.setFocusable(true);
+        controlPanel.addView(dragHandle);
         
-        mainContainer.addView(dragContainer);
         mainContainer.addView(controlPanel);
         mainContainer.addView(btnClose);
         
+        // Overlay-Parameter - KOMPAKT
         int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
@@ -180,7 +213,7 @@ public class OverlayService extends AccessibilityService {
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = 20;
         params.y = 100;
-        params.alpha = 0.95f;
+        params.alpha = 0.92f;
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
@@ -190,10 +223,10 @@ public class OverlayService extends AccessibilityService {
         floatingView.setElevation(999);
         
         windowManager.addView(floatingView, params);
-        setupTouchListener(params);
     }
     
     private void setupButtons() {
+        // Alle Buttons kompakt halten
         btnSwipePlace.setOnClickListener(v -> {
             if (currentMode == Mode.SWIPE_PLACE) {
                 currentMode = Mode.NONE;
@@ -202,8 +235,8 @@ public class OverlayService extends AccessibilityService {
                 return;
             }
             currentMode = Mode.SWIPE_PLACE;
-            updateStatus("🟡 Swipe: Ziehe den Pfeil an die gewünschte Stelle");
-            Toast.makeText(this, "Ziehe den Pfeil dorthin, wo der Swipe starten soll", Toast.LENGTH_LONG).show();
+            updateStatus("🟡 Swipe: Pfeil ziehen");
+            Toast.makeText(this, "Ziehe den Pfeil an die gewünschte Stelle", Toast.LENGTH_SHORT).show();
             showSwipeVisual();
             activeVisual = swipeVisual;
         });
@@ -216,8 +249,8 @@ public class OverlayService extends AccessibilityService {
                 return;
             }
             currentMode = Mode.OCR_PLACE;
-            updateStatus("🟡 OCR: Ziehe das Rechteck über den Datenverbrauch");
-            Toast.makeText(this, "Ziehe das Rechteck über den Datenverbrauch", Toast.LENGTH_LONG).show();
+            updateStatus("🟡 OCR: Rechteck ziehen");
+            Toast.makeText(this, "Ziehe das Rechteck über den Datenverbrauch", Toast.LENGTH_SHORT).show();
             showOcrVisual();
             activeVisual = ocrVisual;
         });
@@ -230,15 +263,15 @@ public class OverlayService extends AccessibilityService {
                 return;
             }
             currentMode = Mode.REFILL_PLACE;
-            updateStatus("🟡 Refill: Ziehe den roten Kreis auf den Button");
-            Toast.makeText(this, "Ziehe den roten Kreis auf den '1GB laden'-Button", Toast.LENGTH_LONG).show();
+            updateStatus("🟡 Refill: Kreis ziehen");
+            Toast.makeText(this, "Ziehe den Kreis auf den '1GB laden'-Button", Toast.LENGTH_SHORT).show();
             showRefillVisual();
             activeVisual = refillVisual;
         });
         
         btnSwipeNow.setOnClickListener(v -> {
             if (swipePlaced) {
-                updateStatus("🔄 Swipe wird ausgeführt...");
+                updateStatus("🔄 Swipe...");
                 performSwipeGesture();
             } else {
                 Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -247,7 +280,7 @@ public class OverlayService extends AccessibilityService {
         
         btnRefillNow.setOnClickListener(v -> {
             if (refillPlaced) {
-                updateStatus("🔄 Refill wird ausgeführt...");
+                updateStatus("🔄 Refill...");
                 clickRefillButton();
             } else {
                 Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -256,7 +289,7 @@ public class OverlayService extends AccessibilityService {
         
         btnOcrNow.setOnClickListener(v -> {
             if (ocrPlaced) {
-                updateStatus("📷 OCR wird ausgeführt...");
+                updateStatus("📷 OCR...");
                 performOcrNow();
             } else {
                 Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -266,72 +299,35 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto.setOnClickListener(v -> {
             if (isRunning) {
                 stopAutomation();
-                Toast.makeText(this, "⏹ Automation gestoppt!", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "⚠️ Automation läuft nicht", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "⏹ Gestoppt!", Toast.LENGTH_SHORT).show();
             }
         });
         
         btnStartAuto.setOnClickListener(v -> {
             if (isRunning) {
-                Toast.makeText(this, "⚠️ Automation läuft bereits", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
             } else if (checkAllPlaced()) {
                 startAutomation();
             } else {
-                Toast.makeText(this, "⚠️ Bitte alle Elemente platzieren!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "⚠️ Alle Elemente platzieren!", Toast.LENGTH_SHORT).show();
             }
         });
     }
     
     private boolean checkAllPlaced() {
         if (!swipePlaced) {
-            Toast.makeText(this, "❌ Swipe nicht platziert", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "❌ Swipe fehlt", Toast.LENGTH_SHORT).show();
             return false;
         }
         if (!ocrPlaced) {
-            Toast.makeText(this, "❌ OCR nicht platziert", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "❌ OCR fehlt", Toast.LENGTH_SHORT).show();
             return false;
         }
         if (!refillPlaced) {
-            Toast.makeText(this, "❌ Refill nicht platziert", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "❌ Refill fehlt", Toast.LENGTH_SHORT).show();
             return false;
         }
         return true;
-    }
-    
-    private void setupTouchListener(WindowManager.LayoutParams params) {
-        floatingView.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    lastX = event.getRawX();
-                    lastY = event.getRawY();
-                    isDragging = false;
-                    return true;
-                    
-                case MotionEvent.ACTION_MOVE:
-                    float deltaX = event.getRawX() - lastX;
-                    float deltaY = event.getRawY() - lastY;
-                    
-                    if (Math.abs(deltaX) > 15 || Math.abs(deltaY) > 15) {
-                        isDragging = true;
-                    }
-                    
-                    if (isDragging) {
-                        params.x += deltaX;
-                        params.y += deltaY;
-                        windowManager.updateViewLayout(floatingView, params);
-                        lastX = event.getRawX();
-                        lastY = event.getRawY();
-                        updateCoordinates(params.x, params.y);
-                    }
-                    return true;
-                    
-                case MotionEvent.ACTION_UP:
-                    isDragging = false;
-                    return true;
-            }
-            return false;
-        });
     }
     
     // ============ PLATZIERUNG ============
@@ -339,26 +335,23 @@ public class OverlayService extends AccessibilityService {
     private void savePosition(int x, int y) {
         switch (currentMode) {
             case SWIPE_PLACE:
-                // PFEIL ZEIGT NACH UNTEN
-                // Start = Oben (Pfeilanfang), Ende = Unten (Pfeilspitze)
-                int swipeLength = 300; // Länge der Wischbewegung
-                swipeStart.set(x + 60, y + 10);        // Oben (Pfeilanfang)
-                swipeEnd.set(x + 60, y + 10 + swipeLength); // Unten (Pfeilspitze)
+                swipeStart.set(x + 60, y + 10);
+                swipeEnd.set(x + 60, y + 250);
                 swipePlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ Swipe platziert: Oben → Unten (" + swipeLength + "px)");
-                Toast.makeText(this, "✅ Swipe: Oben → Unten\nVon " + swipeStart.y + " nach " + swipeEnd.y, Toast.LENGTH_LONG).show();
+                updateStatus("✅ Swipe platziert");
+                Toast.makeText(this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
                 break;
                 
             case OCR_PLACE:
-                ocrRect.set(x, y, x + 200, y + 200);
+                ocrRect.set(x, y, x + 180, y + 180);
                 ocrPlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ OCR-Rechteck bei (" + x + ", " + y + ")");
+                updateStatus("✅ OCR platziert");
                 Toast.makeText(this, "✅ OCR-Rechteck platziert!", Toast.LENGTH_SHORT).show();
                 break;
                 
@@ -368,7 +361,7 @@ public class OverlayService extends AccessibilityService {
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ Refill-Button bei (" + refillButton.x + ", " + refillButton.y + ")");
+                updateStatus("✅ Refill platziert");
                 Toast.makeText(this, "✅ Refill-Button platziert!", Toast.LENGTH_SHORT).show();
                 break;
         }
@@ -377,7 +370,7 @@ public class OverlayService extends AccessibilityService {
     // ============ VISUELLE HILFEN ============
     
     private void createVisualHelpers() {
-        // Swipe-Pfeil (zeigt nach UNTEN)
+        // Swipe-Pfeil (kompakt)
         swipeVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -385,48 +378,31 @@ public class OverlayService extends AccessibilityService {
                 int w = getWidth();
                 int h = getHeight();
                 
-                // Pfeilschaft (Linie)
                 Paint paint = new Paint();
                 paint.setColor(Color.YELLOW);
-                paint.setStrokeWidth(10);
+                paint.setStrokeWidth(8);
                 paint.setStyle(Paint.Style.STROKE);
                 canvas.drawLine(w/2, 20, w/2, h - 40, paint);
                 
-                // Pfeilspitze nach UNTEN
                 Paint arrowPaint = new Paint();
                 arrowPaint.setColor(Color.YELLOW);
                 arrowPaint.setStyle(Paint.Style.FILL);
                 Path arrowPath = new Path();
                 arrowPath.moveTo(w/2, h - 10);
-                arrowPath.lineTo(w/2 - 35, h - 50);
-                arrowPath.lineTo(w/2 + 35, h - 50);
+                arrowPath.lineTo(w/2 - 30, h - 45);
+                arrowPath.lineTo(w/2 + 30, h - 45);
                 arrowPath.close();
                 canvas.drawPath(arrowPath, arrowPaint);
                 
-                // ⬇ Symbol
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.YELLOW);
-                textPaint.setTextSize(45);
+                textPaint.setTextSize(35);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("⬇", w/2, h/2 + 15, textPaint);
-                
-                // Beschriftung
-                Paint hintPaint = new Paint();
-                hintPaint.setColor(Color.WHITE);
-                hintPaint.setTextSize(16);
-                hintPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("⇱ Ziehen", w/2, h - 5, hintPaint);
-                
-                // Richtungsanzeige
-                Paint dirPaint = new Paint();
-                dirPaint.setColor(Color.argb(150, 255, 255, 255));
-                dirPaint.setTextSize(14);
-                dirPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("⬇ Wischrichtung", w/2, 15, dirPaint);
+                canvas.drawText("⬇", w/2, h/2 + 12, textPaint);
             }
         };
         
-        // OCR-Rechteck
+        // OCR-Rechteck (kompakt)
         ocrVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -438,53 +414,40 @@ public class OverlayService extends AccessibilityService {
                 canvas.drawRect(10, 10, getWidth()-10, getHeight()-10, paint);
                 
                 Paint fillPaint = new Paint();
-                fillPaint.setColor(Color.argb(60, 0, 255, 255));
+                fillPaint.setColor(Color.argb(50, 0, 255, 255));
                 fillPaint.setStyle(Paint.Style.FILL);
                 canvas.drawRect(10, 10, getWidth()-10, getHeight()-10, fillPaint);
                 
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
-                textPaint.setTextSize(30);
+                textPaint.setTextSize(24);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("📷 OCR", getWidth()/2, getHeight()/2 + 10, textPaint);
-                
-                Paint hintPaint = new Paint();
-                hintPaint.setColor(Color.WHITE);
-                hintPaint.setTextSize(14);
-                hintPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("⇱ Ziehen", getWidth()/2, getHeight() - 10, hintPaint);
+                canvas.drawText("OCR", getWidth()/2, getHeight()/2 + 8, textPaint);
             }
         };
         
-        // Refill-Kreis
+        // Refill-Kreis (kompakt)
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
                 int size = Math.min(getWidth(), getHeight());
-                
                 Paint paint = new Paint();
                 paint.setColor(Color.RED);
                 paint.setStyle(Paint.Style.FILL);
-                canvas.drawCircle(size/2, size/2, size/2 - 10, paint);
+                canvas.drawCircle(size/2, size/2, size/2 - 8, paint);
                 
                 Paint borderPaint = new Paint();
                 borderPaint.setColor(Color.WHITE);
-                borderPaint.setStrokeWidth(3);
+                borderPaint.setStrokeWidth(2);
                 borderPaint.setStyle(Paint.Style.STROKE);
-                canvas.drawCircle(size/2, size/2, size/2 - 10, borderPaint);
+                canvas.drawCircle(size/2, size/2, size/2 - 8, borderPaint);
                 
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
-                textPaint.setTextSize(size * 0.4f);
+                textPaint.setTextSize(size * 0.35f);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("1GB", size/2, size/2 + size * 0.15f, textPaint);
-                
-                Paint hintPaint = new Paint();
-                hintPaint.setColor(Color.WHITE);
-                hintPaint.setTextSize(12);
-                hintPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("⇱ Ziehen", size/2, size - 5, hintPaint);
+                canvas.drawText("R", size/2, size/2 + size * 0.12f, textPaint);
             }
         };
         
@@ -492,21 +455,21 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showSwipeVisual() {
-        addVisual(swipeVisual, 120, 300);
-        dragOffsetX = 60;
+        addVisual(swipeVisual, 100, 250);
+        dragOffsetX = 50;
         dragOffsetY = 10;
     }
     
     private void showOcrVisual() {
-        addVisual(ocrVisual, 200, 200);
-        dragOffsetX = 100;
-        dragOffsetY = 100;
+        addVisual(ocrVisual, 180, 180);
+        dragOffsetX = 90;
+        dragOffsetY = 90;
     }
     
     private void showRefillVisual() {
-        addVisual(refillVisual, 100, 100);
-        dragOffsetX = 50;
-        dragOffsetY = 50;
+        addVisual(refillVisual, 80, 80);
+        dragOffsetX = 40;
+        dragOffsetY = 40;
     }
     
     private void addVisual(View visual, int width, int height) {
@@ -529,7 +492,6 @@ public class OverlayService extends AccessibilityService {
         visual.setLayoutParams(params);
         windowManager.addView(visual, params);
         
-        // Touch-Listener für Drag & Drop
         visual.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -543,7 +505,7 @@ public class OverlayService extends AccessibilityService {
                     params.x = (int)(event.getRawX() - dragOffsetX);
                     params.y = (int)(event.getRawY() - dragOffsetY);
                     windowManager.updateViewLayout(visual, params);
-                    updateStatus("📌 Position: (" + params.x + ", " + params.y + ")");
+                    updateStatus("📌 (" + params.x + ", " + params.y + ")");
                     updateCoordinates(params.x, params.y);
                     return true;
                     
@@ -566,9 +528,7 @@ public class OverlayService extends AccessibilityService {
         if (visual != null && visual.getParent() != null) {
             try {
                 windowManager.removeView(visual);
-            } catch (Exception e) {
-                Log.e("OverlayService", "Fehler: " + e.getMessage());
-            }
+            } catch (Exception e) {}
         }
     }
     
@@ -577,44 +537,35 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void updateCoordinates(int x, int y) {
-        tvCoordinates.setText("Pos: (" + x + ", " + y + ")");
+        tvCoordinates.setText("(" + x + ", " + y + ")");
     }
     
     // ============ AUSFÜHRUNG ============
     
     private void performSwipeGesture() {
-        if (!swipePlaced) {
-            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (!swipePlaced) return;
         
-        // Swipe von Start (oben) nach Ende (unten) - also in Pfeilrichtung!
         Path path = new Path();
-        path.moveTo(swipeStart.x, swipeStart.y);  // Start = Oben (Pfeilanfang)
-        path.lineTo(swipeEnd.x, swipeEnd.y);      // Ende = Unten (Pfeilspitze)
+        path.moveTo(swipeStart.x, swipeStart.y);
+        path.lineTo(swipeEnd.x, swipeEnd.y);
         
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, 600));
-        
-        updateStatus("🔄 Swipe: Oben → Unten");
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, 500));
         
         dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ Swipe ausgeführt (Oben → Unten)");
+                updateStatus("✅ Swipe OK");
                 handler.postDelayed(() -> {
                     if (!isRunning) updateStatus("✅ Bereit");
-                }, 2000);
+                }, 1500);
             }
         }, null);
     }
     
     private void clickRefillButton() {
-        if (!refillPlaced) {
-            Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (!refillPlaced) return;
         
         Path clickPath = new Path();
         clickPath.moveTo(refillButton.x, refillButton.y);
@@ -626,38 +577,35 @@ public class OverlayService extends AccessibilityService {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ Refill geklickt!");
-                Toast.makeText(OverlayService.this, "✅ Refill-Button wurde geklickt!", Toast.LENGTH_SHORT).show();
+                updateStatus("✅ Refill OK");
+                Toast.makeText(OverlayService.this, "✅ Refill geklickt!", Toast.LENGTH_SHORT).show();
                 handler.postDelayed(() -> {
                     if (!isRunning) updateStatus("✅ Bereit");
-                }, 2000);
+                }, 1500);
             }
         }, null);
     }
     
     private void performOcrNow() {
-        if (!ocrPlaced) {
-            Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (!ocrPlaced) return;
         
         handler.postDelayed(() -> {
             double randomData = 0.3 + Math.random() * 0.7;
             String result = String.format("%.2f GB", randomData);
-            updateStatus("📊 OCR: " + result);
-            Toast.makeText(this, "📊 OCR-Ergebnis: " + result, Toast.LENGTH_LONG).show();
+            updateStatus("📊 " + result);
+            Toast.makeText(this, "📊 " + result, Toast.LENGTH_SHORT).show();
             handler.postDelayed(() -> {
                 if (!isRunning) updateStatus("✅ Bereit");
-            }, 3000);
-        }, 1500);
+            }, 2000);
+        }, 1000);
     }
     
     private void startAutomation() {
         isRunning = true;
-        btnStartAuto.setText("▶ Läuft...");
+        btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
-        updateStatus("🟢 Automatik läuft...");
-        Toast.makeText(this, "🚀 Automatisierung gestartet!", Toast.LENGTH_LONG).show();
+        updateStatus("🟢 Automatik läuft");
+        Toast.makeText(this, "🚀 Gestartet!", Toast.LENGTH_SHORT).show();
         
         handler.postDelayed(() -> {
             if (isRunning) {
@@ -669,16 +617,14 @@ public class OverlayService extends AccessibilityService {
                             if (isRunning) {
                                 clickRefillButton();
                                 handler.postDelayed(() -> {
-                                    if (isRunning) {
-                                        startAutomation();
-                                    }
+                                    if (isRunning) startAutomation();
                                 }, 60000);
                             }
-                        }, 3000);
+                        }, 2000);
                     }
-                }, 2000);
+                }, 1500);
             }
-        }, 2000);
+        }, 1500);
     }
     
     private void stopAutomation() {
