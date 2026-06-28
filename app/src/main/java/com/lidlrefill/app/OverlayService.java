@@ -131,8 +131,12 @@ public class OverlayService extends AccessibilityService {
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
+        // Hauptcontainer
         FrameLayout mainContainer = new FrameLayout(this);
+        mainContainer.setClickable(true);
+        mainContainer.setFocusable(true);
         
+        // Control Panel
         LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         View controlView = inflater.inflate(R.layout.overlay_layout, null);
         
@@ -149,18 +153,19 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
+        // Schließen-Button (klein)
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(16);
+        btnClose.setTextSize(12);
         btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.RED));
         btnClose.setPadding(0, 0, 0, 0);
         btnClose.setAllCaps(false);
         btnClose.setClickable(true);
         
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(60, 60);
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(40, 40);
         closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeParams.setMargins(0, 0, 5, 0);
+        closeParams.setMargins(0, 0, 2, 0);
         btnClose.setLayoutParams(closeParams);
         
         btnClose.setOnClickListener(v -> {
@@ -177,16 +182,9 @@ public class OverlayService extends AccessibilityService {
         
         setupButtons();
         
-        View dragHandle = new View(this);
-        dragHandle.setBackgroundColor(Color.argb(80, 255, 255, 255));
-        FrameLayout.LayoutParams dragParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, 25
-        );
-        dragParams.gravity = Gravity.TOP;
-        dragHandle.setLayoutParams(dragParams);
-        dragHandle.setClickable(true);
-        
-        dragHandle.setOnTouchListener((v, event) -> {
+        // ============ WICHTIG: Touch-Listener für Overlay-Verschiebung ============
+        // Das ganze Overlay kann verschoben werden
+        mainContainer.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     overlayDragX = event.getRawX();
@@ -218,11 +216,11 @@ public class OverlayService extends AccessibilityService {
         
         FrameLayout controlPanel = new FrameLayout(this);
         controlPanel.addView(controlView);
-        controlPanel.addView(dragHandle);
         
         mainContainer.addView(controlPanel);
         mainContainer.addView(btnClose);
         
+        // Overlay-Parameter
         int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
@@ -595,7 +593,7 @@ public class OverlayService extends AccessibilityService {
     
     private long calculateUltimateWaitTime(double currentData, double consumptionRate) {
         if (consumptionRate <= 0.001) {
-            return Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5));  // ← KORRIGIERT
+            return Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5));
         }
         
         double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
@@ -762,7 +760,7 @@ public class OverlayService extends AccessibilityService {
                     if (isRunning) {
                         performSwipeGesture();
                     }
-                }, Math.min(MAX_WAIT_TIME, (long)(MIN_WAIT_TIME * 2)));  // ← KORRIGIERT
+                }, Math.min(MAX_WAIT_TIME, (long)(MIN_WAIT_TIME * 2)));
                 return;
             }
         }
@@ -777,7 +775,7 @@ public class OverlayService extends AccessibilityService {
                 if (isRunning) {
                     performSwipeGesture();
                 }
-            }, Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5)));  // ← KORRIGIERT
+            }, Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5)));
             return;
         }
         
