@@ -35,4 +35,17 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.10.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // ============ GOOGLE ML KIT OCR ============
+    // Text-Erkennung für lateinische Schrift (Deutsch, Englisch, etc.)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    
+    // Für Devanagari-Schrift (falls benötigt)
+    // implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
+    
+    // Für chinesische/japanische Schrift
+    // implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
+    
+    // Für koreanische Schrift
+    // implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
 }
