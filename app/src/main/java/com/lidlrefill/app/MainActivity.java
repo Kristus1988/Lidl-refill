@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -25,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int STORAGE_PERMISSION_REQUEST = 1002;
     
     private MediaProjectionManager mediaProjectionManager;
+    private TextView tvPermissionStatus;
+    private Button btnStartService;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,7 +36,8 @@ public class MainActivity extends AppCompatActivity {
         
         mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         
-        Button btnStartService = findViewById(R.id.btnStartService);
+        tvPermissionStatus = findViewById(R.id.tvPermissionStatus);
+        btnStartService = findViewById(R.id.btnStartService);
         Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         
@@ -43,13 +47,50 @@ public class MainActivity extends AppCompatActivity {
             if (checkAllPermissions()) {
                 requestMediaProjection();
             } else {
-                Toast.makeText(this, "Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
             }
         });
+        
+        // Beim Start Berechtigungsstatus prüfen
+        updatePermissionStatus();
+    }
+    
+    private void updatePermissionStatus() {
+        StringBuilder status = new StringBuilder();
+        status.append("📋 Berechtigungen:\n");
+        
+        // Overlay
+        boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
+        status.append(overlayOk ? "✅" : "❌").append(" Overlay\n");
+        
+        // Accessibility
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        boolean accOk = am != null && am.isEnabled();
+        status.append(accOk ? "✅" : "❌").append(" Accessibility\n");
+        
+        // Storage
+        boolean storageOk = checkStoragePermission();
+        status.append(storageOk ? "✅" : "❌").append(" Speicher\n");
+        
+        // MediaProjection (wird später geprüft)
+        status.append("⏳ MediaProjection (wird beim Start angefragt)");
+        
+        tvPermissionStatus.setText(status.toString());
+    }
+    
+    private boolean checkStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+                == PackageManager.PERMISSION_GRANTED;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
+                == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
     }
     
     private void requestAllPermissions() {
-        // 1. Overlay Permission
+        // 1. OVERLAY PERMISSION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -58,15 +99,17 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // 2. Accessibility Permission
+        // 2. ACCESSIBILITY PERMISSION
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (am != null && !am.isEnabled()) {
+        if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         }
         
-        // 3. Storage Permission (für Screenshots)
+        // 3. STORAGE PERMISSION
         requestStoragePermission();
+        
+        // 4. MEDIAPROJECTION wird beim Start angefragt
     }
     
     private void requestStoragePermission() {
@@ -95,38 +138,37 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private boolean checkAllPermissions() {
-        // Overlay prüfen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, "❌ Overlay-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
-                return false;
-            }
+        boolean allOk = true;
+        StringBuilder missing = new StringBuilder();
+        
+        // Overlay
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            missing.append("❌ Overlay-Berechtigung fehlt\n");
+            allOk = false;
         }
         
-        // Accessibility prüfen
+        // Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
-            Toast.makeText(this, "❌ Accessibility-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
-            return false;
+            missing.append("❌ Accessibility-Berechtigung fehlt\n");
+            allOk = false;
         }
         
-        // Storage prüfen
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
-                != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "❌ Speicher-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
-                return false;
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
-                != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "❌ Speicher-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
-                return false;
-            }
+        // Storage
+        if (!checkStoragePermission()) {
+            missing.append("❌ Speicher-Berechtigung fehlt\n");
+            allOk = false;
         }
         
-        Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
-        return true;
+        if (!allOk) {
+            Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
+            btnStartService.setEnabled(true);
+        }
+        
+        updatePermissionStatus();
+        return allOk;
     }
     
     private void startOverlayService(MediaProjection projection) {
@@ -138,6 +180,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             startService(intent);
         }
+        
         Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
         finish();
     }
@@ -148,6 +191,7 @@ public class MainActivity extends AppCompatActivity {
         
         if (requestCode == OVERLAY_PERMISSION_REQUEST || 
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
+            updatePermissionStatus();
             checkAllPermissions();
             return;
         }
@@ -157,7 +201,11 @@ public class MainActivity extends AppCompatActivity {
                 MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
                 startOverlayService(projection);
             } else {
-                Toast.makeText(this, "❌ Screen-Capture Berechtigung benötigt!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, 
+                    "❌ Screen-Capture Berechtigung benötigt!\n" +
+                    "Bitte erneut versuchen und \"Jetzt starten\" erlauben.", 
+                    Toast.LENGTH_LONG).show();
+                // Nochmal versuchen
                 requestMediaProjection();
             }
         }
@@ -178,8 +226,19 @@ public class MainActivity extends AppCompatActivity {
             if (allGranted) {
                 Toast.makeText(this, "✅ Speicher-Berechtigung erteilt!", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "❌ Speicher-Berechtigung verweigert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, 
+                    "⚠️ Speicher-Berechtigung verweigert!\n" +
+                    "OCR funktioniert möglicherweise nicht.", 
+                    Toast.LENGTH_LONG).show();
             }
+            updatePermissionStatus();
         }
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Bei Rückkehr zur App Status aktualisieren
+        updatePermissionStatus();
     }
 }
