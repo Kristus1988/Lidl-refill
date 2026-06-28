@@ -61,9 +61,14 @@ public class OverlayService extends AccessibilityService {
     // ============ GOOGLE ML KIT OCR ============
     private TextRecognizer textRecognizer;
     
+    // ============ STATIC MEDIAPROJECTION ============
+    private static MediaProjection sMediaProjection = null;
+    
+    public static void setMediaProjection(MediaProjection projection) {
+        sMediaProjection = projection;
+    }
+    
     // ============ SCREENSHOT ============
-    private MediaProjectionManager mediaProjectionManager;
-    private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
     private int screenWidth, screenHeight;
@@ -168,9 +173,6 @@ public class OverlayService extends AccessibilityService {
         display.getMetrics(metrics);
         screenDensity = metrics.densityDpi;
         
-        // ============ MEDIAPROJECTION MANAGER ============
-        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        
         loadPositions();
         
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
@@ -196,69 +198,6 @@ public class OverlayService extends AccessibilityService {
         if (ocrPlaced) {
             updateOcrVisualPosition();
         }
-    }
-    
-    // ============ MEDIAPROJECTION STARTEN ============
-    private void startMediaProjection() {
-        if (mediaProjection != null) {
-            return;
-        }
-        
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
-        
-        // MediaProjection wird in MainActivity gestartet
-        // Hier nur die Initialisierung
-    }
-    
-    public void setMediaProjection(MediaProjection projection) {
-        this.mediaProjection = projection;
-        setupVirtualDisplay();
-    }
-    
-    private void setupVirtualDisplay() {
-        if (mediaProjection == null) {
-            return;
-        }
-        
-        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
-        
-        virtualDisplay = mediaProjection.createVirtualDisplay(
-            "ScreenCapture",
-            screenWidth, screenHeight, screenDensity,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader.getSurface(),
-            null, null
-        );
-    }
-    
-    // ============ SCREENSHOT MACHT ============
-    private Bitmap takeScreenshot() {
-        if (imageReader == null) {
-            return null;
-        }
-        
-        Image image = imageReader.acquireLatestImage();
-        if (image == null) {
-            return null;
-        }
-        
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer buffer = planes[0].getBuffer();
-        int pixelStride = planes[0].getPixelStride();
-        int rowStride = planes[0].getRowStride();
-        int rowPadding = rowStride - pixelStride * screenWidth;
-        
-        Bitmap bitmap = Bitmap.createBitmap(
-            screenWidth + rowPadding / pixelStride,
-            screenHeight,
-            Bitmap.Config.ARGB_8888
-        );
-        bitmap.copyPixelsFromBuffer(buffer);
-        image.close();
-        
-        return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
     }
     
     // ============ POSITIONEN SPEICHERN & LADEN ============
@@ -898,6 +837,51 @@ public class OverlayService extends AccessibilityService {
         updateLearningStatus();
     }
     
+    // ============ SCREENSHOT ============
+    
+    private void setupVirtualDisplay(MediaProjection projection) {
+        if (projection == null) {
+            return;
+        }
+        
+        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
+        
+        virtualDisplay = projection.createVirtualDisplay(
+            "ScreenCapture",
+            screenWidth, screenHeight, screenDensity,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            imageReader.getSurface(),
+            null, null
+        );
+    }
+    
+    private Bitmap takeScreenshot() {
+        if (imageReader == null) {
+            return null;
+        }
+        
+        Image image = imageReader.acquireLatestImage();
+        if (image == null) {
+            return null;
+        }
+        
+        Image.Plane[] planes = image.getPlanes();
+        ByteBuffer buffer = planes[0].getBuffer();
+        int pixelStride = planes[0].getPixelStride();
+        int rowStride = planes[0].getRowStride();
+        int rowPadding = rowStride - pixelStride * screenWidth;
+        
+        Bitmap bitmap = Bitmap.createBitmap(
+            screenWidth + rowPadding / pixelStride,
+            screenHeight,
+            Bitmap.Config.ARGB_8888
+        );
+        bitmap.copyPixelsFromBuffer(buffer);
+        image.close();
+        
+        return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
+    }
+    
     // ============ ECHTE OCR MIT SCREENSHOT ============
     
     private void performRealOcr() {
@@ -908,7 +892,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Screenshot machen
         Bitmap fullScreenshot = takeScreenshot();
         if (fullScreenshot == null) {
             updateStatus("⚠️ Screenshot fehlgeschlagen");
@@ -920,7 +903,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // OCR-Bereich ausschneiden
         Bitmap ocrBitmap = Bitmap.createBitmap(
             fullScreenshot,
             ocrRect.left,
@@ -931,7 +913,6 @@ public class OverlayService extends AccessibilityService {
         
         fullScreenshot.recycle();
         
-        // OCR mit Google ML Kit ausführen
         InputImage image = InputImage.fromBitmap(ocrBitmap, 0);
         textRecognizer.process(image)
             .addOnSuccessListener(visionText -> {
@@ -969,7 +950,6 @@ public class OverlayService extends AccessibilityService {
         if (text == null || text.isEmpty()) return 0;
         
         try {
-            // Suche nach Zahlen mit "GB" oder "MB"
             Pattern pattern = Pattern.compile("(\\d+[\\.\\,]?\\d*)\\s*(GB|MB|Gb|Mb)", 
                 Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(text);
@@ -1275,8 +1255,12 @@ public class OverlayService extends AccessibilityService {
             "🔍 Google ML Kit OCR", 
             Toast.LENGTH_LONG).show();
         
-        // MediaProjection starten
-        startMediaProjection();
+        // MediaProjection verwenden
+        if (sMediaProjection != null) {
+            setupVirtualDisplay(sMediaProjection);
+        } else {
+            Toast.makeText(this, "⚠️ MediaProjection nicht verfügbar!", Toast.LENGTH_SHORT).show();
+        }
         
         lastDataTime = 0;
         lastDataValue = 0;
@@ -1299,14 +1283,9 @@ public class OverlayService extends AccessibilityService {
         updateStatus("● Gestoppt");
         handler.removeCallbacksAndMessages(null);
         
-        // MediaProjection freigeben
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
-        }
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
         }
         if (imageReader != null) {
             imageReader.close();
@@ -1332,10 +1311,6 @@ public class OverlayService extends AccessibilityService {
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
-        }
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
         }
         if (imageReader != null) {
             imageReader.close();
