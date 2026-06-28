@@ -73,14 +73,14 @@ public class OverlayService extends AccessibilityService {
     // ============ ULTIMATIVE PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
     private static final double BUFFER_SAFETY = 0.10;
-    private static final long MIN_WAIT_TIME = 120000;        // 2 Minuten
-    private static final long MAX_WAIT_TIME = 1800000;       // 30 Minuten
-    private static final long INITIAL_WAIT_TIME = 600000;    // 10 Minuten
+    private static final long MIN_WAIT_TIME = 120000;
+    private static final long MAX_WAIT_TIME = 1800000;
+    private static final long INITIAL_WAIT_TIME = 600000;
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
     
-    // ============ AKTUELLE WARTEZEIT (MUSS DEKLARIERT SEIN!) ============
-    private long currentWaitTime = INITIAL_WAIT_TIME;  // ← DAS WAR DER FEHLER!
+    // ============ AKTUELLE WARTEZEIT ============
+    private long currentWaitTime = INITIAL_WAIT_TIME;
     
     // Prognose
     private boolean isFirstMeasurement = true;
@@ -582,7 +582,7 @@ public class OverlayService extends AccessibilityService {
         tvLearning.setText(status);
     }
     
-    // ============ ULTIMATIVE LERN-FUNKTION MIT PROGNOSE ============
+    // ============ ULTIMATIVE LERN-FUNKTION ============
     
     private double calculateAverageConsumption() {
         if (consumptionHistory.isEmpty()) return 0;
@@ -595,7 +595,7 @@ public class OverlayService extends AccessibilityService {
     
     private long calculateUltimateWaitTime(double currentData, double consumptionRate) {
         if (consumptionRate <= 0.001) {
-            return Math.min(MAX_WAIT_TIME, currentWaitTime * 1.5);
+            return Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5));  // ← KORRIGIERT
         }
         
         double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
@@ -605,8 +605,6 @@ public class OverlayService extends AccessibilityService {
         }
         
         long calculatedTime = (long)((remainingUntilRefill / consumptionRate) * 60000);
-        
-        // ============ ULTIMATIVE EFFIZIENZ ============
         
         calculatedTime = Math.max(MIN_WAIT_TIME, calculatedTime);
         calculatedTime = Math.min(MAX_WAIT_TIME, calculatedTime);
@@ -764,7 +762,7 @@ public class OverlayService extends AccessibilityService {
                     if (isRunning) {
                         performSwipeGesture();
                     }
-                }, MIN_WAIT_TIME * 2);
+                }, Math.min(MAX_WAIT_TIME, (long)(MIN_WAIT_TIME * 2)));  // ← KORRIGIERT
                 return;
             }
         }
@@ -779,7 +777,7 @@ public class OverlayService extends AccessibilityService {
                 if (isRunning) {
                     performSwipeGesture();
                 }
-            }, Math.min(MAX_WAIT_TIME, currentWaitTime * 1.5));
+            }, Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5)));  // ← KORRIGIERT
             return;
         }
         
