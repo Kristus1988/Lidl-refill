@@ -156,11 +156,11 @@
         android:background="#22000000"
         android:layout_marginTop="2dp"/>
 
-    <!-- Refill-Schwelle Info -->
+    <!-- Refill-Schwelle Info - KEINE SONDERZEICHEN! -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🔴 Refill bei <= 0.30 GB"
+        android:text="Refill bei &lt;= 0.30 GB"
         android:textColor="#FF1744"
         android:textSize="8sp"
         android:gravity="center"
