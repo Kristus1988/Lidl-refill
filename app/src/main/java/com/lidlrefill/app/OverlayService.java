@@ -26,10 +26,14 @@ import android.graphics.Paint;
 import android.graphics.Color;
 import android.util.Log;
 
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+
 public class OverlayService extends AccessibilityService {
     private WindowManager windowManager;
     private FrameLayout floatingView;
-    private TextView tvStatus, tvCoordinates;
+    private TextView tvStatus, tvCoordinates, tvLearning;
     private Button btnSwipePlace, btnOcrPlace, btnRefillPlace;
     private Button btnSwipeNow, btnRefillNow, btnOcrNow, btnStopAuto, btnStartAuto;
     private Button btnClose;
@@ -58,6 +62,22 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
+    // ============ LERN-FUNKTION ============
+    private List<Double> consumptionHistory = new ArrayList<>();
+    private List<Long> waitTimeHistory = new ArrayList<>();
+    private double averageConsumptionRate = 0;
+    private double lastDataValue = 0;
+    private long lastDataTime = 0;
+    private int cycleCount = 0;
+    private double targetData = 0.70; // Ziel: 0.70 GB
+    private double bufferData = 0.30;  // Puffer: 0.30 GB
+    private DecimalFormat df = new DecimalFormat("0.000");
+    
+    // Statistik
+    private double minConsumption = Double.MAX_VALUE;
+    private double maxConsumption = 0;
+    private double totalConsumption = 0;
+    
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
     @Override
@@ -67,19 +87,16 @@ public class OverlayService extends AccessibilityService {
     public void onServiceConnected() {
         super.onServiceConnected();
         
-        // Schneller Start - nur das Nötigste
         Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
         screenWidth = size.x;
         screenHeight = size.y;
         
-        // Standard-Swipe
         swipeStart.set(screenWidth / 2, 100);
         swipeEnd.set(screenWidth / 2, screenHeight - 100);
         swipePlaced = true;
         
-        // Accessibility Service - minimal konfigurieren
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
                     AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
@@ -88,24 +105,24 @@ public class OverlayService extends AccessibilityService {
         info.packageNames = null;
         setServiceInfo(info);
         
-        // Sofort Overlay erstellen
         createOverlay();
         createVisualHelpers();
-        updateStatus("✅ Bereit");
+        updateStatus("✅ Bereit - Lernmodus aktiv");
+        updateLearningStatus();
     }
     
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
-        // Hauptcontainer
         FrameLayout mainContainer = new FrameLayout(this);
         
-        // Control Panel - KOMPAKT
         LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         View controlView = inflater.inflate(R.layout.overlay_layout, null);
         
         tvStatus = controlView.findViewById(R.id.tvStatus);
         tvCoordinates = controlView.findViewById(R.id.tvCoordinates);
+        tvLearning = controlView.findViewById(R.id.tvLearning);
+        
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnOcrPlace = controlView.findViewById(R.id.btnOcrPlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
@@ -115,7 +132,6 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // Schließen-Button (kleiner)
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
@@ -144,17 +160,16 @@ public class OverlayService extends AccessibilityService {
         
         setupButtons();
         
-        // Drag-Bereich für Overlay-Verschiebung (oberer Rand)
+        // Drag-Handle
         View dragHandle = new View(this);
         dragHandle.setBackgroundColor(Color.argb(80, 255, 255, 255));
         FrameLayout.LayoutParams dragParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, 30
+            FrameLayout.LayoutParams.MATCH_PARENT, 25
         );
         dragParams.gravity = Gravity.TOP;
         dragHandle.setLayoutParams(dragParams);
         dragHandle.setClickable(true);
         
-        // Touch-Listener für Overlay-Verschiebung
         dragHandle.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -192,7 +207,6 @@ public class OverlayService extends AccessibilityService {
         mainContainer.addView(controlPanel);
         mainContainer.addView(btnClose);
         
-        // Overlay-Parameter - KOMPAKT
         int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
@@ -226,7 +240,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void setupButtons() {
-        // Alle Buttons kompakt halten
         btnSwipePlace.setOnClickListener(v -> {
             if (currentMode == Mode.SWIPE_PLACE) {
                 currentMode = Mode.NONE;
@@ -370,7 +383,6 @@ public class OverlayService extends AccessibilityService {
     // ============ VISUELLE HILFEN ============
     
     private void createVisualHelpers() {
-        // Swipe-Pfeil (kompakt)
         swipeVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -402,7 +414,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // OCR-Rechteck (kompakt)
         ocrVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -426,7 +437,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // Refill-Kreis (kompakt)
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -540,7 +550,103 @@ public class OverlayService extends AccessibilityService {
         tvCoordinates.setText("(" + x + ", " + y + ")");
     }
     
-    // ============ AUSFÜHRUNG ============
+    private void updateLearningStatus() {
+        if (tvLearning == null) return;
+        
+        String status = "📊 Zyklen: " + cycleCount;
+        if (cycleCount > 0) {
+            status += " | ⚡ " + df.format(averageConsumptionRate) + " GB/min";
+            status += " | 🎯 " + df.format(targetData) + " GB";
+            status += " | 📈 " + (consumptionHistory.size() > 0 ? 
+                df.format(consumptionHistory.get(consumptionHistory.size()-1)) : "0") + " GB";
+        } else {
+            status += " | ⏳ Lerne...";
+        }
+        tvLearning.setText(status);
+    }
+    
+    // ============ INTELLIGENTE LERN-FUNKTION ============
+    
+    private double calculateAverageConsumption() {
+        if (consumptionHistory.isEmpty()) return 0;
+        double sum = 0;
+        for (double val : consumptionHistory) {
+            sum += val;
+        }
+        return sum / consumptionHistory.size();
+    }
+    
+    private double calculateAdaptiveTarget() {
+        // Dynamisches Ziel basierend auf gelernten Werten
+        if (cycleCount < 3) {
+            return 0.70; // Erste Zyklen: konservativ
+        }
+        
+        // Durchschnittlichen Verbrauch berücksichtigen
+        double avg = calculateAverageConsumption();
+        if (avg > 0) {
+            // Ziel anpassen: höherer Verbrauch = niedrigeres Ziel
+            double adjustedTarget = 0.70 - (avg * 0.05);
+            return Math.max(0.50, Math.min(0.80, adjustedTarget));
+        }
+        return 0.70;
+    }
+    
+    private long calculateWaitTime(double currentData, double consumptionRate) {
+        if (consumptionRate <= 0) return 60000; // Fallback: 1 Minute
+        
+        // Adaptive Zielsetzung
+        double adaptiveTarget = calculateAdaptiveTarget();
+        double remainingData = adaptiveTarget - currentData;
+        
+        // Berücksichtige Puffer
+        double safeRemaining = Math.max(0, remainingData - bufferData);
+        
+        // Berechne Wartezeit in Millisekunden
+        long waitTimeMs = (long)((safeRemaining / consumptionRate) * 60000);
+        
+        // Begrenzung: zwischen 30 Sekunden und 5 Minuten
+        waitTimeMs = Math.max(30000, Math.min(300000, waitTimeMs));
+        
+        // Lerneffekt: Wartezeit anpassen basierend auf vorherigen Zyklen
+        if (!waitTimeHistory.isEmpty()) {
+            double avgWait = waitTimeHistory.stream().mapToLong(Long::longValue).average().orElse(0);
+            // Sanfte Anpassung: 70% neue Berechnung, 30% Historie
+            waitTimeMs = (long)((waitTimeMs * 0.7) + (avgWait * 0.3));
+        }
+        
+        return waitTimeMs;
+    }
+    
+    private void learnFromCycle(double dataValue, double consumptionRate, long waitTime) {
+        // Daten speichern
+        consumptionHistory.add(consumptionRate);
+        waitTimeHistory.add(waitTime);
+        cycleCount++;
+        
+        // Statistik aktualisieren
+        minConsumption = Math.min(minConsumption, consumptionRate);
+        maxConsumption = Math.max(maxConsumption, consumptionRate);
+        totalConsumption += consumptionRate;
+        averageConsumptionRate = calculateAverageConsumption();
+        
+        // Ziel dynamisch anpassen
+        targetData = calculateAdaptiveTarget();
+        
+        // Status aktualisieren
+        updateLearningStatus();
+        
+        // Log-Ausgabe
+        Log.d("LidlRefill", "=== Zyklus " + cycleCount + " ===");
+        Log.d("LidlRefill", "Verbrauch: " + df.format(consumptionRate) + " GB/min");
+        Log.d("LidlRefill", "Durchschnitt: " + df.format(averageConsumptionRate) + " GB/min");
+        Log.d("LidlRefill", "Min: " + df.format(minConsumption) + " | Max: " + df.format(maxConsumption));
+        Log.d("LidlRefill", "Target: " + df.format(targetData) + " GB");
+        Log.d("LidlRefill", "Wartezeit: " + (waitTime/1000) + "s");
+        Log.d("LidlRefill", "==========================");
+    }
+    
+    // ============ AUSFÜHRUNG MIT LERNEN ============
     
     private void performSwipeGesture() {
         if (!swipePlaced) return;
@@ -557,11 +663,86 @@ public class OverlayService extends AccessibilityService {
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
                 updateStatus("✅ Swipe OK");
-                handler.postDelayed(() -> {
-                    if (!isRunning) updateStatus("✅ Bereit");
-                }, 1500);
+                // Nach Swipe: OCR ausführen
+                if (isRunning) {
+                    handler.postDelayed(() -> performOcrWithLearning(), 1500);
+                }
             }
         }, null);
+    }
+    
+    private void performOcrWithLearning() {
+        if (!ocrPlaced || !isRunning) return;
+        
+        // Simuliere OCR-Ergebnis (in echter App mit ML Kit)
+        // Hier wird ein zufälliger Wert generiert, der sich langsam erhöht
+        double baseValue = 0.3 + (cycleCount * 0.01);
+        double randomFactor = 0.7 + (Math.random() * 0.6);
+        double currentData = Math.min(baseValue * randomFactor, 1.2);
+        
+        long currentTime = System.currentTimeMillis();
+        
+        // Erste Messung
+        if (lastDataTime == 0) {
+            lastDataValue = currentData;
+            lastDataTime = currentTime;
+            updateStatus("📊 Erste Messung: " + df.format(currentData) + " GB");
+            Toast.makeText(this, "📊 Erste Messung: " + df.format(currentData) + " GB", Toast.LENGTH_SHORT).show();
+            
+            // Nach 2 Minuten erneut messen
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    performSwipeGesture();
+                }
+            }, 120000); // 2 Minuten
+            return;
+        }
+        
+        // Berechne Verbrauchsrate
+        double timeDiffMinutes = (currentTime - lastDataTime) / 60000.0;
+        double dataDiff = currentData - lastDataValue;
+        double consumptionRate = dataDiff / timeDiffMinutes;
+        
+        // Wenn negativ oder zu klein, überspringen
+        if (consumptionRate <= 0.001) {
+            updateStatus("⚠️ Kein Verbrauch erkannt, wiederhole...");
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    performSwipeGesture();
+                }
+            }, 30000);
+            return;
+        }
+        
+        // Lerne aus diesem Zyklus
+        long waitTime = calculateWaitTime(currentData, consumptionRate);
+        learnFromCycle(currentData, consumptionRate, waitTime);
+        
+        // Status aktualisieren
+        updateStatus("📊 " + df.format(currentData) + " GB | ⚡ " + df.format(consumptionRate) + " GB/min");
+        Toast.makeText(this, 
+            "📊 " + df.format(currentData) + " GB\n" +
+            "⚡ " + df.format(consumptionRate) + " GB/min\n" +
+            "⏱ Warte " + (waitTime/1000) + "s", 
+            Toast.LENGTH_LONG).show();
+        
+        // Warten und dann Refill ausführen
+        handler.postDelayed(() -> {
+            if (isRunning) {
+                clickRefillButton();
+                // Nach Refill: nächsten Zyklus starten
+                handler.postDelayed(() -> {
+                    if (isRunning) {
+                        lastDataTime = 0;
+                        performSwipeGesture();
+                    }
+                }, 5000);
+            }
+        }, waitTime);
+        
+        // Daten speichern für nächsten Zyklus
+        lastDataValue = currentData;
+        lastDataTime = currentTime;
     }
     
     private void clickRefillButton() {
@@ -577,11 +758,11 @@ public class OverlayService extends AccessibilityService {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ Refill OK");
-                Toast.makeText(OverlayService.this, "✅ Refill geklickt!", Toast.LENGTH_SHORT).show();
-                handler.postDelayed(() -> {
-                    if (!isRunning) updateStatus("✅ Bereit");
-                }, 1500);
+                updateStatus("✅ Refill OK (Zyklus " + cycleCount + ")");
+                Toast.makeText(OverlayService.this, 
+                    "✅ Refill #" + cycleCount + " geklickt!\n" +
+                    "📈 Durchschnitt: " + df.format(averageConsumptionRate) + " GB/min", 
+                    Toast.LENGTH_LONG).show();
             }
         }, null);
     }
@@ -589,14 +770,12 @@ public class OverlayService extends AccessibilityService {
     private void performOcrNow() {
         if (!ocrPlaced) return;
         
+        // Simuliere OCR für manuelle Ausführung
         handler.postDelayed(() -> {
             double randomData = 0.3 + Math.random() * 0.7;
-            String result = String.format("%.2f GB", randomData);
+            String result = df.format(randomData) + " GB";
             updateStatus("📊 " + result);
             Toast.makeText(this, "📊 " + result, Toast.LENGTH_SHORT).show();
-            handler.postDelayed(() -> {
-                if (!isRunning) updateStatus("✅ Bereit");
-            }, 2000);
         }, 1000);
     }
     
@@ -604,35 +783,37 @@ public class OverlayService extends AccessibilityService {
         isRunning = true;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
-        updateStatus("🟢 Automatik läuft");
-        Toast.makeText(this, "🚀 Gestartet!", Toast.LENGTH_SHORT).show();
+        updateStatus("🟢 Lernmodus aktiv - Zyklus " + (cycleCount + 1));
+        Toast.makeText(this, "🚀 Automatik mit Lernfunktion gestartet!", Toast.LENGTH_LONG).show();
         
+        // Zurücksetzen für neuen Durchlauf
+        lastDataTime = 0;
+        lastDataValue = 0;
+        
+        // Erste Swipe-Aktion
         handler.postDelayed(() -> {
             if (isRunning) {
                 performSwipeGesture();
-                handler.postDelayed(() -> {
-                    if (isRunning) {
-                        performOcrNow();
-                        handler.postDelayed(() -> {
-                            if (isRunning) {
-                                clickRefillButton();
-                                handler.postDelayed(() -> {
-                                    if (isRunning) startAutomation();
-                                }, 60000);
-                            }
-                        }, 2000);
-                    }
-                }, 1500);
             }
-        }, 1500);
+        }, 2000);
     }
     
     private void stopAutomation() {
         isRunning = false;
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#F44336")));
-        updateStatus("🔴 Gestoppt");
+        updateStatus("🔴 Gestoppt - " + cycleCount + " Zyklen gelernt");
         handler.removeCallbacksAndMessages(null);
+        
+        // Statistiken anzeigen
+        if (cycleCount > 0) {
+            Toast.makeText(this, 
+                "📊 Statistik:\n" +
+                "Zyklen: " + cycleCount + "\n" +
+                "⏱ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min\n" +
+                "📈 Min: " + df.format(minConsumption) + " | Max: " + df.format(maxConsumption),
+                Toast.LENGTH_LONG).show();
+        }
     }
     
     @Override
