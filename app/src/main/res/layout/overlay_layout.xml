@@ -8,7 +8,7 @@
     android:elevation="999dp"
     android:layout_marginTop="30dp">
 
-    <!-- Status - klein -->
+    <!-- Status -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
@@ -21,7 +21,20 @@
         android:background="#33000000"
         android:layout_marginBottom="2dp"/>
 
-    <!-- Platzierung - kleine Buttons -->
+    <!-- Lern-Status -->
+    <TextView
+        android:id="@+id/tvLearning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📊 Lerne..."
+        android:textColor="#FFEB3B"
+        android:textSize="8sp"
+        android:gravity="center"
+        android:padding="2dp"
+        android:background="#22000000"
+        android:layout_marginBottom="2dp"/>
+
+    <!-- Platzierung -->
     <Button
         android:id="@+id/btnSwipePlace"
         android:layout_width="match_parent"
@@ -55,7 +68,7 @@
         android:padding="0dp"
         android:layout_marginTop="1dp"/>
 
-    <!-- Sofort-Aktionen - kleine Buttons -->
+    <!-- Aktionen -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -130,7 +143,7 @@
         android:padding="0dp"
         android:layout_marginTop="1dp"/>
 
-    <!-- Koordinaten - klein -->
+    <!-- Koordinaten -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
