@@ -56,12 +56,15 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_OCR_PLACED = "ocr_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
     
-    // Positionen
+    // ============ POSITIONEN ============
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
-    private Rect ocrRect = new Rect(100, 100, 350, 180);
+    
+    // OCR-Rechteck - STANDARDGRÖSSE 250x180
+    private Rect ocrRect = new Rect(100, 100, 350, 280);
     private boolean ocrPlaced = false;
+    
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
     
@@ -80,7 +83,7 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
-    // ============ ULTIMATIVE EFFIZIENZ VARIABLEN ============
+    // ============ LERN-VARIABLEN ============
     private List<Double> consumptionHistory = new ArrayList<>();
     private List<Long> actualWaitTimes = new ArrayList<>();
     private double averageConsumptionRate = 0;
@@ -88,7 +91,7 @@ public class OverlayService extends AccessibilityService {
     private long lastDataTime = 0;
     private int cycleCount = 0;
     
-    // ============ ULTIMATIVE PARAMETER ============
+    // ============ PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
     private static final double BUFFER_SAFETY = 0.10;
     private static final long MIN_WAIT_TIME = 120000;
@@ -140,8 +143,21 @@ public class OverlayService extends AccessibilityService {
         
         createOverlay();
         createVisualHelpers();
-        updateStatus("✅ Positionen gespeichert!");
+        
+        // Status anzeigen
+        String status = "✅ Positionen geladen";
+        if (ocrPlaced) {
+            status += " | OCR: " + ocrRect.left + "," + ocrRect.top;
+        } else {
+            status += " | OCR: nicht platziert";
+        }
+        updateStatus(status);
         updateLearningStatus();
+        
+        // OCR-Visual aktualisieren wenn platziert
+        if (ocrPlaced) {
+            updateOcrVisualPosition();
+        }
     }
     
     // ============ POSITIONEN SPEICHERN & LADEN ============
@@ -154,7 +170,7 @@ public class OverlayService extends AccessibilityService {
         swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 100);
         swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
         
-        // OCR laden
+        // OCR laden - mit Standardwerten
         ocrRect.left = prefs.getInt(PREF_OCR_LEFT, 100);
         ocrRect.top = prefs.getInt(PREF_OCR_TOP, 100);
         ocrRect.right = prefs.getInt(PREF_OCR_RIGHT, 350);
@@ -165,6 +181,9 @@ public class OverlayService extends AccessibilityService {
         refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
         refillButton.y = prefs.getInt(PREF_REFILL_Y, 500);
         refillPlaced = prefs.getBoolean(PREF_REFILL_PLACED, false);
+        
+        Log.d("LidlRefill", "📂 OCR geladen: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
+        Log.d("LidlRefill", "📂 OCR platziert: " + ocrPlaced);
     }
     
     private void savePositions() {
@@ -191,10 +210,21 @@ public class OverlayService extends AccessibilityService {
         
         editor.apply();
         
-        Log.d("LidlRefill", "✅ Positionen gespeichert!");
-        Log.d("LidlRefill", "Swipe: (" + swipeStart.x + "," + swipeStart.y + ") → (" + swipeEnd.x + "," + swipeEnd.y + ")");
-        Log.d("LidlRefill", "OCR: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
-        Log.d("LidlRefill", "Refill: (" + refillButton.x + "," + refillButton.y + ")");
+        Log.d("LidlRefill", "💾 OCR gespeichert: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
+        Log.d("LidlRefill", "💾 OCR platziert: " + ocrPlaced);
+    }
+    
+    private void updateOcrVisualPosition() {
+        if (ocrVisual != null && ocrVisual.getParent() != null) {
+            WindowManager.LayoutParams params = (WindowManager.LayoutParams) ocrVisual.getLayoutParams();
+            params.x = ocrRect.left;
+            params.y = ocrRect.top;
+            params.width = ocrRect.width();
+            params.height = ocrRect.height();
+            windowManager.updateViewLayout(ocrVisual, params);
+            ocrVisual.invalidate();
+            Log.d("LidlRefill", "🔄 OCR-Visual aktualisiert: " + ocrRect.left + "," + ocrRect.top);
+        }
     }
     
     private void createOverlay() {
@@ -340,8 +370,8 @@ public class OverlayService extends AccessibilityService {
                 return;
             }
             currentMode = Mode.OCR_PLACE;
-            updateStatus("🟡 OCR: Rechteck ziehen");
-            Toast.makeText(this, "Ziehe das Rechteck über den Datenverbrauch", Toast.LENGTH_SHORT).show();
+            updateStatus("🟡 OCR: Rechteck über Datenverbrauch ziehen");
+            Toast.makeText(this, "Ziehe das blaue Rechteck über den Datenverbrauch", Toast.LENGTH_LONG).show();
             showOcrVisual();
             activeVisual = ocrVisual;
         });
@@ -355,7 +385,7 @@ public class OverlayService extends AccessibilityService {
             }
             currentMode = Mode.REFILL_PLACE;
             updateStatus("🟡 Refill: Kreis ziehen");
-            Toast.makeText(this, "Ziehe den Kreis auf den '1GB laden'-Button", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Ziehe den roten Kreis auf den '1GB laden'-Button", Toast.LENGTH_SHORT).show();
             showRefillVisual();
             activeVisual = refillVisual;
         });
@@ -380,10 +410,10 @@ public class OverlayService extends AccessibilityService {
         
         btnOcrNow.setOnClickListener(v -> {
             if (ocrPlaced) {
-                updateStatus("📷 OCR...");
+                updateStatus("📷 OCR wird ausgelesen...");
                 performOcrNow();
             } else {
-                Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "❌ OCR nicht platziert! Bitte zuerst OCR-Rechteck platzieren.", Toast.LENGTH_LONG).show();
             }
         });
         
@@ -400,7 +430,7 @@ public class OverlayService extends AccessibilityService {
             } else if (checkAllPlaced()) {
                 startAutomation();
             } else {
-                Toast.makeText(this, "⚠️ Alle Elemente platzieren!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "⚠️ Alle Elemente platzieren!\n(Swipe, OCR, Refill)", Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -411,7 +441,7 @@ public class OverlayService extends AccessibilityService {
             return false;
         }
         if (!ocrPlaced) {
-            Toast.makeText(this, "❌ OCR fehlt", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "❌ OCR-Rechteck fehlt!\nKlick auf '📷 OCR' und ziehe es über den Datenverbrauch", Toast.LENGTH_LONG).show();
             return false;
         }
         if (!refillPlaced) {
@@ -420,6 +450,8 @@ public class OverlayService extends AccessibilityService {
         }
         return true;
     }
+    
+    // ============ PLATZIERUNG - KORRIGIERT ============
     
     private void savePosition(int x, int y) {
         switch (currentMode) {
@@ -430,20 +462,32 @@ public class OverlayService extends AccessibilityService {
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                savePositions();  // ← SPEICHERN
+                savePositions();
                 updateStatus("✅ Swipe platziert & gespeichert!");
                 Toast.makeText(this, "✅ Swipe platziert & gespeichert!", Toast.LENGTH_SHORT).show();
                 break;
                 
             case OCR_PLACE:
-                ocrRect.set(x, y, x + 250, y + 180);
+                // OCR-RECHTECK SPEICHERN - Korrekte Position!
+                ocrRect.left = x;
+                ocrRect.top = y;
+                ocrRect.right = x + 250;
+                ocrRect.bottom = y + 180;
                 ocrPlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                savePositions();  // ← SPEICHERN
-                updateStatus("✅ OCR platziert & gespeichert! (250x180)");
-                Toast.makeText(this, "✅ OCR-Rechteck platziert & gespeichert!", Toast.LENGTH_SHORT).show();
+                savePositions();
+                
+                // Status anzeigen
+                updateStatus("✅ OCR platziert bei (" + x + ", " + y + ")");
+                Toast.makeText(this, 
+                    "✅ OCR-Rechteck platziert!\n" +
+                    "Position: (" + x + ", " + y + ")\n" +
+                    "Größe: 250x180", 
+                    Toast.LENGTH_LONG).show();
+                
+                Log.d("LidlRefill", "✅ OCR platziert: " + ocrRect.left + "," + ocrRect.top);
                 break;
                 
             case REFILL_PLACE:
@@ -452,7 +496,7 @@ public class OverlayService extends AccessibilityService {
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                savePositions();  // ← SPEICHERN
+                savePositions();
                 updateStatus("✅ Refill platziert & gespeichert!");
                 Toast.makeText(this, "✅ Refill-Button platziert & gespeichert!", Toast.LENGTH_SHORT).show();
                 break;
@@ -462,6 +506,7 @@ public class OverlayService extends AccessibilityService {
     // ============ VISUELLE HILFEN ============
     
     private void createVisualHelpers() {
+        // Swipe-Visual
         swipeVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -493,29 +538,62 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
+        // OCR-Visual - KORRIGIERT mit größerer Darstellung
         ocrVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
+                int w = getWidth();
+                int h = getHeight();
+                
+                // Äußerer Rahmen - Cyan
                 Paint paint = new Paint();
                 paint.setColor(Color.CYAN);
-                paint.setStrokeWidth(4);
+                paint.setStrokeWidth(6);
                 paint.setStyle(Paint.Style.STROKE);
-                canvas.drawRect(10, 10, getWidth()-10, getHeight()-10, paint);
+                canvas.drawRect(5, 5, w-5, h-5, paint);
                 
+                // Halbtransparente Füllung
                 Paint fillPaint = new Paint();
-                fillPaint.setColor(Color.argb(50, 0, 255, 255));
+                fillPaint.setColor(Color.argb(80, 0, 255, 255));
                 fillPaint.setStyle(Paint.Style.FILL);
-                canvas.drawRect(10, 10, getWidth()-10, getHeight()-10, fillPaint);
+                canvas.drawRect(5, 5, w-5, h-5, fillPaint);
                 
+                // OCR Text
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
-                textPaint.setTextSize(24);
+                textPaint.setTextSize(36);
+                textPaint.setStyle(Paint.Style.BOLD);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("📷 OCR", getWidth()/2, getHeight()/2 + 8, textPaint);
+                canvas.drawText("📷 OCR", w/2, h/2 + 12, textPaint);
+                
+                // Größenangabe
+                Paint sizePaint = new Paint();
+                sizePaint.setColor(Color.argb(200, 255, 255, 255));
+                sizePaint.setTextSize(16);
+                sizePaint.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText(w + " x " + h, w/2, h - 15, sizePaint);
+                
+                // Ecken markieren
+                Paint cornerPaint = new Paint();
+                cornerPaint.setColor(Color.CYAN);
+                cornerPaint.setStrokeWidth(8);
+                // Oben links
+                canvas.drawLine(5, 5, 30, 5, cornerPaint);
+                canvas.drawLine(5, 5, 5, 30, cornerPaint);
+                // Oben rechts
+                canvas.drawLine(w-5, 5, w-30, 5, cornerPaint);
+                canvas.drawLine(w-5, 5, w-5, 30, cornerPaint);
+                // Unten links
+                canvas.drawLine(5, h-5, 30, h-5, cornerPaint);
+                canvas.drawLine(5, h-5, 5, h-30, cornerPaint);
+                // Unten rechts
+                canvas.drawLine(w-5, h-5, w-30, h-5, cornerPaint);
+                canvas.drawLine(w-5, h-5, w-5, h-30, cornerPaint);
             }
         };
         
+        // Refill-Visual
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -528,15 +606,15 @@ public class OverlayService extends AccessibilityService {
                 
                 Paint borderPaint = new Paint();
                 borderPaint.setColor(Color.WHITE);
-                borderPaint.setStrokeWidth(2);
+                borderPaint.setStrokeWidth(3);
                 borderPaint.setStyle(Paint.Style.STROKE);
                 canvas.drawCircle(size/2, size/2, size/2 - 8, borderPaint);
                 
                 Paint textPaint = new Paint();
                 textPaint.setColor(Color.WHITE);
-                textPaint.setTextSize(size * 0.35f);
+                textPaint.setTextSize(size * 0.4f);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("R", size/2, size/2 + size * 0.12f, textPaint);
+                canvas.drawText("1GB", size/2, size/2 + size * 0.15f, textPaint);
             }
         };
         
@@ -550,9 +628,19 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showOcrVisual() {
+        // OCR-Visual mit korrekter Größe anzeigen
         addVisual(ocrVisual, 250, 180);
         dragOffsetX = 125;
         dragOffsetY = 90;
+        
+        // Wenn bereits platziert, Position setzen
+        if (ocrPlaced) {
+            WindowManager.LayoutParams params = (WindowManager.LayoutParams) ocrVisual.getLayoutParams();
+            params.x = ocrRect.left;
+            params.y = ocrRect.top;
+            windowManager.updateViewLayout(ocrVisual, params);
+            Log.d("LidlRefill", "🔄 OCR-Visual auf gespeicherte Position gesetzt: " + ocrRect.left + "," + ocrRect.top);
+        }
     }
     
     private void showRefillVisual() {
@@ -562,7 +650,19 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void addVisual(View visual, int width, int height) {
-        hideVisuals();
+        // Vorheriges Visual entfernen
+        if (visual == swipeVisual) {
+            removeVisual(ocrVisual);
+            removeVisual(refillVisual);
+        } else if (visual == ocrVisual) {
+            removeVisual(swipeVisual);
+            removeVisual(refillVisual);
+        } else if (visual == refillVisual) {
+            removeVisual(swipeVisual);
+            removeVisual(ocrVisual);
+        } else {
+            hideVisuals();
+        }
         
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 width, height,
@@ -575,12 +675,23 @@ public class OverlayService extends AccessibilityService {
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
-        params.x = screenWidth / 2 - width / 2;
-        params.y = screenHeight / 2 - height / 2;
+        
+        // Wenn OCR bereits platziert, an die gespeicherte Position
+        if (visual == ocrVisual && ocrPlaced) {
+            params.x = ocrRect.left;
+            params.y = ocrRect.top;
+            Log.d("LidlRefill", "📍 OCR auf gespeicherte Position: " + ocrRect.left + "," + ocrRect.top);
+        } else {
+            params.x = screenWidth / 2 - width / 2;
+            params.y = screenHeight / 2 - height / 2;
+        }
+        
+        params.elevation = 1000;
         
         visual.setLayoutParams(params);
         windowManager.addView(visual, params);
         
+        // Touch-Listener für Drag & Drop
         visual.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -594,7 +705,13 @@ public class OverlayService extends AccessibilityService {
                     params.x = (int)(event.getRawX() - dragOffsetX);
                     params.y = (int)(event.getRawY() - dragOffsetY);
                     windowManager.updateViewLayout(visual, params);
-                    updateStatus("📌 (" + params.x + ", " + params.y + ")");
+                    
+                    // Bei OCR: Koordinaten live anzeigen
+                    if (visual == ocrVisual) {
+                        updateStatus("📌 OCR: (" + params.x + ", " + params.y + ") | " + params.width + "x" + params.height);
+                    } else {
+                        updateStatus("📌 Position: (" + params.x + ", " + params.y + ")");
+                    }
                     updateCoordinates(params.x, params.y);
                     return true;
                     
@@ -617,7 +734,9 @@ public class OverlayService extends AccessibilityService {
         if (visual != null && visual.getParent() != null) {
             try {
                 windowManager.removeView(visual);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+                Log.e("LidlRefill", "Fehler beim Entfernen: " + e.getMessage());
+            }
         }
     }
     
@@ -642,10 +761,12 @@ public class OverlayService extends AccessibilityService {
         } else {
             status += " | ⏳ Lerne...";
         }
+        // OCR-Status hinzufügen
+        status += ocrPlaced ? " | 📷 OK" : " | 📷 fehlt";
         tvLearning.setText(status);
     }
     
-    // ============ ULTIMATIVE LERN-FUNKTION ============
+    // ============ LERN-FUNKTION ============
     
     private double calculateAverageConsumption() {
         if (consumptionHistory.isEmpty()) return 0;
@@ -730,17 +851,14 @@ public class OverlayService extends AccessibilityService {
         
         updateLearningStatus();
         
-        Log.d("LidlRefill", "=== ULTIMATIVE EFFIZIENZ ZYKLUS " + cycleCount + " ===");
+        Log.d("LidlRefill", "=== ZYKLUS " + cycleCount + " ===");
         Log.d("LidlRefill", "📊 Stand: " + df.format(dataValue) + " GB");
         Log.d("LidlRefill", "⚡ Verbrauch: " + df.format(consumptionRate) + " GB/min");
-        Log.d("LidlRefill", "📈 Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min");
         Log.d("LidlRefill", "⏱ Wartezeit: " + (waitTime/1000) + "s");
-        Log.d("LidlRefill", "🔮 Confidence: " + df.format(confidenceLevel * 100) + "%");
-        Log.d("LidlRefill", "🔄 Swipes: " + totalSwipes);
         Log.d("LidlRefill", "================================");
     }
     
-    // ============ ULTIMATIVE AUSFÜHRUNG ============
+    // ============ AUSFÜHRUNG ============
     
     private void performSwipeGesture() {
         if (!swipePlaced) return;
@@ -768,10 +886,22 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void performUltimateOcr() {
-        if (!ocrPlaced || !isRunning) return;
+        if (!ocrPlaced || !isRunning) {
+            if (!ocrPlaced) {
+                updateStatus("⚠️ OCR nicht platziert!");
+            }
+            return;
+        }
+        
+        // ============ HIER WIRD DAS OCR-RECHTECK AUSGELESEN ============
+        // In der echten App würde hier ML Kit OCR stehen
+        // Aktuell simulieren wir den Datenverbrauch
         
         double currentData = simulateRealisticData();
         long currentTime = System.currentTimeMillis();
+        
+        Log.d("LidlRefill", "📷 OCR ausgelesen: " + df.format(currentData) + " GB");
+        Log.d("LidlRefill", "📷 OCR-Rechteck: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
         
         if (isFirstMeasurement) {
             lastDataValue = currentData;
@@ -902,8 +1032,7 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, 
             "🔴 REFILL!\n" +
             df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB\n" +
-            "🔄 Nur " + totalSwipes + " Swipes benötigt!\n" +
-            "📊 " + cycleCount + " Zyklen gelernt", 
+            "🔄 Nur " + totalSwipes + " Swipes benötigt!", 
             Toast.LENGTH_LONG).show();
         
         handler.postDelayed(() -> {
@@ -957,22 +1086,32 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("✅ REFILL! (" + totalSwipes + " Swipes)");
                 Toast.makeText(OverlayService.this, 
                     "✅ REFILL DURCHGEFÜHRT!\n" +
-                    "🔄 Nur " + totalSwipes + " Swipes!\n" +
-                    "📊 " + cycleCount + " Zyklen gelernt", 
+                    "🔄 Nur " + totalSwipes + " Swipes!", 
                     Toast.LENGTH_LONG).show();
             }
         }, null);
     }
     
     private void performOcrNow() {
-        if (!ocrPlaced) return;
+        if (!ocrPlaced) {
+            Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
         
+        // OCR manuell ausführen
         handler.postDelayed(() -> {
-            double randomData = 0.3 + Math.random() * 0.7;
-            String result = df.format(randomData) + " GB";
-            updateStatus("📊 " + result);
-            Toast.makeText(this, "📊 " + result, Toast.LENGTH_SHORT).show();
-        }, 1000);
+            double data = 0.3 + Math.random() * 0.7;
+            String result = df.format(data) + " GB";
+            updateStatus("📊 OCR: " + result);
+            Toast.makeText(this, 
+                "📊 OCR-Ergebnis:\n" +
+                result + "\n" +
+                "📍 Rechteck: (" + ocrRect.left + ", " + ocrRect.top + ")", 
+                Toast.LENGTH_LONG).show();
+            
+            Log.d("LidlRefill", "📷 Manuelles OCR: " + result);
+            Log.d("LidlRefill", "📷 Rechteck: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
+        }, 1500);
     }
     
     private void startAutomation() {
@@ -982,12 +1121,11 @@ public class OverlayService extends AccessibilityService {
         usePrediction = false;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
-        updateStatus("🟢 ULTIMATIV gestartet");
+        updateStatus("🟢 Automatik gestartet");
         Toast.makeText(this, 
-            "🚀 ULTIMATIVE EFFIZIENZ!\n" +
+            "🚀 AUTOMATIK GESTARTET!\n" +
             "📊 Refill bei <= " + REFILL_THRESHOLD + " GB\n" +
-            "⏱ Min: 2min | Max: 30min\n" +
-            "🔮 Mit Prognose-Funktion", 
+            "📍 OCR: (" + ocrRect.left + ", " + ocrRect.top + ")", 
             Toast.LENGTH_LONG).show();
         
         lastDataTime = 0;
@@ -1013,11 +1151,10 @@ public class OverlayService extends AccessibilityService {
         
         if (cycleCount > 0) {
             Toast.makeText(this, 
-                "📊 ULTIMATIVE STATISTIK:\n" +
+                "📊 STATISTIK:\n" +
                 "🔄 Swipes: " + totalSwipes + "\n" +
                 "📊 Zyklen: " + cycleCount + "\n" +
-                "⚡ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min\n" +
-                "🔮 Prognosen: " + (usePrediction ? "Aktiv" : "Inaktiv"), 
+                "⚡ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min", 
                 Toast.LENGTH_LONG).show();
         }
     }
@@ -1025,7 +1162,7 @@ public class OverlayService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        savePositions();  // ← SPEICHERN BEIM SCHLIESSEN
+        savePositions();
         hideVisuals();
         if (floatingView != null && windowManager != null) {
             try {
