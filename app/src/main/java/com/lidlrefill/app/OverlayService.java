@@ -3,6 +3,8 @@ package com.lidlrefill.app;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -12,16 +14,22 @@ import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
-import android.view.PixelCopy;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
@@ -35,6 +43,7 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
+import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +60,14 @@ public class OverlayService extends AccessibilityService {
     
     // ============ GOOGLE ML KIT OCR ============
     private TextRecognizer textRecognizer;
+    
+    // ============ SCREENSHOT ============
+    private MediaProjectionManager mediaProjectionManager;
+    private MediaProjection mediaProjection;
+    private VirtualDisplay virtualDisplay;
+    private ImageReader imageReader;
+    private int screenWidth, screenHeight;
+    private int screenDensity;
     
     // ============ SPEICHER-FUNKTION ============
     private SharedPreferences prefs;
@@ -89,7 +106,6 @@ public class OverlayService extends AccessibilityService {
     private View swipeVisual, ocrVisual, refillVisual;
     
     private Handler handler = new Handler(Looper.getMainLooper());
-    private int screenWidth, screenHeight;
     private boolean isRunning = false;
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
@@ -140,11 +156,20 @@ public class OverlayService extends AccessibilityService {
         
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         
-        Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
+        // ============ BILDSCHIRMGRÖSSE ============
+        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        Display display = wm.getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
         screenWidth = size.x;
         screenHeight = size.y;
+        
+        DisplayMetrics metrics = new DisplayMetrics();
+        display.getMetrics(metrics);
+        screenDensity = metrics.densityDpi;
+        
+        // ============ MEDIAPROJECTION MANAGER ============
+        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         
         loadPositions();
         
@@ -171,6 +196,69 @@ public class OverlayService extends AccessibilityService {
         if (ocrPlaced) {
             updateOcrVisualPosition();
         }
+    }
+    
+    // ============ MEDIAPROJECTION STARTEN ============
+    private void startMediaProjection() {
+        if (mediaProjection != null) {
+            return;
+        }
+        
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        
+        // MediaProjection wird in MainActivity gestartet
+        // Hier nur die Initialisierung
+    }
+    
+    public void setMediaProjection(MediaProjection projection) {
+        this.mediaProjection = projection;
+        setupVirtualDisplay();
+    }
+    
+    private void setupVirtualDisplay() {
+        if (mediaProjection == null) {
+            return;
+        }
+        
+        imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
+        
+        virtualDisplay = mediaProjection.createVirtualDisplay(
+            "ScreenCapture",
+            screenWidth, screenHeight, screenDensity,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            imageReader.getSurface(),
+            null, null
+        );
+    }
+    
+    // ============ SCREENSHOT MACHT ============
+    private Bitmap takeScreenshot() {
+        if (imageReader == null) {
+            return null;
+        }
+        
+        Image image = imageReader.acquireLatestImage();
+        if (image == null) {
+            return null;
+        }
+        
+        Image.Plane[] planes = image.getPlanes();
+        ByteBuffer buffer = planes[0].getBuffer();
+        int pixelStride = planes[0].getPixelStride();
+        int rowStride = planes[0].getRowStride();
+        int rowPadding = rowStride - pixelStride * screenWidth;
+        
+        Bitmap bitmap = Bitmap.createBitmap(
+            screenWidth + rowPadding / pixelStride,
+            screenHeight,
+            Bitmap.Config.ARGB_8888
+        );
+        bitmap.copyPixelsFromBuffer(buffer);
+        image.close();
+        
+        return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
     }
     
     // ============ POSITIONEN SPEICHERN & LADEN ============
@@ -810,9 +898,9 @@ public class OverlayService extends AccessibilityService {
         updateLearningStatus();
     }
     
-    // ============ ECHTE GOOGLE ML KIT OCR ============
+    // ============ ECHTE OCR MIT SCREENSHOT ============
     
-    private void performRealOcr(View rootView) {
+    private void performRealOcr() {
         if (!ocrPlaced || !isRunning) {
             if (!ocrPlaced) {
                 updateStatus("⚠️ OCR nicht platziert!");
@@ -820,58 +908,59 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Screenshot des OCR-Bereichs erstellen
-        Bitmap screenshot = Bitmap.createBitmap(
-            ocrRect.width(), 
-            ocrRect.height(), 
-            Bitmap.Config.ARGB_8888
+        // Screenshot machen
+        Bitmap fullScreenshot = takeScreenshot();
+        if (fullScreenshot == null) {
+            updateStatus("⚠️ Screenshot fehlgeschlagen");
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    performSwipeGesture();
+                }
+            }, 5000);
+            return;
+        }
+        
+        // OCR-Bereich ausschneiden
+        Bitmap ocrBitmap = Bitmap.createBitmap(
+            fullScreenshot,
+            ocrRect.left,
+            ocrRect.top,
+            ocrRect.width(),
+            ocrRect.height()
         );
         
-        // Nur den OCR-Bereich erfassen
-        PixelCopy.request(rootView, ocrRect, screenshot, 
-            new PixelCopy.OnPixelCopyFinishedListener() {
-                @Override
-                public void onPixelCopyFinished(int copyResult) {
-                    if (copyResult == PixelCopy.SUCCESS) {
-                        // OCR mit Google ML Kit ausführen
-                        InputImage image = InputImage.fromBitmap(screenshot, 0);
-                        textRecognizer.process(image)
-                            .addOnSuccessListener(visionText -> {
-                                String resultText = visionText.getText();
-                                double dataValue = parseDataFromText(resultText);
-                                
-                                if (dataValue > 0) {
-                                    updateStatus("📊 OCR: " + resultText);
-                                    processOcrResult(dataValue, resultText);
-                                } else {
-                                    updateStatus("⚠️ Kein GB-Wert erkannt: " + resultText);
-                                    handler.postDelayed(() -> {
-                                        if (isRunning) {
-                                            performSwipeGesture();
-                                        }
-                                    }, 30000);
-                                }
-                            })
-                            .addOnFailureListener(e -> {
-                                updateStatus("❌ OCR Fehler: " + e.getMessage());
-                                Log.e("LidlRefill", "OCR Fehler: " + e.getMessage());
-                                handler.postDelayed(() -> {
-                                    if (isRunning) {
-                                        performSwipeGesture();
-                                    }
-                                }, 30000);
-                            });
-                    } else {
-                        updateStatus("⚠️ Screenshot Fehler: " + copyResult);
-                        handler.postDelayed(() -> {
-                            if (isRunning) {
-                                performSwipeGesture();
-                            }
-                        }, 30000);
-                    }
+        fullScreenshot.recycle();
+        
+        // OCR mit Google ML Kit ausführen
+        InputImage image = InputImage.fromBitmap(ocrBitmap, 0);
+        textRecognizer.process(image)
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                double dataValue = parseDataFromText(resultText);
+                
+                if (dataValue > 0) {
+                    updateStatus("📊 OCR: " + resultText);
+                    processOcrResult(dataValue, resultText);
+                } else {
+                    updateStatus("⚠️ Kein GB-Wert erkannt: " + resultText);
+                    handler.postDelayed(() -> {
+                        if (isRunning) {
+                            performSwipeGesture();
+                        }
+                    }, 30000);
                 }
-            }, new Handler(Looper.getMainLooper())
-        );
+            })
+            .addOnFailureListener(e -> {
+                updateStatus("❌ OCR Fehler: " + e.getMessage());
+                Log.e("LidlRefill", "OCR Fehler: " + e.getMessage());
+                handler.postDelayed(() -> {
+                    if (isRunning) {
+                        performSwipeGesture();
+                    }
+                }, 30000);
+            });
+        
+        ocrBitmap.recycle();
     }
     
     // ============ DATEN AUS OCR-TEXT EXTRAHIEREN ============
@@ -1064,17 +1153,7 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("✅ Swipe #" + totalSwipes);
                 if (isRunning) {
                     handler.postDelayed(() -> {
-                        View rootView = getApplicationContext().getWindowManager().getCurrentFocus();
-                        if (rootView != null) {
-                            performRealOcr(rootView);
-                        } else {
-                            updateStatus("⚠️ Kein Bildschirm sichtbar");
-                            handler.postDelayed(() -> {
-                                if (isRunning) {
-                                    performSwipeGesture();
-                                }
-                            }, 5000);
-                        }
+                        performRealOcr();
                     }, OCR_DURATION);
                 }
             }
@@ -1138,56 +1217,48 @@ public class OverlayService extends AccessibilityService {
         
         updateStatus("📷 OCR wird ausgelesen...");
         
-        View rootView = getApplicationContext().getWindowManager().getCurrentFocus();
-        if (rootView == null) {
-            updateStatus("⚠️ Kein Bildschirm sichtbar");
-            Toast.makeText(this, "⚠️ Kein Bildschirm sichtbar", Toast.LENGTH_SHORT).show();
+        Bitmap fullScreenshot = takeScreenshot();
+        if (fullScreenshot == null) {
+            updateStatus("⚠️ Screenshot fehlgeschlagen");
+            Toast.makeText(this, "⚠️ Screenshot fehlgeschlagen", Toast.LENGTH_SHORT).show();
             return;
         }
         
-        Bitmap screenshot = Bitmap.createBitmap(
-            ocrRect.width(), 
-            ocrRect.height(), 
-            Bitmap.Config.ARGB_8888
+        Bitmap ocrBitmap = Bitmap.createBitmap(
+            fullScreenshot,
+            ocrRect.left,
+            ocrRect.top,
+            ocrRect.width(),
+            ocrRect.height()
         );
         
-        PixelCopy.request(rootView, ocrRect, screenshot, 
-            new PixelCopy.OnPixelCopyFinishedListener() {
-                @Override
-                public void onPixelCopyFinished(int copyResult) {
-                    if (copyResult == PixelCopy.SUCCESS) {
-                        InputImage image = InputImage.fromBitmap(screenshot, 0);
-                        textRecognizer.process(image)
-                            .addOnSuccessListener(visionText -> {
-                                String resultText = visionText.getText();
-                                double dataValue = parseDataFromText(resultText);
-                                
-                                updateStatus("📊 OCR: " + resultText);
-                                Toast.makeText(OverlayService.this, 
-                                    "📊 OCR Ergebnis:\n" +
-                                    resultText + "\n" +
-                                    "📍 Rechteck: " + ocrRect.left + "," + ocrRect.top + "\n" +
-                                    (dataValue > 0 ? "📈 Wert: " + df.format(dataValue) + " GB" : "⚠️ Kein Wert erkannt"), 
-                                    Toast.LENGTH_LONG).show();
-                                
-                                Log.d("LidlRefill", "📷 Manuelles OCR: " + resultText);
-                                Log.d("LidlRefill", "📷 Wert: " + dataValue);
-                            })
-                            .addOnFailureListener(e -> {
-                                updateStatus("❌ OCR Fehler: " + e.getMessage());
-                                Toast.makeText(OverlayService.this, 
-                                    "❌ OCR Fehler: " + e.getMessage(), 
-                                    Toast.LENGTH_LONG).show();
-                            });
-                    } else {
-                        updateStatus("⚠️ Screenshot Fehler: " + copyResult);
-                        Toast.makeText(OverlayService.this, 
-                            "⚠️ Screenshot Fehler: " + copyResult, 
-                            Toast.LENGTH_LONG).show();
-                    }
-                }
-            }, new Handler(Looper.getMainLooper())
-        );
+        fullScreenshot.recycle();
+        
+        InputImage image = InputImage.fromBitmap(ocrBitmap, 0);
+        textRecognizer.process(image)
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                double dataValue = parseDataFromText(resultText);
+                
+                updateStatus("📊 OCR: " + resultText);
+                Toast.makeText(OverlayService.this, 
+                    "📊 OCR Ergebnis:\n" +
+                    resultText + "\n" +
+                    "📍 Rechteck: " + ocrRect.left + "," + ocrRect.top + "\n" +
+                    (dataValue > 0 ? "📈 Wert: " + df.format(dataValue) + " GB" : "⚠️ Kein Wert erkannt"), 
+                    Toast.LENGTH_LONG).show();
+                
+                Log.d("LidlRefill", "📷 Manuelles OCR: " + resultText);
+                Log.d("LidlRefill", "📷 Wert: " + dataValue);
+            })
+            .addOnFailureListener(e -> {
+                updateStatus("❌ OCR Fehler: " + e.getMessage());
+                Toast.makeText(OverlayService.this, 
+                    "❌ OCR Fehler: " + e.getMessage(), 
+                    Toast.LENGTH_LONG).show();
+            });
+        
+        ocrBitmap.recycle();
     }
     
     private void startAutomation() {
@@ -1203,6 +1274,9 @@ public class OverlayService extends AccessibilityService {
             "📍 OCR: " + ocrRect.left + "," + ocrRect.top + "\n" +
             "🔍 Google ML Kit OCR", 
             Toast.LENGTH_LONG).show();
+        
+        // MediaProjection starten
+        startMediaProjection();
         
         lastDataTime = 0;
         lastDataValue = 0;
@@ -1225,6 +1299,20 @@ public class OverlayService extends AccessibilityService {
         updateStatus("● Gestoppt");
         handler.removeCallbacksAndMessages(null);
         
+        // MediaProjection freigeben
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+        if (mediaProjection != null) {
+            mediaProjection.stop();
+            mediaProjection = null;
+        }
+        if (imageReader != null) {
+            imageReader.close();
+            imageReader = null;
+        }
+        
         if (cycleCount > 0) {
             Toast.makeText(this, 
                 "📊 Statistik:\n" +
@@ -1240,6 +1328,20 @@ public class OverlayService extends AccessibilityService {
         super.onDestroy();
         savePositions();
         hideVisuals();
+        
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+        if (mediaProjection != null) {
+            mediaProjection.stop();
+            mediaProjection = null;
+        }
+        if (imageReader != null) {
+            imageReader.close();
+            imageReader = null;
+        }
+        
         if (floatingView != null && windowManager != null) {
             try {
                 windowManager.removeView(floatingView);
