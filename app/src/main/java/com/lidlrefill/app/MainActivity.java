@@ -1,8 +1,10 @@
 package com.lidlrefill.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
@@ -13,11 +15,14 @@ import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
     private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
     private static final int MEDIA_PROJECTION_REQUEST = 1001;
+    private static final int STORAGE_PERMISSION_REQUEST = 1002;
     
     private MediaProjectionManager mediaProjectionManager;
     
@@ -60,8 +65,26 @@ public class MainActivity extends AppCompatActivity {
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         }
         
-        // 3. MediaProjection Permission
-        requestMediaProjection();
+        // 3. Storage Permission (für Screenshots)
+        requestStoragePermission();
+    }
+    
+    private void requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+
+            String[] permissions = {
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.POST_NOTIFICATIONS
+            };
+            ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Android 6-12
+            String[] permissions = {
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            };
+            ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
+        }
     }
     
     private void requestMediaProjection() {
@@ -87,12 +110,26 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         
+        // Storage prüfen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+                != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "❌ Speicher-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "❌ Speicher-Berechtigung fehlt", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        }
+        
         Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
         return true;
     }
     
     private void startOverlayService(MediaProjection projection) {
-        // MediaProjection in OverlayService speichern
         OverlayService.setMediaProjection(projection);
         
         Intent intent = new Intent(this, OverlayService.class);
@@ -117,15 +154,31 @@ public class MainActivity extends AppCompatActivity {
         
         if (requestCode == MEDIA_PROJECTION_REQUEST) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                // MediaProjection erstellen
-                if (mediaProjectionManager != null) {
-                    MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
-                    startOverlayService(projection);
-                }
+                MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
+                startOverlayService(projection);
             } else {
                 Toast.makeText(this, "❌ Screen-Capture Berechtigung benötigt!", Toast.LENGTH_LONG).show();
-                // Nochmal versuchen
                 requestMediaProjection();
+            }
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == STORAGE_PERMISSION_REQUEST) {
+            boolean allGranted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted) {
+                Toast.makeText(this, "✅ Speicher-Berechtigung erteilt!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "❌ Speicher-Berechtigung verweigert!", Toast.LENGTH_SHORT).show();
             }
         }
     }
