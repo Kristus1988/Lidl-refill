@@ -42,7 +42,7 @@ public class OverlayService extends AccessibilityService {
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
-    private Rect ocrRect = new Rect(100, 100, 300, 300);
+    private Rect ocrRect = new Rect(100, 100, 350, 180);  // ← STANDARD: BREITER
     private boolean ocrPlaced = false;
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
@@ -131,12 +131,10 @@ public class OverlayService extends AccessibilityService {
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
-        // Hauptcontainer
         FrameLayout mainContainer = new FrameLayout(this);
         mainContainer.setClickable(true);
         mainContainer.setFocusable(true);
         
-        // Control Panel
         LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
         View controlView = inflater.inflate(R.layout.overlay_layout, null);
         
@@ -153,7 +151,6 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // Schließen-Button (klein)
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
@@ -182,8 +179,6 @@ public class OverlayService extends AccessibilityService {
         
         setupButtons();
         
-        // ============ WICHTIG: Touch-Listener für Overlay-Verschiebung ============
-        // Das ganze Overlay kann verschoben werden
         mainContainer.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -220,7 +215,6 @@ public class OverlayService extends AccessibilityService {
         mainContainer.addView(controlPanel);
         mainContainer.addView(btnClose);
         
-        // Overlay-Parameter
         int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
@@ -373,13 +367,13 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case OCR_PLACE:
-                ocrRect.set(x, y, x + 180, y + 180);
+                ocrRect.set(x, y, x + 250, y + 180);  // ← BREITER: 250x180
                 ocrPlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ OCR platziert");
-                Toast.makeText(this, "✅ OCR-Rechteck platziert!", Toast.LENGTH_SHORT).show();
+                updateStatus("✅ OCR platziert (" + 250 + "x" + 180 + ")");
+                Toast.makeText(this, "✅ OCR-Rechteck platziert! (250x180)", Toast.LENGTH_SHORT).show();
                 break;
                 
             case REFILL_PLACE:
@@ -447,7 +441,7 @@ public class OverlayService extends AccessibilityService {
                 textPaint.setColor(Color.WHITE);
                 textPaint.setTextSize(24);
                 textPaint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText("OCR", getWidth()/2, getHeight()/2 + 8, textPaint);
+                canvas.drawText("📷 OCR", getWidth()/2, getHeight()/2 + 8, textPaint);
             }
         };
         
@@ -485,8 +479,8 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showOcrVisual() {
-        addVisual(ocrVisual, 180, 180);
-        dragOffsetX = 90;
+        addVisual(ocrVisual, 250, 180);  // ← BREITER: 250x180
+        dragOffsetX = 125;
         dragOffsetY = 90;
     }
     
