@@ -2,23 +2,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Overlay & Accessibility -->
+    <!-- ============ OVERLAY & ACCESSIBILITY ============ -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     
-    <!-- Internet für ML Kit (optional, für Updates) -->
+    <!-- ============ SCREENSHOT / MEDIAPROJECTION ============ -->
     <uses-permission android:name="android.permission.INTERNET" />
     
-    <!-- Für Sperrbildschirm -->
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- Für Screenshots (benötigt für OCR) -->
+    <!-- ============ SPEICHERZUGRIFF FÜR SCREENSHOTS ============ -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     
+    <!-- Für Android 13+ -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- ============ SPERRBILDSCHIRM ============ -->
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- ============ BENACHRICHTIGUNGEN ============ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- ============ ALLE APPS ERKENNEN ============ -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" 
         tools:ignore="QueryAllPackagesPermission" />
 
