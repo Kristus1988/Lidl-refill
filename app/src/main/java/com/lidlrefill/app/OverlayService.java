@@ -96,7 +96,7 @@ public class OverlayService extends AccessibilityService {
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
     
-    // OCR-Rechteck: WENIGER BREIT (220px) 
+    // OCR-Rechteck: 220px breit
     private Rect ocrRect = new Rect(100, 100, 320, 280);
     private boolean ocrPlaced = false;
     
@@ -125,12 +125,12 @@ public class OverlayService extends AccessibilityService {
     private long lastDataTime = 0;
     private int cycleCount = 0;
     
-    // ============ PARAMETER ============
+    // ============ OPTIMIERTE PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
     private static final double BUFFER_SAFETY = 0.10;
-    private static final long MIN_WAIT_TIME = 120000;
-    private static final long MAX_WAIT_TIME = 1800000;
-    private static final long INITIAL_WAIT_TIME = 600000;
+    private static final long MIN_WAIT_TIME = 120000;      // 2 Minuten
+    private static final long MAX_WAIT_TIME = 1800000;     // 30 Minuten
+    private static final long INITIAL_WAIT_TIME = 600000;  // 10 Minuten
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
     
@@ -538,7 +538,6 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
                 break;
             case OCR_PLACE:
-                // OCR-Rechteck: WENIGER BREIT (220px)
                 ocrRect.left = x;
                 ocrRect.top = y;
                 ocrRect.right = x + 220;
@@ -657,10 +656,7 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); dragOffsetX = 50; dragOffsetY = 10; }
-    
     private void showOcrVisual() { addVisual(ocrVisual, 220, 180); dragOffsetX = 110; dragOffsetY = 90; }
-    
-    // REFILL-KREIS: GRÖSSER (100px)
     private void showRefillVisual() { addVisual(refillVisual, 100, 100); dragOffsetX = 50; dragOffsetY = 50; }
     
     private void addVisual(View visual, int width, int height) {
@@ -715,6 +711,7 @@ public class OverlayService extends AccessibilityService {
         if (cycleCount > 0) {
             status += " | " + df.format(averageConsumptionRate) + " GB/min";
             status += " | " + df.format(lastDataValue) + " GB";
+            status += " | ⏱ " + (currentWaitTime/1000) + "s";
         }
         status += ocrPlaced ? " | OCR✅" : " | OCR❌";
         status += isScreenshotReady ? " | 📷✅" : " | 📷❌";
@@ -737,7 +734,6 @@ public class OverlayService extends AccessibilityService {
             
             if (width <= 0 || height <= 0) return null;
             
-            // BESSERE OCR-QUALITÄT: 2x Skalierung
             Bitmap cropped = Bitmap.createBitmap(full, left, top, width, height);
             Bitmap scaled = Bitmap.createScaledBitmap(cropped, width * 2, height * 2, true);
             cropped.recycle();
@@ -751,7 +747,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ VERBESSERTES PARSING - 6 MUSTER ============
+    // ============ VERBESSERTES PARSING ============
     private double parseDataFromText(String text) {
         if (text == null || text.isEmpty()) return 0;
         try {
@@ -841,7 +837,79 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ VEREINFACHTE LOGIK ============
+    // ============ OPTIMIERTE WARTEZEIT-BERECHNUNG ============
+    
+    private double calculateStdDev() {
+        if (consumptionHistory.size() < 2) return 0;
+        double mean = calculateAverageConsumption();
+        double sum = 0;
+        for (double val : consumptionHistory) {
+            sum += Math.pow(val - mean, 2);
+        }
+        return Math.sqrt(sum / consumptionHistory.size());
+    }
+    
+    private long calculateWaitTime(double currentData, double consumptionRate) {
+        // 1. PRÜFUNG: Kein Verbrauch
+        if (consumptionRate <= 0.001) {
+            return MIN_WAIT_TIME * 2;
+        }
+        
+        // 2. PRÜFUNG: Extrem niedriger Verbrauch
+        if (consumptionRate < 0.002) {
+            return Math.min(MAX_WAIT_TIME, 900000); // Max 15 Minuten
+        }
+        
+        // 3. BERECHNUNG: Zeit bis Refill
+        double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
+        if (remainingUntilRefill <= 0) {
+            return 0; // Sofort Refill
+        }
+        
+        long calculatedTime = (long)((remainingUntilRefill / consumptionRate) * 60000);
+        
+        // 4. BEGRENZUNG: Min/Max
+        calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
+        
+        // 5. LERNEFFEKT: 50% Historie, 50% neu (statt 70/30)
+        if (!actualWaitTimes.isEmpty()) {
+            double avgWait = actualWaitTimes.stream()
+                .mapToLong(Long::longValue)
+                .average()
+                .orElse(calculatedTime);
+            calculatedTime = (long)((calculatedTime * 0.5) + (avgWait * 0.5));
+        }
+        
+        // 6. VERBRAUCHS-ANPASSUNG
+        if (consumptionRate < 0.005) {
+            // Sehr langsamer Verbrauch: 20% länger warten
+            calculatedTime = Math.min(MAX_WAIT_TIME, (long)(calculatedTime * 1.2));
+        } else if (consumptionRate > 0.08) {
+            // Hoher Verbrauch: 20% kürzer warten
+            calculatedTime = Math.max(MIN_WAIT_TIME, (long)(calculatedTime * 0.8));
+        }
+        
+        // 7. AUSREISSER-ERKENNUNG mit Standardabweichung
+        if (consumptionHistory.size() >= 3) {
+            double mean = calculateAverageConsumption();
+            double stdDev = calculateStdDev();
+            if (stdDev > 0 && Math.abs(consumptionRate - mean) > 2 * stdDev) {
+                // Ausreißer erkannt: Historie ignorieren, mit Durchschnitt neu berechnen
+                calculatedTime = Math.max(MIN_WAIT_TIME, 
+                    Math.min(MAX_WAIT_TIME, (long)((remainingUntilRefill / mean) * 60000)));
+                Log.d(TAG, "⚠️ Ausreißer erkannt: " + df.format(consumptionRate) + 
+                    " GB/min (Ø " + df.format(mean) + " GB/min)");
+            }
+        }
+        
+        // 8. SICHERHEIT: Nicht unter 30 Sekunden
+        calculatedTime = Math.max(30000, calculatedTime);
+        
+        currentWaitTime = calculatedTime;
+        return calculatedTime;
+    }
+    
+    // ============ VERARBEITUNG ============
     
     private void processOcrResult(double currentData, String fullText) {
         long currentTime = System.currentTimeMillis();
@@ -897,7 +965,7 @@ public class OverlayService extends AccessibilityService {
         
         long waitSeconds = waitTime / 1000;
         long waitMinutes = waitSeconds / 60;
-        String timeString = waitMinutes > 0 ? waitMinutes + "m" : waitSeconds + "s";
+        String timeString = waitMinutes > 0 ? waitMinutes + "m " + (waitSeconds % 60) + "s" : waitSeconds + "s";
         updateStatus("⏱ " + timeString + " bis " + df.format(REFILL_THRESHOLD) + " GB");
         Toast.makeText(this, "📊 " + df.format(currentData) + " GB\n⏱ Warte " + timeString, Toast.LENGTH_LONG).show();
         
@@ -906,39 +974,18 @@ public class OverlayService extends AccessibilityService {
         lastDataTime = currentTime;
     }
     
-    // ============ VEREINFACHTE WARTEZEIT ============
-    
-    private long calculateWaitTime(double currentData, double consumptionRate) {
-        if (consumptionRate <= 0.001) return MIN_WAIT_TIME * 2;
-        
-        double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
-        if (remainingUntilRefill <= 0) return 0;
-        
-        long calculatedTime = (long)((remainingUntilRefill / consumptionRate) * 60000);
-        calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
-        
-        // Lerneffekt: 70% Historie, 30% neu
-        if (!actualWaitTimes.isEmpty()) {
-            double avgWait = actualWaitTimes.stream().mapToLong(Long::longValue).average().orElse(calculatedTime);
-            calculatedTime = (long)((calculatedTime * 0.3) + (avgWait * 0.7));
-        }
-        
-        return calculatedTime;
-    }
-    
     private void learnFromCycle(double dataValue, double consumptionRate, long waitTime) {
         consumptionHistory.add(consumptionRate);
         actualWaitTimes.add(waitTime);
         cycleCount++;
-        
-        if (consumptionHistory.size() >= 3) {
-            double variance = 0, mean = calculateAverageConsumption();
-            for (double val : consumptionHistory) variance += Math.pow(val - mean, 2);
-            variance /= consumptionHistory.size();
-        }
         averageConsumptionRate = calculateAverageConsumption();
         totalWaitTime += waitTime;
         updateLearningStatus();
+        
+        // Nur bei jedem 5. Zyklus Log ausgeben (weniger Overhead)
+        if (cycleCount % 5 == 0) {
+            Log.d(TAG, "📊 Zyklus " + cycleCount + ": " + df.format(consumptionRate) + " GB/min");
+        }
     }
     
     private double calculateAverageConsumption() {
@@ -1042,13 +1089,15 @@ public class OverlayService extends AccessibilityService {
         btnStartAuto.setText("▶");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
         updateStatus("🟢 Automatik");
-        Toast.makeText(this, "🚀 Automatik gestartet!", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "🚀 Automatik gestartet!\n📍 OCR: " + ocrRect.left + "," + ocrRect.top, Toast.LENGTH_LONG).show();
         
         lastDataTime = 0;
         lastDataValue = 0;
         currentWaitTime = INITIAL_WAIT_TIME;
         totalSwipes = 0;
         cycleCount = 0;
+        consumptionHistory.clear();
+        actualWaitTimes.clear();
         
         handler.postDelayed(() -> { if (isRunning) performSwipeGesture(); }, 2000);
     }
@@ -1059,8 +1108,15 @@ public class OverlayService extends AccessibilityService {
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#F44336")));
         updateStatus("● Gestoppt");
         handler.removeCallbacksAndMessages(null);
+        
         if (cycleCount > 0) {
-            Toast.makeText(this, "📊 Statistik:\n🔄 Swipes: " + totalSwipes + "\n📊 Zyklen: " + cycleCount, Toast.LENGTH_LONG).show();
+            Toast.makeText(this, 
+                "📊 Statistik:\n" +
+                "🔄 Swipes: " + totalSwipes + "\n" +
+                "📊 Zyklen: " + cycleCount + "\n" +
+                "⚡ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min\n" +
+                "⏱ Ø Wartezeit: " + (totalWaitTime/cycleCount/1000) + "s", 
+                Toast.LENGTH_LONG).show();
         }
     }
     
