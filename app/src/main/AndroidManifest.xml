@@ -10,18 +10,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     
     <!-- ============ SPEICHERZUGRIFF FÜR SCREENSHOTS ============ -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Android 12 und niedriger -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="29" 
+        tools:ignore="ScopedStorage" />
     
-    <!-- Für Android 13+ -->
+    <!-- Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     
     <!-- ============ SPERRBILDSCHIRM ============ -->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
-    <!-- ============ BENACHRICHTIGUNGEN ============ -->
+    <!-- ============ BENACHRICHTIGUNGEN (Android 13+) ============ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- ============ ALLE APPS ERKENNEN ============ -->
