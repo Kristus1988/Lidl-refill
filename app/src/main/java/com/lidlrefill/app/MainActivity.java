@@ -91,14 +91,17 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
     
-    private void startOverlayService() {
+    private void startOverlayService(MediaProjection projection) {
+        // MediaProjection in OverlayService speichern
+        OverlayService.setMediaProjection(projection);
+        
         Intent intent = new Intent(this, OverlayService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
         } else {
             startService(intent);
         }
-        Toast.makeText(this, "🚀 Overlay wird gestartet...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
         finish();
     }
     
@@ -114,21 +117,10 @@ public class MainActivity extends AppCompatActivity {
         
         if (requestCode == MEDIA_PROJECTION_REQUEST) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                // MediaProjection an OverlayService übergeben
+                // MediaProjection erstellen
                 if (mediaProjectionManager != null) {
                     MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
-                    
-                    // OverlayService starten und MediaProjection übergeben
-                    Intent intent = new Intent(this, OverlayService.class);
-                    intent.putExtra("media_projection", projection);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent);
-                    } else {
-                        startService(intent);
-                    }
-                    
-                    Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
-                    finish();
+                    startOverlayService(projection);
                 }
             } else {
                 Toast.makeText(this, "❌ Screen-Capture Berechtigung benötigt!", Toast.LENGTH_LONG).show();
