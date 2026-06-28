@@ -3,12 +3,14 @@ package com.lidlrefill.app;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.SharedPreferences;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.preference.PreferenceManager;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -38,11 +40,27 @@ public class OverlayService extends AccessibilityService {
     private Button btnSwipeNow, btnRefillNow, btnOcrNow, btnStopAuto, btnStartAuto;
     private Button btnClose;
     
+    // ============ SPEICHER-FUNKTION ============
+    private SharedPreferences prefs;
+    private static final String PREF_SWIPE_START_X = "swipe_start_x";
+    private static final String PREF_SWIPE_START_Y = "swipe_start_y";
+    private static final String PREF_SWIPE_END_X = "swipe_end_x";
+    private static final String PREF_SWIPE_END_Y = "swipe_end_y";
+    private static final String PREF_OCR_LEFT = "ocr_left";
+    private static final String PREF_OCR_TOP = "ocr_top";
+    private static final String PREF_OCR_RIGHT = "ocr_right";
+    private static final String PREF_OCR_BOTTOM = "ocr_bottom";
+    private static final String PREF_REFILL_X = "refill_x";
+    private static final String PREF_REFILL_Y = "refill_y";
+    private static final String PREF_SWIPE_PLACED = "swipe_placed";
+    private static final String PREF_OCR_PLACED = "ocr_placed";
+    private static final String PREF_REFILL_PLACED = "refill_placed";
+    
     // Positionen
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
-    private Rect ocrRect = new Rect(100, 100, 350, 180);  // ← STANDARD: BREITER
+    private Rect ocrRect = new Rect(100, 100, 350, 180);
     private boolean ocrPlaced = false;
     private Point refillButton = new Point(500, 500);
     private boolean refillPlaced = false;
@@ -79,17 +97,14 @@ public class OverlayService extends AccessibilityService {
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
     
-    // ============ AKTUELLE WARTEZEIT ============
     private long currentWaitTime = INITIAL_WAIT_TIME;
     
-    // Prognose
     private boolean isFirstMeasurement = true;
     private boolean isSecondMeasurement = true;
     private double predictedRefillTime = 0;
     private double confidenceLevel = 0;
     private boolean usePrediction = false;
     
-    // Statistik
     private int totalSwipes = 0;
     private long totalWaitTime = 0;
     
@@ -104,15 +119,16 @@ public class OverlayService extends AccessibilityService {
     public void onServiceConnected() {
         super.onServiceConnected();
         
+        prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        
         Display display = ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
         screenWidth = size.x;
         screenHeight = size.y;
         
-        swipeStart.set(screenWidth / 2, 100);
-        swipeEnd.set(screenWidth / 2, screenHeight - 100);
-        swipePlaced = true;
+        // ============ GESPEICHERTE POSITIONEN LADEN ============
+        loadPositions();
         
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
@@ -124,8 +140,61 @@ public class OverlayService extends AccessibilityService {
         
         createOverlay();
         createVisualHelpers();
-        updateStatus("✅ ULTIMATIV: Refill bei <= " + REFILL_THRESHOLD + " GB");
+        updateStatus("✅ Positionen gespeichert!");
         updateLearningStatus();
+    }
+    
+    // ============ POSITIONEN SPEICHERN & LADEN ============
+    
+    private void loadPositions() {
+        // Swipe laden
+        swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 100);
+        swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 100);
+        swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
+        
+        // OCR laden
+        ocrRect.left = prefs.getInt(PREF_OCR_LEFT, 100);
+        ocrRect.top = prefs.getInt(PREF_OCR_TOP, 100);
+        ocrRect.right = prefs.getInt(PREF_OCR_RIGHT, 350);
+        ocrRect.bottom = prefs.getInt(PREF_OCR_BOTTOM, 280);
+        ocrPlaced = prefs.getBoolean(PREF_OCR_PLACED, false);
+        
+        // Refill laden
+        refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
+        refillButton.y = prefs.getInt(PREF_REFILL_Y, 500);
+        refillPlaced = prefs.getBoolean(PREF_REFILL_PLACED, false);
+    }
+    
+    private void savePositions() {
+        SharedPreferences.Editor editor = prefs.edit();
+        
+        // Swipe speichern
+        editor.putInt(PREF_SWIPE_START_X, swipeStart.x);
+        editor.putInt(PREF_SWIPE_START_Y, swipeStart.y);
+        editor.putInt(PREF_SWIPE_END_X, swipeEnd.x);
+        editor.putInt(PREF_SWIPE_END_Y, swipeEnd.y);
+        editor.putBoolean(PREF_SWIPE_PLACED, swipePlaced);
+        
+        // OCR speichern
+        editor.putInt(PREF_OCR_LEFT, ocrRect.left);
+        editor.putInt(PREF_OCR_TOP, ocrRect.top);
+        editor.putInt(PREF_OCR_RIGHT, ocrRect.right);
+        editor.putInt(PREF_OCR_BOTTOM, ocrRect.bottom);
+        editor.putBoolean(PREF_OCR_PLACED, ocrPlaced);
+        
+        // Refill speichern
+        editor.putInt(PREF_REFILL_X, refillButton.x);
+        editor.putInt(PREF_REFILL_Y, refillButton.y);
+        editor.putBoolean(PREF_REFILL_PLACED, refillPlaced);
+        
+        editor.apply();
+        
+        Log.d("LidlRefill", "✅ Positionen gespeichert!");
+        Log.d("LidlRefill", "Swipe: (" + swipeStart.x + "," + swipeStart.y + ") → (" + swipeEnd.x + "," + swipeEnd.y + ")");
+        Log.d("LidlRefill", "OCR: " + ocrRect.left + "," + ocrRect.top + " → " + ocrRect.right + "," + ocrRect.bottom);
+        Log.d("LidlRefill", "Refill: (" + refillButton.x + "," + refillButton.y + ")");
     }
     
     private void createOverlay() {
@@ -154,27 +223,28 @@ public class OverlayService extends AccessibilityService {
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(12);
+        btnClose.setTextSize(14);
         btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.RED));
         btnClose.setPadding(0, 0, 0, 0);
         btnClose.setAllCaps(false);
         btnClose.setClickable(true);
         
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(40, 40);
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(44, 44);
         closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeParams.setMargins(0, 0, 2, 0);
+        closeParams.setMargins(0, 4, 4, 0);
         btnClose.setLayoutParams(closeParams);
         
         btnClose.setOnClickListener(v -> {
             stopAutomation();
             hideVisuals();
+            savePositions();
             if (floatingView != null && windowManager != null) {
                 try {
                     windowManager.removeView(floatingView);
                 } catch (Exception e) {}
             }
             stopSelf();
-            Toast.makeText(this, "Overlay geschlossen", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Overlay geschlossen - Positionen gespeichert!", Toast.LENGTH_SHORT).show();
         });
         
         setupButtons();
@@ -351,8 +421,6 @@ public class OverlayService extends AccessibilityService {
         return true;
     }
     
-    // ============ PLATZIERUNG ============
-    
     private void savePosition(int x, int y) {
         switch (currentMode) {
             case SWIPE_PLACE:
@@ -362,18 +430,20 @@ public class OverlayService extends AccessibilityService {
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ Swipe platziert");
-                Toast.makeText(this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
+                savePositions();  // ← SPEICHERN
+                updateStatus("✅ Swipe platziert & gespeichert!");
+                Toast.makeText(this, "✅ Swipe platziert & gespeichert!", Toast.LENGTH_SHORT).show();
                 break;
                 
             case OCR_PLACE:
-                ocrRect.set(x, y, x + 250, y + 180);  // ← BREITER: 250x180
+                ocrRect.set(x, y, x + 250, y + 180);
                 ocrPlaced = true;
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ OCR platziert (" + 250 + "x" + 180 + ")");
-                Toast.makeText(this, "✅ OCR-Rechteck platziert! (250x180)", Toast.LENGTH_SHORT).show();
+                savePositions();  // ← SPEICHERN
+                updateStatus("✅ OCR platziert & gespeichert! (250x180)");
+                Toast.makeText(this, "✅ OCR-Rechteck platziert & gespeichert!", Toast.LENGTH_SHORT).show();
                 break;
                 
             case REFILL_PLACE:
@@ -382,8 +452,9 @@ public class OverlayService extends AccessibilityService {
                 currentMode = Mode.NONE;
                 activeVisual = null;
                 hideVisuals();
-                updateStatus("✅ Refill platziert");
-                Toast.makeText(this, "✅ Refill-Button platziert!", Toast.LENGTH_SHORT).show();
+                savePositions();  // ← SPEICHERN
+                updateStatus("✅ Refill platziert & gespeichert!");
+                Toast.makeText(this, "✅ Refill-Button platziert & gespeichert!", Toast.LENGTH_SHORT).show();
                 break;
         }
     }
@@ -479,7 +550,7 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showOcrVisual() {
-        addVisual(ocrVisual, 250, 180);  // ← BREITER: 250x180
+        addVisual(ocrVisual, 250, 180);
         dragOffsetX = 125;
         dragOffsetY = 90;
     }
@@ -954,6 +1025,7 @@ public class OverlayService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        savePositions();  // ← SPEICHERN BEIM SCHLIESSEN
         hideVisuals();
         if (floatingView != null && windowManager != null) {
             try {
