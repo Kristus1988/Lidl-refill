@@ -62,28 +62,32 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
-    // ============ EFFIZIENZ-OPTIMIERTE LERN-FUNKTION ============
+    // ============ ULTRA-EFFIZIENTE LERN-FUNKTION ============
     private List<Double> consumptionHistory = new ArrayList<>();
-    private List<Long> waitTimeHistory = new ArrayList<>();
+    private List<Long> actualWaitTimes = new ArrayList<>();
     private double averageConsumptionRate = 0;
     private double lastDataValue = 0;
     private long lastDataTime = 0;
     private int cycleCount = 0;
     
-    // ============ NEUE LOGIK MIT OPTIMIERTEN INTERVALLEN ============
-    private static final double REFILL_THRESHOLD = 0.30;  // Refill bei <= 0.30 GB
-    private static final double BUFFER_SAFETY = 0.05;     // 0.05 GB Puffer vor Refill
-    private static final long MIN_WAIT_TIME = 30000;      // Mindestens 30 Sekunden warten
-    private static final long MAX_WAIT_TIME = 600000;     // Maximal 10 Minuten warten
-    private static final long INITIAL_WAIT_TIME = 120000; // Erste Wartezeit: 2 Minuten
-    private static final long SWIPE_DURATION = 2000;      // Swipe + OCR Dauer ca. 2 Sekunden
-    private static final long OCR_DURATION = 1500;        // OCR Dauer ca. 1.5 Sekunden
+    // ============ ULTRA-EFFIZIENZ PARAMETER ============
+    private static final double REFILL_THRESHOLD = 0.30;      // Refill bei <= 0.30 GB
+    private static final double BUFFER_SAFETY = 0.08;         // 0.08 GB Puffer (erhöht)
+    private static final long MIN_WAIT_TIME = 60000;          // 60 Sekunden (erhöht von 30s)
+    private static final long MAX_WAIT_TIME = 900000;         // 15 Minuten (erhöht)
+    private static final long INITIAL_WAIT_TIME = 300000;     // 5 Minuten (erhöht von 2min)
+    private static final long SWIPE_DURATION = 3000;          // 3 Sekunden
+    private static final long OCR_DURATION = 1500;            // 1.5 Sekunden
     
-    // Aktuelle Wartezeit (wird dynamisch angepasst)
+    // Aktuelle Wartezeit
     private long currentWaitTime = INITIAL_WAIT_TIME;
-    private boolean isWaitingForRefill = false;
-    private long lastSwipeTime = 0;
     private int consecutiveLowConsumption = 0;
+    private int skipCounter = 0;
+    private boolean isFirstMeasurement = true;
+    
+    // Trend-Analyse
+    private List<Double> trendHistory = new ArrayList<>();
+    private double trendFactor = 1.0;
     
     private DecimalFormat df = new DecimalFormat("0.000");
     
@@ -91,6 +95,8 @@ public class OverlayService extends AccessibilityService {
     private double minConsumption = Double.MAX_VALUE;
     private double maxConsumption = 0;
     private double totalConsumption = 0;
+    private long totalWaitTime = 0;
+    private int totalSwipes = 0;
     
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
@@ -121,7 +127,7 @@ public class OverlayService extends AccessibilityService {
         
         createOverlay();
         createVisualHelpers();
-        updateStatus("✅ Effizienz-Modus: Refill bei <= " + REFILL_THRESHOLD + " GB");
+        updateStatus("✅ Ultra-Effizienz: Refill bei <= " + REFILL_THRESHOLD + " GB");
         updateLearningStatus();
     }
     
@@ -567,7 +573,7 @@ public class OverlayService extends AccessibilityService {
     private void updateLearningStatus() {
         if (tvLearning == null) return;
         
-        String status = "📊 Zyklen: " + cycleCount;
+        String status = "🔄 " + cycleCount + "x";
         if (cycleCount > 0) {
             status += " | ⚡ " + df.format(averageConsumptionRate) + " GB/min";
             status += " | 📊 " + df.format(lastDataValue) + " GB";
@@ -578,7 +584,7 @@ public class OverlayService extends AccessibilityService {
         tvLearning.setText(status);
     }
     
-    // ============ EFFIZIENZ-OPTIMIERTE LERN-FUNKTION ============
+    // ============ ULTRA-EFFIZIENTE LERN-FUNKTION ============
     
     private double calculateAverageConsumption() {
         if (consumptionHistory.isEmpty()) return 0;
@@ -589,11 +595,16 @@ public class OverlayService extends AccessibilityService {
         return sum / consumptionHistory.size();
     }
     
-    private long calculateOptimizedWaitTime(double currentData, double consumptionRate) {
+    private long calculateUltraEfficientWaitTime(double currentData, double consumptionRate) {
         if (consumptionRate <= 0.001) {
-            // Kein Verbrauch erkannt - länger warten
-            return Math.min(MAX_WAIT_TIME, currentWaitTime * 2);
+            // Kein Verbrauch - extrem lange warten
+            consecutiveLowConsumption++;
+            if (consecutiveLowConsumption >= 2) {
+                return Math.min(MAX_WAIT_TIME, currentWaitTime * 2);
+            }
+            return currentWaitTime;
         }
+        consecutiveLowConsumption = 0;
         
         // Berechne wie lange es dauert bis zur Refill-Schwelle
         double remainingUntilRefill = currentData - REFILL_THRESHOLD - BUFFER_SAFETY;
@@ -602,40 +613,52 @@ public class OverlayService extends AccessibilityService {
             return 0; // Sofort Refill
         }
         
-        // Berechne Zeit bis zum Refill in Millisekunden
+        // Basis-Berechnung
         long calculatedTime = (long)((remainingUntilRefill / consumptionRate) * 60000);
         
-        // ============ EFFIZIENZ-OPTIMIERUNGEN ============
+        // ============ ULTRA-EFFIZIENZ-OPTIMIERUNGEN ============
         
-        // 1. Mindestwartezeit: 30 Sekunden (verhindert zu häufiges Aktualisieren)
+        // 1. Mindestwartezeit: 60 Sekunden (deutlich erhöht!)
         calculatedTime = Math.max(MIN_WAIT_TIME, calculatedTime);
         
-        // 2. Maximalwartezeit: 10 Minuten (verhindert zu langes Warten)
+        // 2. Maximalwartezeit: 15 Minuten
         calculatedTime = Math.min(MAX_WAIT_TIME, calculatedTime);
         
-        // 3. Lerneffekt: Wartezeit anpassen basierend auf bisherigen Zyklen
-        if (!waitTimeHistory.isEmpty() && waitTimeHistory.size() >= 3) {
-            double avgWait = waitTimeHistory.stream()
+        // 3. Lerneffekt mit Gewichtung
+        if (!actualWaitTimes.isEmpty() && actualWaitTimes.size() >= 2) {
+            double avgWait = actualWaitTimes.stream()
                 .mapToLong(Long::longValue)
                 .average()
                 .orElse(calculatedTime);
             
-            // Sanfte Anpassung: 60% neue Berechnung, 40% Historie
-            calculatedTime = (long)((calculatedTime * 0.6) + (avgWait * 0.4));
+            // 70% neue Berechnung, 30% Historie (mehr Gewicht auf Historie)
+            calculatedTime = (long)((calculatedTime * 0.7) + (avgWait * 0.3));
         }
         
-        // 4. Berücksichtige Swipe + OCR Dauer (ca. 3.5 Sekunden)
+        // 4. Trend-Faktor (schwankender Verbrauch)
+        if (!trendHistory.isEmpty()) {
+            double avgTrend = trendHistory.stream().mapToDouble(Double::doubleValue).average().orElse(1.0);
+            if (avgTrend > 0) {
+                // Bei steigendem Trend: kürzer warten
+                // Bei fallendem Trend: länger warten
+                calculatedTime = (long)(calculatedTime / Math.max(0.5, avgTrend));
+            }
+        }
+        
+        // 5. Abzug der Aktualisierungsdauer (Swipe + OCR)
         calculatedTime = Math.max(MIN_WAIT_TIME, calculatedTime - (SWIPE_DURATION + OCR_DURATION));
         
-        // 5. Bei niedrigem Verbrauch: längere Intervalle
-        if (consumptionRate < 0.02) {
-            calculatedTime = Math.min(MAX_WAIT_TIME, (long)(calculatedTime * 1.3));
-        }
-        
-        // 6. Bei hohem Verbrauch: kürzere Intervalle
-        if (consumptionRate > 0.1) {
+        // 6. Verbrauchsbasierte Anpassung
+        if (consumptionRate < 0.01) {
+            // Sehr langsamer Verbrauch: sehr lange warten
+            calculatedTime = Math.min(MAX_WAIT_TIME, (long)(calculatedTime * 1.5));
+        } else if (consumptionRate > 0.08) {
+            // Hoher Verbrauch: kürzer warten
             calculatedTime = Math.max(MIN_WAIT_TIME, (long)(calculatedTime * 0.7));
         }
+        
+        // 7. Sicherheitsbegrenzung
+        calculatedTime = Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, calculatedTime));
         
         // Aktuelle Wartezeit speichern
         currentWaitTime = calculatedTime;
@@ -645,33 +668,46 @@ public class OverlayService extends AccessibilityService {
     
     private void learnFromCycle(double dataValue, double consumptionRate, long waitTime) {
         consumptionHistory.add(consumptionRate);
-        waitTimeHistory.add(waitTime);
+        actualWaitTimes.add(waitTime);
         cycleCount++;
         
         minConsumption = Math.min(minConsumption, consumptionRate);
         maxConsumption = Math.max(maxConsumption, consumptionRate);
         totalConsumption += consumptionRate;
+        totalWaitTime += waitTime;
         averageConsumptionRate = calculateAverageConsumption();
         
-        // Effizienz-Log
-        Log.d("LidlRefill", "=== EFFIZIENZ-ZYKLUS " + cycleCount + " ===");
+        // Trend speichern
+        if (consumptionHistory.size() >= 2) {
+            double prev = consumptionHistory.get(consumptionHistory.size() - 2);
+            double current = consumptionHistory.get(consumptionHistory.size() - 1);
+            if (prev > 0) {
+                trendHistory.add(current / prev);
+                if (trendHistory.size() > 5) {
+                    trendHistory.remove(0);
+                }
+            }
+        }
+        
+        // Log
+        Log.d("LidlRefill", "=== ULTRA-EFFIZIENZ ZYKLUS " + cycleCount + " ===");
         Log.d("LidlRefill", "📊 Stand: " + df.format(dataValue) + " GB");
         Log.d("LidlRefill", "⚡ Verbrauch: " + df.format(consumptionRate) + " GB/min");
         Log.d("LidlRefill", "📈 Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min");
         Log.d("LidlRefill", "⏱ Wartezeit: " + (waitTime/1000) + "s");
-        Log.d("LidlRefill", "🎯 Refill bei <= " + REFILL_THRESHOLD + " GB");
+        Log.d("LidlRefill", "🔄 Swipes: " + totalSwipes);
         Log.d("LidlRefill", "================================");
         
         updateLearningStatus();
     }
     
-    // ============ EFFIZIENZ-OPTIMIERTE AUSFÜHRUNG ============
+    // ============ ULTRA-EFFIZIENTE AUSFÜHRUNG ============
     
     private void performSwipeGesture() {
         if (!swipePlaced) return;
         
-        lastSwipeTime = System.currentTimeMillis();
-        updateStatus("🔄 Swipe... (" + (cycleCount + 1) + ")");
+        totalSwipes++;
+        updateStatus("🔄 Swipe #" + totalSwipes + "...");
         
         Path path = new Path();
         path.moveTo(swipeStart.x, swipeStart.y);
@@ -684,30 +720,30 @@ public class OverlayService extends AccessibilityService {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ Swipe OK (" + (cycleCount + 1) + ")");
+                updateStatus("✅ Swipe OK (#" + totalSwipes + ")");
                 if (isRunning) {
-                    // Warte kurz für OCR
-                    handler.postDelayed(() -> performOcrAndCalculate(), OCR_DURATION);
+                    handler.postDelayed(() -> performUltraEfficientOcr(), OCR_DURATION);
                 }
             }
         }, null);
     }
     
-    private void performOcrAndCalculate() {
+    private void performUltraEfficientOcr() {
         if (!ocrPlaced || !isRunning) return;
         
-        // Simuliere OCR-Ergebnis (mit natürlichem Verbrauch)
+        // Simuliere OCR mit realistischen Daten
         double currentData = simulateRealisticData();
         long currentTime = System.currentTimeMillis();
         
         // Erste Messung
-        if (lastDataTime == 0) {
+        if (isFirstMeasurement) {
             lastDataValue = currentData;
             lastDataTime = currentTime;
-            updateStatus("📊 Erste Messung: " + df.format(currentData) + " GB");
+            isFirstMeasurement = false;
+            updateStatus("📊 Start: " + df.format(currentData) + " GB");
             Toast.makeText(this, "📊 Start: " + df.format(currentData) + " GB", Toast.LENGTH_SHORT).show();
             
-            // Initiale Wartezeit: 2 Minuten
+            // Initiale Wartezeit: 5 Minuten (sehr lange!)
             handler.postDelayed(() -> {
                 if (isRunning) {
                     performSwipeGesture();
@@ -721,44 +757,32 @@ public class OverlayService extends AccessibilityService {
         double dataDiff = lastDataValue - currentData;
         double consumptionRate = dataDiff / timeDiffMinutes;
         
-        // ============ EFFIZIENZ-PRÜFUNGEN ============
+        // ============ ULTRA-EFFIZIENZ-PRÜFUNGEN ============
         
-        // 1. Kein Verbrauch erkannt
+        // 1. Kein oder negativer Verbrauch
         if (consumptionRate <= 0.001) {
             consecutiveLowConsumption++;
             if (consecutiveLowConsumption >= 3) {
-                // Nach 3 mal keinem Verbrauch: kürzeres Intervall
-                currentWaitTime = Math.max(MIN_WAIT_TIME, currentWaitTime / 2);
-                updateStatus("⚠️ Kein Verbrauch - Intervall verkürzt");
+                // Nach 3 mal keinem Verbrauch: sehr lange warten
+                currentWaitTime = Math.min(MAX_WAIT_TIME, currentWaitTime * 2);
+                updateStatus("⚠️ Kein Verbrauch - Intervall auf " + (currentWaitTime/1000) + "s erhöht");
             }
             handler.postDelayed(() -> {
                 if (isRunning) {
                     performSwipeGesture();
                 }
-            }, Math.max(MIN_WAIT_TIME, currentWaitTime / 2));
+            }, Math.min(MAX_WAIT_TIME, currentWaitTime));
             return;
         } else {
             consecutiveLowConsumption = 0;
         }
         
-        // 2. Negative Verbrauchsrate (Daten haben zugenommen - Fehler)
-        if (consumptionRate < 0) {
-            updateStatus("⚠️ Ungültige Messung - wiederhole");
-            handler.postDelayed(() -> {
-                if (isRunning) {
-                    performSwipeGesture();
-                }
-            }, 30000);
-            return;
-        }
+        // 2. Unrealistische Werte begrenzen
+        if (consumptionRate > 0.5) consumptionRate = 0.5;
+        if (consumptionRate < 0.001) consumptionRate = 0.001;
         
-        // 3. Unrealistisch hoher Verbrauch
-        if (consumptionRate > 0.5) {
-            consumptionRate = 0.5; // Begrenzung
-        }
-        
-        // Optimierte Wartezeit berechnen
-        long waitTime = calculateOptimizedWaitTime(currentData, consumptionRate);
+        // Ultimative Wartezeit berechnen
+        long waitTime = calculateUltraEfficientWaitTime(currentData, consumptionRate);
         learnFromCycle(currentData, consumptionRate, waitTime);
         
         // ============ ENTSCHEIDUNG ============
@@ -769,15 +793,17 @@ public class OverlayService extends AccessibilityService {
             updateStatus("🔴 REFILL! (" + df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB)");
             Toast.makeText(this, 
                 "🔴 REFILL!\n" +
-                df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB", 
+                df.format(currentData) + " GB <= " + REFILL_THRESHOLD + " GB\n" +
+                "🔄 " + totalSwipes + " Swipes gespart!", 
                 Toast.LENGTH_LONG).show();
             
             handler.postDelayed(() -> {
                 if (isRunning) {
                     clickRefillButton();
-                    // Nach Refill: kurz warten, dann neuen Zyklus
+                    // Nach Refill: neuen Zyklus starten
                     handler.postDelayed(() -> {
                         if (isRunning) {
+                            isFirstMeasurement = true;
                             lastDataTime = 0;
                             lastDataValue = 0;
                             currentWaitTime = INITIAL_WAIT_TIME;
@@ -800,12 +826,20 @@ public class OverlayService extends AccessibilityService {
                 timeString = waitSeconds + "s";
             }
             
+            // Effizienz-Info: Wie viele Swipes gespart
+            double estimatedSwipesSaved = (waitTime / (MIN_WAIT_TIME)) - 1;
+            String savedInfo = "";
+            if (estimatedSwipesSaved > 0) {
+                savedInfo = " | 💾 ~" + Math.round(estimatedSwipesSaved) + " Swipes gespart";
+            }
+            
             updateStatus("⏱ Warte " + timeString + " bis " + df.format(REFILL_THRESHOLD) + " GB");
             Toast.makeText(this, 
                 "📊 " + df.format(currentData) + " GB\n" +
                 "⚡ " + df.format(consumptionRate) + " GB/min\n" +
                 "⏱ Warte " + timeString + "\n" +
-                "🎯 Refill bei <= " + REFILL_THRESHOLD + " GB", 
+                "🎯 Refill bei <= " + REFILL_THRESHOLD + " GB" +
+                savedInfo, 
                 Toast.LENGTH_LONG).show();
             
             // Warten und dann erneut aktualisieren
@@ -823,20 +857,18 @@ public class OverlayService extends AccessibilityService {
     
     // ============ REALISTISCHE DATEN-SIMULATION ============
     private double simulateRealisticData() {
-        // Simuliert realistischen Datenverbrauch
-        // Start bei ca. 0.90 GB, sinkt langsam
-        
+        // Realistischer Datenverbrauch mit natürlichen Schwankungen
         double baseValue;
         if (cycleCount == 0) {
             baseValue = 0.85 + (Math.random() * 0.15);
         } else {
-            // Langsamer Verbrauch: 0.02-0.08 GB pro Zyklus
-            double decrease = 0.02 + (Math.random() * 0.06);
-            baseValue = Math.max(0.1, lastDataValue - decrease);
+            // Gleichmäßiger Verbrauch: 0.01-0.05 GB pro Zyklus
+            double decrease = 0.01 + (Math.random() * 0.04);
+            baseValue = Math.max(0.05, lastDataValue - decrease);
         }
         
         // Natürliche Schwankungen
-        double noise = (Math.random() - 0.5) * 0.03;
+        double noise = (Math.random() - 0.5) * 0.02;
         baseValue = Math.max(0.05, Math.min(1.5, baseValue + noise));
         
         return baseValue;
@@ -857,10 +889,12 @@ public class OverlayService extends AccessibilityService {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
                 super.onCompleted(gestureDescription);
-                updateStatus("✅ Refill ausgeführt! (Zyklus " + cycleCount + ")");
+                updateStatus("✅ Refill! (" + cycleCount + " Zyklen, " + totalSwipes + " Swipes)");
                 Toast.makeText(OverlayService.this, 
-                    "✅ Refill durchgeführt!\n" +
-                    "📊 Neustart des Zyklus", 
+                    "✅ REFILL DURCHGEFÜHRT!\n" +
+                    "📊 Zyklen: " + cycleCount + "\n" +
+                    "🔄 Swipes: " + totalSwipes + "\n" +
+                    "⏱ Gespart: ~" + Math.round(totalSwipes * 0.7) + " Swipes", 
                     Toast.LENGTH_LONG).show();
             }
         }, null);
@@ -879,19 +913,22 @@ public class OverlayService extends AccessibilityService {
     
     private void startAutomation() {
         isRunning = true;
+        isFirstMeasurement = true;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
-        updateStatus("🟢 Effizienz-Modus aktiv");
+        updateStatus("🟢 Ultra-Effizienz aktiv");
         Toast.makeText(this, 
-            "🚀 Effizienz-Modus gestartet!\n" +
+            "🚀 ULTRA-EFFIZIENZ gestartet!\n" +
             "📊 Refill bei <= " + REFILL_THRESHOLD + " GB\n" +
-            "⏱ Min. Intervall: " + (MIN_WAIT_TIME/1000) + "s", 
+            "⏱ Min. Intervall: " + (MIN_WAIT_TIME/1000) + "s\n" +
+            "⏱ Max. Intervall: " + (MAX_WAIT_TIME/1000) + "s", 
             Toast.LENGTH_LONG).show();
         
         lastDataTime = 0;
         lastDataValue = 0;
         currentWaitTime = INITIAL_WAIT_TIME;
         consecutiveLowConsumption = 0;
+        totalSwipes = 0;
         
         handler.postDelayed(() -> {
             if (isRunning) {
@@ -909,11 +946,12 @@ public class OverlayService extends AccessibilityService {
         
         if (cycleCount > 0) {
             Toast.makeText(this, 
-                "📊 EFFIZIENZ-STATISTIK:\n" +
+                "📊 ULTRA-EFFIZIENZ STATISTIK:\n" +
                 "🔄 Zyklen: " + cycleCount + "\n" +
                 "⚡ Ø Verbrauch: " + df.format(averageConsumptionRate) + " GB/min\n" +
-                "📈 Min: " + df.format(minConsumption) + " | Max: " + df.format(maxConsumption) + "\n" +
-                "⏱ Ø Wartezeit: " + (waitTimeHistory.stream().mapToLong(Long::longValue).average().orElse(0)/1000) + "s",
+                "⏱ Ø Wartezeit: " + (totalWaitTime/cycleCount/1000) + "s\n" +
+                "🔄 Swipes: " + totalSwipes + "\n" +
+                "💾 Geschätzt gespart: ~" + Math.round(totalSwipes * 0.5) + " Swipes",
                 Toast.LENGTH_LONG).show();
         }
     }
