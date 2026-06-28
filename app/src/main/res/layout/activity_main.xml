@@ -11,37 +11,33 @@
         android:padding="20dp"
         android:gravity="center_horizontal">
 
-        <ImageView
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:src="@drawable/ic_launcher"
-            android:layout_marginBottom="20dp" />
-
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Lidl Refill Automator"
-            android:textSize="24sp"
+            android:text="🔄 Lidl Refill"
+            android:textSize="28sp"
             android:textStyle="bold"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="10dp"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Funktioniert über ALLEN Apps!"
-            android:textSize="16sp"
-            android:textColor="#4CAF50"
-            android:layout_marginBottom="20dp" />
+            android:text="Automatisches 1GB Aufladen"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:layout_marginBottom="30dp"/>
 
+        <!-- PERMISSION STATUS -->
         <TextView
+            android:id="@+id/tvPermissionStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Diese App läuft als Overlay über allen Apps - auch über System-Apps und dem Sperrbildschirm!"
-            android:textSize="14sp"
-            android:gravity="center"
-            android:background="#E0F7FA"
-            android:padding="10dp"
-            android:layout_marginBottom="20dp" />
+            android:text="📋 Berechtigungen werden geprüft..."
+            android:textSize="12sp"
+            android:background="#F5F5F5"
+            android:padding="12dp"
+            android:layout_marginBottom="20dp"
+            android:lineSpacingExtra="4dp"/>
 
         <Button
             android:id="@+id/btnRequestPermissions"
@@ -49,7 +45,7 @@
             android:layout_height="wrap_content"
             android:text="🔓 Berechtigungen erteilen"
             android:backgroundTint="#2196F3"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="10dp"/>
 
         <Button
             android:id="@+id/btnCheckPermissions"
@@ -57,7 +53,7 @@
             android:layout_height="wrap_content"
             android:text="✅ Berechtigungen prüfen"
             android:backgroundTint="#FF9800"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="10dp"/>
 
         <Button
             android:id="@+id/btnStartService"
@@ -65,31 +61,32 @@
             android:layout_height="wrap_content"
             android:text="🚀 Overlay starten"
             android:backgroundTint="#4CAF50"
-            android:layout_marginBottom="20dp" />
+            android:layout_marginBottom="20dp"
+            android:enabled="false"/>
 
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#CCCCCC"
-            android:layout_marginBottom="20dp" />
+            android:layout_marginBottom="20dp"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📋 Benötigte Berechtigungen:"
+            android:text="📌 BENÖTIGTE BERECHTIGUNGEN:"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="10dp"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✓ Overlay (Bildschirm-Overlay)\n✓ Accessibility (Touch-Steuerung)\n✓ Benachrichtigungen (für Status)"
-            android:textSize="13sp"
-            android:textColor="#666666"
+            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)"
+            android:textSize="12sp"
+            android:textColor="#555555"
             android:background="#F5F5F5"
-            android:padding="10dp"
-            android:lineSpacingExtra="5dp" />
+            android:padding="12dp"
+            android:lineSpacingExtra="4dp"/>
 
         <TextView
             android:layout_width="match_parent"
@@ -100,7 +97,7 @@
             android:gravity="center"
             android:background="#FFEBEE"
             android:padding="10dp"
-            android:layout_marginTop="20dp" />
+            android:layout_marginTop="20dp"/>
 
     </LinearLayout>
 </ScrollView>
