@@ -598,7 +598,40 @@ public class OverlayService extends AccessibilityService {
                 case MotionEvent.ACTION_UP:
                     // Nur speichern wenn ein Modus aktiv ist
                     if (currentMode != Mode.NONE) {
-                        savePosition(params.x, params.y);
+                        // Direkt die Position je nach Modus speichern
+                        switch (currentMode) {
+                            case SWIPE_PLACE:
+                                swipeStart.set(params.x + 60, params.y + 10);
+                                swipeEnd.set(params.x + 60, params.y + 250);
+                                swipePlaced = true;
+                                currentMode = Mode.NONE;
+                                activeVisual = null;
+                                hideVisuals();
+                                savePositions();
+                                updateStatus("● Swipe gespeichert");
+                                break;
+                            case OCR_PLACE:
+                                ocrRect.left = params.x;
+                                ocrRect.top = params.y;
+                                ocrRect.right = params.x + 220;
+                                ocrRect.bottom = params.y + 180;
+                                ocrPlaced = true;
+                                currentMode = Mode.NONE;
+                                activeVisual = null;
+                                hideVisuals();
+                                savePositions();
+                                updateStatus("● OCR bei (" + params.x + ", " + params.y + ")");
+                                break;
+                            case REFILL_PLACE:
+                                refillButton.set(params.x + 50, params.y + 50);
+                                refillPlaced = true;
+                                currentMode = Mode.NONE;
+                                activeVisual = null;
+                                hideVisuals();
+                                savePositions();
+                                updateStatus("● Refill gespeichert");
+                                break;
+                        }
                     }
                     return true;
             }
