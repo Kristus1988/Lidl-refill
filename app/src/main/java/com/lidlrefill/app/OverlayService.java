@@ -97,7 +97,6 @@ public class OverlayService extends AccessibilityService {
     private static final long MAX_WAIT_TIME = 1800000;
     private static final long INITIAL_WAIT_TIME = 600000;
     
-    // Zeiträume für menschliche Abweichungen
     private static final long[][] WAIT_RANGES = {
         {900000, 1200000},  // Standard: 15-20 Minuten
         {600000, 780000},   // FullHD: 10-13 Minuten
@@ -138,7 +137,6 @@ public class OverlayService extends AccessibilityService {
         
         loadPositions();
         
-        // Gespeicherten Verbrauch laden
         int savedIndex = prefs.getInt("consumption_index", 0);
         currentModeIndex = savedIndex;
         selectedConsumptionRate = CONSUMPTION_OPTIONS[savedIndex];
@@ -185,7 +183,7 @@ public class OverlayService extends AccessibilityService {
         editor.apply();
     }
     
-    // ============ OVERLAY ============
+    // ============ OVERLAY MIT GRÖSSEREM SCHLIEßEN-BUTTON ============
     
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -208,7 +206,7 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // ============ SPINNER - NUR 3 OPTIONEN ============
+        // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
             this, 
             android.R.layout.simple_spinner_dropdown_item,
@@ -238,18 +236,22 @@ public class OverlayService extends AccessibilityService {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         
+        // ============ GRÖSSERER SCHLIEßEN-BUTTON ============
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(10);
+        btnClose.setTextSize(18);                // Größer
         btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.RED));
         btnClose.setPadding(0, 0, 0, 0);
         btnClose.setAllCaps(false);
         btnClose.setClickable(true);
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(28, 28);
+        btnClose.setElevation(10);               // Schatten
+        
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(44, 44);  // Größer
         closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeParams.setMargins(0, 2, 2, 0);
+        closeParams.setMargins(0, 4, 4, 0);
         btnClose.setLayoutParams(closeParams);
+        
         btnClose.setOnClickListener(v -> {
             stopAutomation();
             hideVisuals();
@@ -550,7 +552,6 @@ public class OverlayService extends AccessibilityService {
         }, currentWaitTime);
     }
     
-    // ============ MENSCHLICHE WARTEZEIT ============
     private long calculateHumanWaitTime() {
         long minWait = WAIT_RANGES[currentModeIndex][0];
         long maxWait = WAIT_RANGES[currentModeIndex][1];
