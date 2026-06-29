@@ -124,10 +124,9 @@ public class OverlayService extends AccessibilityService {
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
     
-    // ============ SIMULATIONS-MODUS ============
-    private static final boolean USE_SIMULATION_MODE = true;  // true = Simulation, false = echtes OCR
-    private static final double SIMULATED_CONSUMPTION_RATE = 0.05;  // 0.05 GB/min = 1GB in 20 Minuten
-    private static final double SIMULATED_START_DATA = 0.90;  // Start mit 0.90 GB
+    private static final boolean USE_SIMULATION_MODE = true;
+    private static final double SIMULATED_CONSUMPTION_RATE = 0.05;
+    private static final double SIMULATED_START_DATA = 0.90;
     
     private long currentWaitTime = INITIAL_WAIT_TIME;
     private boolean isFirstMeasurement = true;
@@ -470,7 +469,6 @@ public class OverlayService extends AccessibilityService {
                 return;
             }
             
-            // Screen-Capture nur bei OCR prüfen
             if (ocrPlaced && !isScreenshotReady) {
                 requestScreenCaptureIfNeeded();
                 return;
@@ -564,11 +562,13 @@ public class OverlayService extends AccessibilityService {
     private void showOcrVisual() { addVisual(ocrVisual, 220, 180); dragOffsetX = 110; dragOffsetY = 90; }
     private void showRefillVisual() { addVisual(refillVisual, 100, 100); dragOffsetX = 50; dragOffsetY = 50; }
     
+    // ============ KORRIGIERTE addVisual METHODE ============
     private void addVisual(View visual, int width, int height) {
         if (visual == swipeVisual) { removeVisual(ocrVisual); removeVisual(refillVisual); }
         else if (visual == ocrVisual) { removeVisual(swipeVisual); removeVisual(refillVisual); }
         else if (visual == refillVisual) { removeVisual(swipeVisual); removeVisual(ocrVisual); }
         else { hideVisuals(); }
+        
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(width, height,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
@@ -576,9 +576,11 @@ public class OverlayService extends AccessibilityService {
         params.gravity = Gravity.TOP | Gravity.START;
         params.x = (visual == ocrVisual && ocrPlaced) ? ocrRect.left : screenWidth / 2 - width / 2;
         params.y = (visual == ocrVisual && ocrPlaced) ? ocrRect.top : screenHeight / 2 - height / 2;
+        
         visual.setElevation(1000);
         visual.setLayoutParams(params);
         windowManager.addView(visual, params);
+        
         visual.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -594,7 +596,10 @@ public class OverlayService extends AccessibilityService {
                     updateCoordinates(params.x, params.y);
                     return true;
                 case MotionEvent.ACTION_UP:
-                    savePosition(params.x, params.y);
+                    // Nur speichern wenn ein Modus aktiv ist
+                    if (currentMode != Mode.NONE) {
+                        savePosition(params.x, params.y);
+                    }
                     return true;
             }
             return false;
@@ -757,7 +762,6 @@ public class OverlayService extends AccessibilityService {
     
     private void performRealOcr() {
         if (!ocrPlaced || !isRunning) {
-            // Fallback auf Simulation
             performSimulatedOcr();
             return;
         }
@@ -1044,7 +1048,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void startAutomation() {
-        // Prüfe ob OCR platziert ist, aber Screen-Capture fehlt
         if (ocrPlaced && !isScreenshotReady) {
             Toast.makeText(this, "⚠️ Screen-Capture nicht bereit für OCR!", Toast.LENGTH_LONG).show();
             requestScreenCaptureIfNeeded();
