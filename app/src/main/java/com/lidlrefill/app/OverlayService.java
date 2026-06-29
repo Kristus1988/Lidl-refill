@@ -19,6 +19,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
@@ -56,7 +57,6 @@ public class OverlayService extends AccessibilityService {
     private int screenWidth;
     private int screenHeight;
     
-    // Positionen
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private boolean swipePlaced = false;
@@ -77,11 +77,8 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
-    // ============ NUR 3 VERBRAUCHS-OPTIONEN ============
     private static final double[] CONSUMPTION_OPTIONS = {
-        0.05,   // Standard: 0.05 GB/min
-        0.08,   // FullHD: 0.08 GB/min
-        0.15    // 4K: 0.15 GB/min
+        0.05, 0.08, 0.15
     };
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Standard (17-20 Min)",
@@ -90,7 +87,6 @@ public class OverlayService extends AccessibilityService {
     };
     private double selectedConsumptionRate = 0.05;
     
-    // ============ SIMULATIONS-PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
     private static final double SIMULATED_START_DATA = 0.90;
     private static final long MIN_WAIT_TIME = 120000;
@@ -98,9 +94,9 @@ public class OverlayService extends AccessibilityService {
     private static final long INITIAL_WAIT_TIME = 600000;
     
     private static final long[][] WAIT_RANGES = {
-        {900000, 1200000},  // Standard: 15-20 Minuten
-        {600000, 780000},   // FullHD: 10-13 Minuten
-        {300000, 480000}    // 4K: 5-8 Minuten
+        {900000, 1200000},
+        {600000, 780000},
+        {300000, 480000}
     };
     
     private double currentDataValue = SIMULATED_START_DATA;
@@ -157,8 +153,6 @@ public class OverlayService extends AccessibilityService {
         updateLearningStatus();
     }
     
-    // ============ POSITIONEN ============
-    
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, swipeStart.x);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, swipeStart.y);
@@ -183,8 +177,6 @@ public class OverlayService extends AccessibilityService {
         editor.apply();
     }
     
-    // ============ OVERLAY MIT GRÖSSEREM SCHLIEßEN-BUTTON ============
-    
     private void createOverlay() {
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
@@ -206,12 +198,21 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // ============ SPINNER ============
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+        // ============ SPINNER MIT WEISSEM TEXT ============
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this, 
             android.R.layout.simple_spinner_dropdown_item,
             CONSUMPTION_LABELS
-        );
+        ) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                TextView text = (TextView) view;
+                text.setTextColor(Color.WHITE);
+                text.setTextSize(14);
+                return view;
+            }
+        };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
         
@@ -240,16 +241,16 @@ public class OverlayService extends AccessibilityService {
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(18);                // Größer
+        btnClose.setTextSize(22);
         btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.RED));
         btnClose.setPadding(0, 0, 0, 0);
         btnClose.setAllCaps(false);
         btnClose.setClickable(true);
-        btnClose.setElevation(10);               // Schatten
+        btnClose.setElevation(15);
         
-        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(44, 44);  // Größer
+        FrameLayout.LayoutParams closeParams = new FrameLayout.LayoutParams(52, 52);
         closeParams.gravity = Gravity.TOP | Gravity.END;
-        closeParams.setMargins(0, 4, 4, 0);
+        closeParams.setMargins(0, 6, 6, 0);
         btnClose.setLayoutParams(closeParams);
         
         btnClose.setOnClickListener(v -> {
@@ -314,7 +315,7 @@ public class OverlayService extends AccessibilityService {
         );
         params.gravity = Gravity.BOTTOM | Gravity.END;
         params.x = 20;
-        params.y = 20;
+        params.y = 40;   // 0,5cm höher
         params.alpha = 0.92f;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
@@ -522,8 +523,6 @@ public class OverlayService extends AccessibilityService {
         tvLearning.setText(status);
     }
     
-    // ============ SIMULATIONS-LOGIK ============
-    
     private void performSimulationCycle() {
         if (!isRunning) return;
         
@@ -559,8 +558,6 @@ public class OverlayService extends AccessibilityService {
         waitTime += (long)((random.nextDouble() - 0.5) * 30000);
         return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
     }
-    
-    // ============ AUSFÜHRUNG ============
     
     private void performSwipeGesture() {
         if (!swipePlaced) return;
