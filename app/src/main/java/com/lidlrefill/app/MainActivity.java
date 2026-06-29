@@ -10,8 +10,6 @@ import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
@@ -29,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
     
     private MediaProjectionManager mediaProjectionManager;
     private TextView tvPermissionStatus;
-    private Button btnStartService, btnRestartApp, btnForceStart;
+    private Button btnStartService, btnRestartApp;
     private static MediaProjection sPendingProjection = null;
     
     @Override
@@ -42,7 +40,6 @@ public class MainActivity extends AppCompatActivity {
         tvPermissionStatus = findViewById(R.id.tvPermissionStatus);
         btnStartService = findViewById(R.id.btnStartService);
         btnRestartApp = findViewById(R.id.btnRestartApp);
-        btnForceStart = findViewById(R.id.btnForceStart);
         
         Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
@@ -50,11 +47,12 @@ public class MainActivity extends AppCompatActivity {
         btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
         btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
         
+        // ============ NEU: Overlay starten OHNE Screen-Capture ============
         btnStartService.setOnClickListener(v -> {
-            if (checkAllPermissions()) {
-                requestMediaProjection();
+            if (checkBasicPermissions()) {
+                startOverlayOnly();
             } else {
-                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "❌ Bitte Overlay & Accessibility erteilen", Toast.LENGTH_LONG).show();
             }
         });
         
@@ -69,17 +67,16 @@ public class MainActivity extends AppCompatActivity {
             android.os.Process.killProcess(android.os.Process.myPid());
         });
         
-        btnForceStart.setOnClickListener(v -> {
-            Toast.makeText(this, "⚠️ FORCE START - Screen-Capture wird gestartet...", Toast.LENGTH_LONG).show();
-            requestMediaProjection();
-        });
-        
         updatePermissionStatus();
         
-        // Prüfen ob eine pendente Projection vorhanden ist
+        // Prüfen ob eine pendente Projection vorhanden ist (von Screen-Capture Rückkehr)
         if (sPendingProjection != null) {
-            startOverlayService(sPendingProjection);
+            // Projection an OverlayService übergeben und starten
+            OverlayService.setMediaProjection(sPendingProjection);
             sPendingProjection = null;
+            Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_SHORT).show();
+            // OverlayService ist bereits gestartet, jetzt kann OCR verwendet werden
+            finish();
         }
     }
     
@@ -94,32 +91,43 @@ public class MainActivity extends AppCompatActivity {
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
-        if (!accOk && isHonorOrHuawei()) {
-            status.append("\n🔧 HONOR ACCESSIBILITY FIX:\n");
-            status.append("1. Einstellungen → Barrierefreiheit → Bedienungshilfen\n");
-            status.append("2. Lidl Refill AUS-schalten\n");
-            status.append("3. Wieder EIN-schalten\n");
-            status.append("4. Muster/Passwort bestätigen\n");
-            status.append("5. '🔄 App neu starten' klicken\n");
-        }
+        // Screen-Capture wird erst bei Bedarf aktiviert
+        status.append("⏳ Screen-Capture (wird bei OCR/Start aktiviert)\n");
         
-        boolean storageOk = checkStoragePermission();
-        status.append(storageOk ? "✅" : "❌").append(" Speicher\n");
-        
-        if (isHonorOrHuawei()) {
-            status.append("\n⚠️ HONOR HINWEIS:\n");
-            status.append("Nach Screen-Capture 'Zulassen':\n");
-            status.append("→ 'FORCE START' erneut klicken!\n");
+        if (isXiaomiOrHonor()) {
+            status.append("\n⚠️ XIAOMI/HONOR HINWEIS:\n");
+            status.append("1. 'Overlay starten' klicken\n");
+            status.append("2. Overlay erscheint über allen Apps\n");
+            status.append("3. In der Lidl-App: Swipe, OCR, Refill platzieren\n");
+            status.append("4. Bei 'Start' oder 'OCR jetzt' wird Screen-Capture aktiviert");
         }
         
         tvPermissionStatus.setText(status.toString());
     }
     
-    private boolean isHonorOrHuawei() {
+    private boolean isXiaomiOrHonor() {
         String manufacturer = Build.MANUFACTURER.toLowerCase();
-        return manufacturer.contains("honor") || 
+        return manufacturer.contains("xiaomi") || 
+               manufacturer.contains("redmi") ||
+               manufacturer.contains("poco") ||
+               manufacturer.contains("honor") ||
                manufacturer.contains("huawei") ||
                manufacturer.contains("hihonor");
+    }
+    
+    private boolean checkBasicPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "❌ Overlay-Berechtigung fehlt!", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            Toast.makeText(this, "❌ Accessibility-Berechtigung fehlt!", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        
+        return true;
     }
     
     private boolean checkStoragePermission() {
@@ -154,13 +162,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    private void requestMediaProjection() {
-        if (mediaProjectionManager != null) {
-            Intent intent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(intent, MEDIA_PROJECTION_REQUEST);
-        }
-    }
-    
     private boolean checkAllPermissions() {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
@@ -178,30 +179,49 @@ public class MainActivity extends AppCompatActivity {
         
         if (!allOk) {
             Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
-            btnStartService.setEnabled(false);
         } else {
             Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
-            btnStartService.setEnabled(true);
         }
         
         updatePermissionStatus();
         return allOk;
     }
     
-    private void startOverlayService(MediaProjection projection) {
-        OverlayService.setMediaProjection(projection);
-        
+    // ============ NEU: Overlay starten OHNE Screen-Capture ============
+    private void startOverlayOnly() {
         Intent intent = new Intent(this, OverlayService.class);
+        // Keine MediaProjection - Overlay startet ohne Screen-Capture
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
         } else {
             startService(intent);
         }
         
-        Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
-        
-        // Bei Honor: App minimieren
-        moveTaskToBack(true);
+        Toast.makeText(this, 
+            "✅ Overlay gestartet!\n" +
+            "Öffne Lidl-App und platziere Elemente.\n" +
+            "Bei 'Start' wird Screen-Capture aktiviert.", 
+            Toast.LENGTH_LONG).show();
+        finish();
+    }
+    
+    // ============ Screen-Capture für OCR/Start anfordern ============
+    public static void requestScreenCapture(Context context) {
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).requestMediaProjection();
+        } else {
+            // Falls von OverlayService aufgerufen
+            Intent intent = new Intent(context, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        }
+    }
+    
+    private void requestMediaProjection() {
+        if (mediaProjectionManager != null) {
+            Intent intent = mediaProjectionManager.createScreenCaptureIntent();
+            startActivityForResult(intent, MEDIA_PROJECTION_REQUEST);
+        }
     }
     
     @Override
@@ -219,20 +239,17 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
                 
-                // Bei Honor: Projection speichern für später
-                if (isHonorOrHuawei()) {
-                    sPendingProjection = projection;
-                    Toast.makeText(this, 
-                        "✅ Screen-Capture erteilt!\n" +
-                        "Klicke jetzt 'FORCE START' zum Aktivieren!", 
-                        Toast.LENGTH_LONG).show();
-                } else {
-                    startOverlayService(projection);
-                }
+                // Projection an OverlayService übergeben
+                OverlayService.setMediaProjection(projection);
+                Toast.makeText(this, "✅ Screen-Capture aktiviert! OCR funktioniert jetzt.", Toast.LENGTH_LONG).show();
+                
+                // OverlayService informieren dass Screen-Capture bereit ist
+                // OverlayService.notifyScreenshotReady();
+                finish();
             } else {
                 Toast.makeText(this, 
-                    "❌ Screen-Capture benötigt!\n" +
-                    "Bitte 'Gesamter Bildschirm' auswählen.", 
+                    "❌ Screen-Capture benötigt für OCR!\n" +
+                    "Bitte 'JETZT STARTEN' auswählen.", 
                     Toast.LENGTH_LONG).show();
                 requestMediaProjection();
             }
@@ -243,12 +260,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         updatePermissionStatus();
-        
-        // Prüfen ob eine pendente Projection vorhanden ist
-        if (sPendingProjection != null) {
-            startOverlayService(sPendingProjection);
-            sPendingProjection = null;
-        }
     }
     
     @Override
