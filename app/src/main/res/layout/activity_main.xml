@@ -55,6 +55,16 @@
             android:backgroundTint="#FF9800"
             android:layout_marginBottom="10dp"/>
 
+        <!-- NEUSTART BUTTON - WICHTIG FÜR HONOR! -->
+        <Button
+            android:id="@+id/btnRestartApp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 App neu starten"
+            android:backgroundTint="#9C27B0"
+            android:layout_marginBottom="10dp"
+            android:textColor="#FFFFFF"/>
+
         <Button
             android:id="@+id/btnStartService"
             android:layout_width="match_parent"
@@ -81,7 +91,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n   ⚠️ Honor: Muster/Passwort kann erforderlich sein!\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n   ⚠️ Honor: Scoped Storage wird automatisch genutzt\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)"
+            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n   ⚠️ Honor: Muster/Passwort kann erforderlich sein!\n   🔧 Nach Aktivierung: 'App neu starten' klicken!\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)"
             android:textSize="12sp"
             android:textColor="#555555"
             android:background="#F5F5F5"
