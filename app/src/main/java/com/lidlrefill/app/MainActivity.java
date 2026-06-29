@@ -2,8 +2,6 @@ package com.lidlrefill.app;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.ActivityManager;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -14,7 +12,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Process;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
@@ -33,7 +30,6 @@ public class MainActivity extends AppCompatActivity {
     private MediaProjectionManager mediaProjectionManager;
     private TextView tvPermissionStatus;
     private Button btnStartService, btnRestartApp, btnForceStart;
-    private static boolean isWaitingForProjection = false;
     private static MediaProjection sPendingProjection = null;
     
     @Override
@@ -64,7 +60,13 @@ public class MainActivity extends AppCompatActivity {
         
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
-            restartApp();
+            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+            finish();
+            android.os.Process.killProcess(android.os.Process.myPid());
         });
         
         btnForceStart.setOnClickListener(v -> {
@@ -74,22 +76,11 @@ public class MainActivity extends AppCompatActivity {
         
         updatePermissionStatus();
         
-        // Prüfen ob wir eine pendente Projection haben (von onActivityResult)
+        // Prüfen ob eine pendente Projection vorhanden ist
         if (sPendingProjection != null) {
             startOverlayService(sPendingProjection);
             sPendingProjection = null;
         }
-    }
-    
-    private void restartApp() {
-        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-        }
-        finish();
-        // Für Honor: Prozess beenden
-        Process.killProcess(Process.myPid());
     }
     
     private void updatePermissionStatus() {
@@ -119,7 +110,6 @@ public class MainActivity extends AppCompatActivity {
             status.append("\n⚠️ HONOR HINWEIS:\n");
             status.append("Nach Screen-Capture 'Zulassen':\n");
             status.append("→ 'FORCE START' erneut klicken!\n");
-            status.append("→ Dann erscheint das Overlay.");
         }
         
         tvPermissionStatus.setText(status.toString());
@@ -210,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
         
         Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
         
-        // Bei Honor: App in den Hintergrund statt schließen
+        // Bei Honor: App minimieren
         moveTaskToBack(true);
     }
     
@@ -229,24 +219,19 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
                 
-                // Bei Honor: Projection speichern und App neustarten
+                // Bei Honor: Projection speichern für später
                 if (isHonorOrHuawei()) {
                     sPendingProjection = projection;
                     Toast.makeText(this, 
-                        "🔄 Honor: App wird neu gestartet...\n" +
-                        "Nach Neustart 'FORCE START' klicken!", 
+                        "✅ Screen-Capture erteilt!\n" +
+                        "Klicke jetzt 'FORCE START' zum Aktivieren!", 
                         Toast.LENGTH_LONG).show();
-                    
-                    // App neu starten
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        restartApp();
-                    }, 1000);
                 } else {
                     startOverlayService(projection);
                 }
             } else {
                 Toast.makeText(this, 
-                    "❌ Screen-Capture Berechtigung benötigt!\n" +
+                    "❌ Screen-Capture benötigt!\n" +
                     "Bitte 'Gesamter Bildschirm' auswählen.", 
                     Toast.LENGTH_LONG).show();
                 requestMediaProjection();
@@ -263,8 +248,6 @@ public class MainActivity extends AppCompatActivity {
         if (sPendingProjection != null) {
             startOverlayService(sPendingProjection);
             sPendingProjection = null;
-            // App minimieren
-            moveTaskToBack(true);
         }
     }
     
