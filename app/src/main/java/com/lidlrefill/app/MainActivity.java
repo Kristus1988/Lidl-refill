@@ -28,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     
     private MediaProjectionManager mediaProjectionManager;
     private TextView tvPermissionStatus;
-    private Button btnStartService, btnRestartApp;
+    private Button btnStartService, btnRestartApp, btnForceStart;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         tvPermissionStatus = findViewById(R.id.tvPermissionStatus);
         btnStartService = findViewById(R.id.btnStartService);
         btnRestartApp = findViewById(R.id.btnRestartApp);
+        btnForceStart = findViewById(R.id.btnForceStart);
         
         Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
@@ -67,6 +68,19 @@ public class MainActivity extends AppCompatActivity {
             Process.killProcess(Process.myPid());
         });
         
+        // ============ FORCE START (UMGEHT HONOR PROBLEM) ============
+        btnForceStart.setOnClickListener(v -> {
+            // Überspringe die Accessibility-Prüfung und starte trotzdem
+            Toast.makeText(this, 
+                "⚠️ FORCE START:\n" +
+                "Accessibility wird ignoriert!\n" +
+                "Stelle sicher, dass es in den Einstellungen aktiviert ist.", 
+                Toast.LENGTH_LONG).show();
+            
+            // MediaProjection direkt anfordern
+            requestMediaProjection();
+        });
+        
         updatePermissionStatus();
     }
     
@@ -78,18 +92,19 @@ public class MainActivity extends AppCompatActivity {
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
         status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        // Accessibility - EINFACHE PRÜFUNG (ohne AccessibilityServiceInfo)
+        // Accessibility - NUR NOCH EINFACHE PRÜFUNG
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
         if (!accOk && isHonorOrHuawei()) {
-            status.append("\n🔧 HONOR FIX:\n");
+            status.append("\n🔧 HONOR ACCESSIBILITY FIX:\n");
             status.append("1. Einstellungen → Barrierefreiheit → Bedienungshilfen\n");
             status.append("2. Lidl Refill AUS-schalten\n");
             status.append("3. Wieder EIN-schalten\n");
             status.append("4. Muster/Passwort bestätigen\n");
-            status.append("5. '🔄 App neu starten' klicken!");
+            status.append("5. '🔄 App neu starten' klicken\n");
+            status.append("6. Oder '⚠️ FORCE START' verwenden!");
         }
         
         // Storage
@@ -138,7 +153,7 @@ public class MainActivity extends AppCompatActivity {
                     "3. Wieder EIN-schalten\n" +
                     "4. Muster/Passwort bestätigen\n" +
                     "5. Zurück zur App\n" +
-                    "6. '🔄 App neu starten' klicken!", 
+                    "6. '🔄 App neu starten' oder '⚠️ FORCE START'", 
                     Toast.LENGTH_LONG).show();
             }
         }
@@ -170,12 +185,15 @@ public class MainActivity extends AppCompatActivity {
             allOk = false;
         }
         
-        // Accessibility prüfen - EINFACH!
+        // Accessibility prüfen - EINFACH, aber mit Honor-Hinweis
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
+        boolean accOk = am != null && am.isEnabled();
+        
+        if (!accOk) {
             missing.append("❌ Accessibility (Sonderfunktionen) fehlt\n");
             if (isHonorOrHuawei()) {
-                missing.append("→ HONOR: AUS/EIN schalten und 'App neu starten'!\n");
+                missing.append("→ HONOR: AUS/EIN schalten, App neu starten\n");
+                missing.append("→ Oder '⚠️ FORCE START' verwenden!\n");
             }
             allOk = false;
         }
@@ -214,7 +232,7 @@ public class MainActivity extends AppCompatActivity {
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
             if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
                 Toast.makeText(this, 
-                    "🔄 Bitte 'App neu starten' klicken für Aktivierung!", 
+                    "🔄 Bitte 'App neu starten' oder 'FORCE START' verwenden!", 
                     Toast.LENGTH_LONG).show();
             }
             updatePermissionStatus();
