@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
-import android.view.accessibility.AccessibilityServiceInfo;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -21,14 +20,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import java.util.List;
-
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
     private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
     private static final int MEDIA_PROJECTION_REQUEST = 1001;
     private static final int STORAGE_PERMISSION_REQUEST = 1002;
-    private static final int BATTERY_OPTIMIZATION_REQUEST = 1003;
     
     private MediaProjectionManager mediaProjectionManager;
     private TextView tvPermissionStatus;
@@ -65,11 +61,12 @@ public class MainActivity extends AppCompatActivity {
         
         // Overlay
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
-        status.append(overlayOk ? "✅" : "❌").append(" Overlay\n");
+        status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        // Accessibility - VERBESSERTE ERKENNUNG für Honor
-        boolean accOk = isAccessibilityEnabled();
-        status.append(accOk ? "✅" : "❌").append(" Accessibility\n");
+        // Accessibility - EINFACHE PRÜFUNG
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        boolean accOk = am != null && am.isEnabled();
+        status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
         // Storage
         boolean storageOk = checkStoragePermission();
@@ -88,6 +85,14 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
+        // Xiaomi spezifisch
+        if (isXiaomiOrRedmi()) {
+            status.append("\n⚠️ XIAOMI/REDMI erkannt:\n");
+            status.append("→ Overlay = 'Fenster einblenden'\n");
+            status.append("→ Accessibility = 'Sonderfunktionen'\n");
+            status.append("→ Batterie-Optimierung muss AUS sein!");
+        }
+        
         tvPermissionStatus.setText(status.toString());
     }
     
@@ -98,41 +103,19 @@ public class MainActivity extends AppCompatActivity {
                manufacturer.contains("hihonor");
     }
     
-    // ============ VERBESSERTE ACCESSIBILITY-ERKENNUNG ============
-    private boolean isAccessibilityEnabled() {
-        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (am == null) return false;
-        
-        // Methode 1: Standard-Prüfung
-        boolean isEnabled = am.isEnabled();
-        
-        // Methode 2: Prüfen ob der Service läuft (für Honor)
-        if (!isEnabled) {
-            try {
-                // Prüfe ob unser Service in der Liste der aktiven Dienste ist
-                List<AccessibilityServiceInfo> services = 
-                    am.getEnabledAccessibilityServiceList(
-                        AccessibilityServiceInfo.FEEDBACK_GENERIC);
-                for (AccessibilityServiceInfo info : services) {
-                    if (info.getResolveInfo() != null && 
-                        info.getResolveInfo().serviceInfo != null) {
-                        String packageName = info.getResolveInfo().serviceInfo.packageName;
-                        if (getPackageName().equals(packageName)) {
-                            return true;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Ignorieren
-            }
-        }
-        
-        return isEnabled;
+    private boolean isXiaomiOrRedmi() {
+        String manufacturer = Build.MANUFACTURER.toLowerCase();
+        return manufacturer.contains("xiaomi") || 
+               manufacturer.contains("redmi") ||
+               manufacturer.contains("poco");
     }
     
     private boolean checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+                == PackageManager.PERMISSION_GRANTED;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
                 == PackageManager.PERMISSION_GRANTED;
         }
         return true;
@@ -148,9 +131,9 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // 2. ACCESSIBILITY PERMISSION - HONOR SPEZIFISCH
+        // 2. ACCESSIBILITY PERMISSION
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (am == null || !isAccessibilityEnabled()) {
+        if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
             
@@ -164,14 +147,31 @@ public class MainActivity extends AppCompatActivity {
                     "5. Zurück zur App\n" +
                     "6. 'Berechtigungen prüfen' klicken", 
                     Toast.LENGTH_LONG).show();
+            } else if (isXiaomiOrRedmi()) {
+                Toast.makeText(this, 
+                    "🔧 XIAOMI HINWEIS:\n" +
+                    "1. Einstellungen → Sonderfunktionen → Bedienungshilfen\n" +
+                    "2. Lidl Refill aktivieren\n" +
+                    "3. Bei MIUI 13+: App-Freigabe erlauben", 
+                    Toast.LENGTH_LONG).show();
             }
         }
         
-        // 3. STORAGE PERMISSION (nur bei Android 13+)
+        // 3. STORAGE PERMISSION
+        requestStoragePermission();
+    }
+    
+    private void requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             String[] permissions = {
                 Manifest.permission.READ_MEDIA_IMAGES,
                 Manifest.permission.POST_NOTIFICATIONS
+            };
+            ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String[] permissions = {
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
             };
             ActivityCompat.requestPermissions(this, permissions, STORAGE_PERMISSION_REQUEST);
         }
@@ -188,31 +188,24 @@ public class MainActivity extends AppCompatActivity {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
         
+        // Overlay prüfen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            missing.append("❌ Overlay-Berechtigung fehlt\n");
+            missing.append("❌ Overlay (Fenster einblenden) fehlt\n");
             allOk = false;
         }
         
-        if (!isAccessibilityEnabled()) {
-            missing.append("❌ Accessibility fehlt (Honor-Problem!)\n");
-            missing.append("→ Einstellungen → Barrierefreiheit → Bedienungshilfen\n");
-            missing.append("→ Lidl Refill AUS/EIN schalten\n");
-            missing.append("→ Danach App NEU STARTEN\n");
+        // Accessibility prüfen
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            missing.append("❌ Accessibility (Sonderfunktionen) fehlt\n");
+            if (isHonorOrHuawei()) {
+                missing.append("→ HONOR: AUS/EIN schalten und App neu starten!\n");
+            }
             allOk = false;
         }
         
         if (!allOk) {
             Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
-            if (isHonorOrHuawei()) {
-                Toast.makeText(this, 
-                    "🔧 HONOR ACCESSIBILITY FIX:\n" +
-                    "1. Gerät NEU STARTEN\n" +
-                    "2. Einstellungen → Barrierefreiheit\n" +
-                    "3. Lidl Refill AUS/EIN schalten\n" +
-                    "4. App schließen und neu öffnen\n" +
-                    "5. 'Berechtigungen prüfen' klicken", 
-                    Toast.LENGTH_LONG).show();
-            }
         } else {
             Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
             btnStartService.setEnabled(true);
@@ -241,8 +234,8 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         
         if (requestCode == OVERLAY_PERMISSION_REQUEST || 
-            requestCode == ACCESSIBILITY_PERMISSION_REQUEST ||
-            requestCode == BATTERY_OPTIMIZATION_REQUEST) {
+            requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
+            // Bei Honor: App neu starten!
             if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
                 Toast.makeText(this, 
                     "🔄 Bitte App NEU STARTEN für Aktivierung!", 
@@ -259,7 +252,8 @@ public class MainActivity extends AppCompatActivity {
                 startOverlayService(projection);
             } else {
                 Toast.makeText(this, 
-                    "❌ Screen-Capture Berechtigung benötigt!", 
+                    "❌ Screen-Capture Berechtigung benötigt!\n" +
+                    "Bitte erneut versuchen.", 
                     Toast.LENGTH_LONG).show();
                 requestMediaProjection();
             }
@@ -269,7 +263,25 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        updatePermissionStatus();
+        
+        if (requestCode == STORAGE_PERMISSION_REQUEST) {
+            boolean allGranted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted) {
+                Toast.makeText(this, "✅ Speicher-Berechtigung erteilt!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, 
+                    "⚠️ Speicher-Berechtigung verweigert!\n" +
+                    "OCR funktioniert möglicherweise nicht.", 
+                    Toast.LENGTH_LONG).show();
+            }
+            updatePermissionStatus();
+        }
     }
     
     @Override
