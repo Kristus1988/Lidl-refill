@@ -67,7 +67,7 @@
             android:id="@+id/btnForceStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="⚠️ FORCE START"
+            android:text="⚠️ FORCE START (Honor)"
             android:backgroundTint="#E65100"
             android:layout_marginBottom="10dp"
             android:textColor="#FFFFFF"/>
@@ -98,7 +98,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n   ⚠️ Honor: Muster/Passwort kann erforderlich sein!\n   🔧 Nach Aktivierung: 'App neu starten'\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)\n   ⚠️ Honor: Nach Zulassen App neu starten!"
+            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n   ⚠️ Honor: Muster/Passwort kann erforderlich sein!\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)\n   ⚠️ Honor: Nach Zulassen → FORCE START erneut!"
             android:textSize="12sp"
             android:textColor="#555555"
             android:background="#F5F5F5"
