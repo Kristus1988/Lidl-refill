@@ -54,6 +54,16 @@
             android:backgroundTint="#FF9800"
             android:layout_marginBottom="10dp"/>
 
+        <!-- NEU: ACCESSIBILITY REFRESH BUTTON -->
+        <Button
+            android:id="@+id/btnRefreshAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔄 Accessibility refresh (Honor)"
+            android:backgroundTint="#E91E63"
+            android:layout_marginBottom="10dp"
+            android:textColor="#FFFFFF"/>
+
         <Button
             android:id="@+id/btnRestartApp"
             android:layout_width="match_parent"
@@ -67,7 +77,7 @@
             android:id="@+id/btnForceStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="⚠️ FORCE START (Honor)"
+            android:text="⚠️ FORCE START"
             android:backgroundTint="#E65100"
             android:layout_marginBottom="10dp"
             android:textColor="#FFFFFF"/>
@@ -90,25 +100,26 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📌 BENÖTIGTE BERECHTIGUNGEN:"
+            android:text="📌 FÜR HONOR:"
             android:textSize="14sp"
             android:textStyle="bold"
+            android:textColor="#E65100"
             android:layout_marginBottom="10dp"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="1️⃣ Overlay (Bildschirm-Overlay)\n   → Zum Anzeigen der Steuerung über allen Apps\n\n2️⃣ Accessibility (Touch-Steuerung)\n   → Für Gesten und Bildschirmsteuerung\n   ⚠️ Honor: Muster/Passwort kann erforderlich sein!\n\n3️⃣ Speicher (für Screenshots)\n   → Zum Auslesen des Datenverbrauchs\n\n4️⃣ Screen-Capture (Bildschirmaufnahme)\n   → Für die Texterkennung (OCR)\n   ⚠️ Honor: Nach Zulassen → FORCE START erneut!"
-            android:textSize="12sp"
+            android:text="1️⃣ Accessibility in Einstellungen aktivieren\n2️⃣ '🔄 Accessibility refresh' klicken\n3️⃣ '✅ Berechtigungen prüfen' klicken\n4️⃣ 'FORCE START' klicken\n5️⃣ Screen-Capture erlauben\n6️⃣ App NEU ÖFFNEN\n7️⃣ 'FORCE START' klicken\n8️⃣ ✅ Overlay erscheint!"
+            android:textSize="13sp"
             android:textColor="#555555"
-            android:background="#F5F5F5"
+            android:background="#FFF3E0"
             android:padding="12dp"
             android:lineSpacingExtra="4dp"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="\n⚠️ Die App funktioniert über ALLEN Apps!\nSogar über dem Sperrbildschirm."
+            android:text="\n⚠️ Die App funktioniert über ALLEN Apps!"
             android:textSize="12sp"
             android:textColor="#D32F2F"
             android:gravity="center"
