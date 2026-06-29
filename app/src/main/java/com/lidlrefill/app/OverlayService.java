@@ -124,6 +124,11 @@ public class OverlayService extends AccessibilityService {
     private static final long SWIPE_DURATION = 3000;
     private static final long OCR_DURATION = 1500;
     
+    // ============ SIMULATIONS-MODUS ============
+    private static final boolean USE_SIMULATION_MODE = true;  // true = Simulation, false = echtes OCR
+    private static final double SIMULATED_CONSUMPTION_RATE = 0.05;  // 0.05 GB/min = 1GB in 20 Minuten
+    private static final double SIMULATED_START_DATA = 0.90;  // Start mit 0.90 GB
+    
     private long currentWaitTime = INITIAL_WAIT_TIME;
     private boolean isFirstMeasurement = true;
     private boolean isSecondMeasurement = true;
@@ -169,13 +174,11 @@ public class OverlayService extends AccessibilityService {
         createOverlay();
         createVisualHelpers();
         
-        // MediaProjection NICHT automatisch starten!
-        // Wird erst bei OCR/Start angefordert
         if (sMediaProjection != null) {
             setupVirtualDisplay(sMediaProjection);
         }
         
-        updateStatus("● Bereit - Screen-Capture erst bei OCR/Start");
+        updateStatus(ocrPlaced ? "● Bereit - OCR platziert" : "● Simulations-Modus (kein OCR)");
         updateLearningStatus();
     }
     
@@ -232,11 +235,9 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREEN-CAPTURE BEI BEDARF ANFORDERN ============
     private void requestScreenCaptureIfNeeded() {
         if (!isScreenshotReady) {
             updateStatus("📷 Screen-Capture wird benötigt...");
-            // MainActivity aufrufen um Screen-Capture anzufordern
             Intent intent = new Intent(this, MainActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
@@ -440,10 +441,9 @@ public class OverlayService extends AccessibilityService {
         });
         btnOcrNow.setOnClickListener(v -> {
             if (!ocrPlaced) {
-                Toast.makeText(this, "❌ OCR nicht platziert!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "❌ OCR nicht platziert! Nutze Simulations-Modus.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            // Screen-Capture prüfen - WICHTIG!
             if (!isScreenshotReady) {
                 requestScreenCaptureIfNeeded();
                 return;
@@ -461,60 +461,23 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (!checkAllPlaced()) {
-                Toast.makeText(this, "⚠️ Alle Elemente platzieren!", Toast.LENGTH_SHORT).show();
+            if (!swipePlaced) {
+                Toast.makeText(this, "⚠️ Swipe platzieren!", Toast.LENGTH_SHORT).show();
                 return;
             }
-            // Screen-Capture prüfen - WICHTIG!
-            if (!isScreenshotReady) {
+            if (!refillPlaced) {
+                Toast.makeText(this, "⚠️ Refill platzieren!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Screen-Capture nur bei OCR prüfen
+            if (ocrPlaced && !isScreenshotReady) {
                 requestScreenCaptureIfNeeded();
                 return;
             }
+            
             startAutomation();
         });
-    }
-    
-    private boolean checkAllPlaced() {
-        if (!swipePlaced) { Toast.makeText(this, "❌ Swipe fehlt", Toast.LENGTH_SHORT).show(); return false; }
-        if (!ocrPlaced) { Toast.makeText(this, "❌ OCR fehlt!", Toast.LENGTH_SHORT).show(); return false; }
-        if (!refillPlaced) { Toast.makeText(this, "❌ Refill fehlt", Toast.LENGTH_SHORT).show(); return false; }
-        return true;
-    }
-    
-    private void savePosition(int x, int y) {
-        switch (currentMode) {
-            case SWIPE_PLACE:
-                swipeStart.set(x + 60, y + 10);
-                swipeEnd.set(x + 60, y + 250);
-                swipePlaced = true;
-                currentMode = Mode.NONE;
-                activeVisual = null;
-                hideVisuals();
-                savePositions();
-                updateStatus("● Swipe gespeichert");
-                break;
-            case OCR_PLACE:
-                ocrRect.left = x;
-                ocrRect.top = y;
-                ocrRect.right = x + 220;
-                ocrRect.bottom = y + 180;
-                ocrPlaced = true;
-                currentMode = Mode.NONE;
-                activeVisual = null;
-                hideVisuals();
-                savePositions();
-                updateStatus("● OCR bei (" + x + ", " + y + ")");
-                break;
-            case REFILL_PLACE:
-                refillButton.set(x + 50, y + 50);
-                refillPlaced = true;
-                currentMode = Mode.NONE;
-                activeVisual = null;
-                hideVisuals();
-                savePositions();
-                updateStatus("● Refill gespeichert");
-                break;
-        }
     }
     
     // ============ VISUELLE HILFEN ============
@@ -648,13 +611,102 @@ public class OverlayService extends AccessibilityService {
         if (tvLearning == null) return;
         String status = "🔄 " + totalSwipes + "x";
         if (cycleCount > 0) {
-            status += " | " + df.format(averageConsumptionRate) + " GB/min";
-            status += " | " + df.format(lastDataValue) + " GB";
+            status += " | ⚡ " + df.format(averageConsumptionRate) + " GB/min";
+            status += " | 📊 " + df.format(lastDataValue) + " GB";
             status += " | ⏱ " + (currentWaitTime/1000) + "s";
         }
-        status += ocrPlaced ? " | OCR✅" : " | OCR❌";
+        status += ocrPlaced ? " | OCR✅" : " | 🔮SIM";
         status += isScreenshotReady ? " | 📷✅" : " | 📷⏳";
         tvLearning.setText(status);
+    }
+    
+    // ============ SIMULATIONS-MODUS ============
+    
+    private double getSimulatedData() {
+        if (cycleCount == 0) {
+            return SIMULATED_START_DATA;
+        }
+        double timeSinceLast = (System.currentTimeMillis() - lastDataTime) / 60000.0;
+        double decrease = SIMULATED_CONSUMPTION_RATE * timeSinceLast;
+        double newValue = lastDataValue - decrease;
+        return Math.max(0.05, newValue);
+    }
+    
+    private void performSimulatedOcr() {
+        if (!isRunning) return;
+        
+        double currentData = getSimulatedData();
+        long currentTime = System.currentTimeMillis();
+        
+        if (isFirstMeasurement) {
+            lastDataValue = currentData;
+            lastDataTime = currentTime;
+            isFirstMeasurement = false;
+            isSecondMeasurement = true;
+            updateStatus("📊 Simulation: " + df.format(currentData) + " GB (Start)");
+            handler.postDelayed(() -> {
+                if (isRunning) performSwipeGesture();
+            }, INITIAL_WAIT_TIME);
+            return;
+        }
+        
+        if (isSecondMeasurement) {
+            double timeDiffMinutes = (currentTime - lastDataTime) / 60000.0;
+            double dataDiff = lastDataValue - currentData;
+            double consumptionRate = dataDiff / timeDiffMinutes;
+            
+            if (consumptionRate > 0.001) {
+                isSecondMeasurement = false;
+                lastDataValue = currentData;
+                lastDataTime = currentTime;
+                long waitTime = calculateWaitTime(currentData, consumptionRate);
+                learnFromCycle(currentData, consumptionRate, waitTime);
+                updateStatus("📊 Simulation: " + df.format(currentData) + " GB | ⚡ " + df.format(consumptionRate) + " GB/min");
+                if (currentData <= REFILL_THRESHOLD) {
+                    triggerRefill(currentData);
+                    return;
+                }
+                handler.postDelayed(() -> {
+                    if (isRunning) performSwipeGesture();
+                }, waitTime);
+            } else {
+                updateStatus("⚠️ Kein Verbrauch (Simulation)");
+                handler.postDelayed(() -> {
+                    if (isRunning) performSwipeGesture();
+                }, Math.min(MAX_WAIT_TIME, MIN_WAIT_TIME * 2));
+            }
+            return;
+        }
+        
+        double timeDiffMinutes = (currentTime - lastDataTime) / 60000.0;
+        double dataDiff = lastDataValue - currentData;
+        double consumptionRate = dataDiff / timeDiffMinutes;
+        
+        if (consumptionRate <= 0.001) {
+            updateStatus("⚠️ Kein Verbrauch (Simulation)");
+            handler.postDelayed(() -> {
+                if (isRunning) performSwipeGesture();
+            }, Math.min(MAX_WAIT_TIME, (long)(currentWaitTime * 1.5)));
+            return;
+        }
+        
+        long waitTime = calculateWaitTime(currentData, consumptionRate);
+        learnFromCycle(currentData, consumptionRate, waitTime);
+        if (currentData <= REFILL_THRESHOLD) {
+            triggerRefill(currentData);
+            return;
+        }
+        
+        long waitSeconds = waitTime / 1000;
+        long waitMinutes = waitSeconds / 60;
+        String timeString = waitMinutes > 0 ? waitMinutes + "m " + (waitSeconds % 60) + "s" : waitSeconds + "s";
+        updateStatus("⏱ Simulation: " + timeString + " bis " + df.format(REFILL_THRESHOLD) + " GB");
+        
+        handler.postDelayed(() -> {
+            if (isRunning) performSwipeGesture();
+        }, waitTime);
+        lastDataValue = currentData;
+        lastDataTime = currentTime;
     }
     
     // ============ OCR ============
@@ -705,11 +757,11 @@ public class OverlayService extends AccessibilityService {
     
     private void performRealOcr() {
         if (!ocrPlaced || !isRunning) {
-            if (!ocrPlaced) updateStatus("⚠️ OCR nicht platziert!");
+            // Fallback auf Simulation
+            performSimulatedOcr();
             return;
         }
         
-        // Screen-Capture prüfen
         if (!isScreenshotReady) {
             requestScreenCaptureIfNeeded();
             return;
@@ -717,8 +769,8 @@ public class OverlayService extends AccessibilityService {
         
         Bitmap ocrBitmap = captureOcrArea();
         if (ocrBitmap == null) {
-            updateStatus("⚠️ Screenshot fehlgeschlagen");
-            retryOcr();
+            updateStatus("⚠️ Screenshot fehlgeschlagen - Simulation");
+            performSimulatedOcr();
             return;
         }
         InputImage image = InputImage.fromBitmap(ocrBitmap, 0);
@@ -732,32 +784,16 @@ public class OverlayService extends AccessibilityService {
                     updateStatus("📊 " + resultText);
                     processOcrResult(dataValue, resultText);
                 } else {
-                    updateStatus("⚠️ Kein GB-Wert");
-                    retryOcr();
+                    updateStatus("⚠️ Kein GB-Wert - Simulation");
+                    performSimulatedOcr();
                 }
             })
             .addOnFailureListener(e -> {
                 ocrBitmap.recycle();
-                updateStatus("❌ OCR Fehler");
+                updateStatus("❌ OCR Fehler - Simulation");
                 Log.e(TAG, "OCR Fehler: " + e.getMessage());
-                retryOcr();
+                performSimulatedOcr();
             });
-    }
-    
-    private void retryOcr() {
-        ocrRetryCount++;
-        if (ocrRetryCount <= MAX_OCR_RETRIES) {
-            updateStatus("🔄 OCR Retry " + ocrRetryCount + "/" + MAX_OCR_RETRIES);
-            handler.postDelayed(() -> {
-                if (isRunning) performRealOcr();
-            }, 3000);
-        } else {
-            ocrRetryCount = 0;
-            updateStatus("⚠️ OCR fehlgeschlagen - nächster Zyklus");
-            handler.postDelayed(() -> {
-                if (isRunning) performSwipeGesture();
-            }, 30000);
-        }
     }
     
     // ============ BERECHNUNGEN ============
@@ -818,7 +854,6 @@ public class OverlayService extends AccessibilityService {
         totalSwipes++;
         updateStatus("🔄 Swipe #" + totalSwipes);
         
-        // Menschliche Abweichungen
         int randomOffsetX = (int)((Math.random() - 0.5) * 40);
         int randomOffsetY = (int)((Math.random() - 0.5) * 40);
         long randomDuration = 400 + (long)(Math.random() * 400);
@@ -1009,18 +1044,20 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void startAutomation() {
-        if (!isScreenshotReady) {
-            Toast.makeText(this, "⚠️ Screen-Capture nicht bereit!", Toast.LENGTH_LONG).show();
+        // Prüfe ob OCR platziert ist, aber Screen-Capture fehlt
+        if (ocrPlaced && !isScreenshotReady) {
+            Toast.makeText(this, "⚠️ Screen-Capture nicht bereit für OCR!", Toast.LENGTH_LONG).show();
             requestScreenCaptureIfNeeded();
             return;
         }
+        
         isRunning = true;
         isFirstMeasurement = true;
         isSecondMeasurement = true;
         btnStartAuto.setText("▶");
         btnStartAuto.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#FF6D00")));
-        updateStatus("🟢 Automatik");
-        Toast.makeText(this, "🚀 Automatik gestartet!", Toast.LENGTH_LONG).show();
+        updateStatus(ocrPlaced ? "🟢 Automatik (OCR)" : "🟢 Automatik (Simulation)");
+        Toast.makeText(this, ocrPlaced ? "🚀 Automatik mit OCR gestartet!" : "🚀 Automatik mit Simulation gestartet!", Toast.LENGTH_LONG).show();
         
         lastDataTime = 0;
         lastDataValue = 0;
