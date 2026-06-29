@@ -3,50 +3,51 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#CC1A1A1A"
-    android:padding="10dp"
+    android:background="#DD1A1A1A"
+    android:padding="12dp"
     android:elevation="999dp"
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Status - größer -->
+    <!-- Status - größer & weiß -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="●"
         android:textColor="#4CAF50"
-        android:textSize="15sp"
+        android:textSize="16sp"
         android:gravity="center"
         android:padding="4dp"
         android:layout_marginBottom="4dp"
         android:layout_gravity="center"/>
 
-    <!-- Verbrauchs-Auswahl -->
+    <!-- Verbrauchs-Auswahl - Weißer Text -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="📊 VERBRAUCH:"
-        android:textColor="#4FC3F7"
-        android:textSize="12sp"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
         android:gravity="center"
         android:layout_marginBottom="2dp"/>
 
+    <!-- Spinner - Weißer Text, größer -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
-        android:layout_height="36dp"
-        android:background="#33000000"
+        android:layout_height="40dp"
+        android:background="#44000000"
         android:textColor="#FFFFFF"
-        android:textSize="13sp"
-        android:layout_marginBottom="4dp"/>
+        android:textSize="14sp"
+        android:layout_marginBottom="6dp"/>
 
-    <!-- Platzierungs-Buttons - GRÖSSER -->
+    <!-- Platzierungs-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
+        android:layout_marginBottom="6dp">
 
         <Button
             android:id="@+id/btnSwipePlace"
@@ -58,7 +59,7 @@
             android:textSize="24sp"
             android:textStyle="bold"
             android:padding="0dp"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="6dp"
             android:gravity="center"/>
 
         <Button
@@ -74,12 +75,12 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Aktions-Buttons - GRÖSSER -->
+    <!-- Aktions-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
+        android:layout_marginBottom="6dp">
 
         <Button
             android:id="@+id/btnSwipeNow"
@@ -90,7 +91,7 @@
             android:backgroundTint="#00E676"
             android:textSize="18sp"
             android:padding="0dp"
-            android:layout_marginEnd="3dp"
+            android:layout_marginEnd="4dp"
             android:gravity="center"/>
 
         <Button
@@ -103,22 +104,11 @@
             android:textSize="20sp"
             android:textStyle="bold"
             android:padding="0dp"
-            android:layout_marginEnd="3dp"
-            android:gravity="center"/>
-
-        <Button
-            android:id="@+id/btnStopAuto"
-            android:layout_width="46dp"
-            android:layout_height="46dp"
-            android:text="⏹"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#D50000"
-            android:textSize="18sp"
-            android:padding="0dp"
+            android:layout_marginEnd="4dp"
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Start-Button - GRÖSSER -->
+    <!-- Start-Button -->
     <Button
         android:id="@+id/btnStartAuto"
         android:layout_width="match_parent"
@@ -129,21 +119,35 @@
         android:textSize="16sp"
         android:textStyle="bold"
         android:padding="0dp"
+        android:gravity="center"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Stop-Button - UNTER Start-Button -->
+    <Button
+        android:id="@+id/btnStopAuto"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:text="⏹ STOP"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#D50000"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:padding="0dp"
         android:gravity="center"/>
 
-    <!-- Koordinaten - GRÖSSER -->
+    <!-- Koordinaten -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text=""
-        android:textColor="#666666"
+        android:textColor="#888888"
         android:textSize="10sp"
         android:gravity="center"
-        android:padding="2dp"
-        android:layout_marginTop="2dp"/>
+        android:padding="3dp"
+        android:layout_marginTop="4dp"/>
 
-    <!-- Lern-Status - GRÖSSER -->
+    <!-- Lern-Status -->
     <TextView
         android:id="@+id/tvLearning"
         android:layout_width="match_parent"
@@ -152,6 +156,6 @@
         android:textColor="#FFEB3B"
         android:textSize="10sp"
         android:gravity="center"
-        android:padding="2dp"/>
+        android:padding="3dp"/>
 
 </LinearLayout>
