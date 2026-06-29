@@ -58,15 +58,12 @@ public class MainActivity extends AppCompatActivity {
         // ============ NEUSTART BUTTON ============
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
-            // App neu starten
             Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
             if (intent != null) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
             }
-            // Aktuelle Activity beenden
             finish();
-            // Prozess beenden (für Honor notwendig)
             Process.killProcess(Process.myPid());
         });
         
@@ -81,8 +78,9 @@ public class MainActivity extends AppCompatActivity {
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
         status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        // Accessibility - MIT HONOR FIX
-        boolean accOk = isAccessibilityEnabled();
+        // Accessibility - EINFACHE PRÜFUNG (ohne AccessibilityServiceInfo)
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
         if (!accOk && isHonorOrHuawei()) {
@@ -108,45 +106,6 @@ public class MainActivity extends AppCompatActivity {
                manufacturer.contains("hihonor");
     }
     
-    // ============ VERBESSERTE ACCESSIBILITY-ERKENNUNG FÜR HONOR ============
-    private boolean isAccessibilityEnabled() {
-        try {
-            AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-            if (am == null) return false;
-            
-            // Standard-Prüfung
-            boolean isEnabled = am.isEnabled();
-            
-            // Für Honor: Zusätzliche Prüfung
-            if (!isEnabled && isHonorOrHuawei()) {
-                // Prüfe ob der Service in der Liste ist
-                try {
-                    java.util.List<android.view.accessibility.AccessibilityServiceInfo> services = 
-                        am.getEnabledAccessibilityServiceList(
-                            android.view.accessibility.AccessibilityServiceInfo.FEEDBACK_GENERIC);
-                    
-                    if (services != null) {
-                        for (android.view.accessibility.AccessibilityServiceInfo info : services) {
-                            if (info.getResolveInfo() != null && 
-                                info.getResolveInfo().serviceInfo != null) {
-                                String packageName = info.getResolveInfo().serviceInfo.packageName;
-                                if (getPackageName().equals(packageName)) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    // Ignorieren
-                }
-            }
-            
-            return isEnabled;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    
     private boolean checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
@@ -167,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 2. ACCESSIBILITY PERMISSION
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        if (am == null || !isAccessibilityEnabled()) {
+        if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
             
@@ -211,8 +170,9 @@ public class MainActivity extends AppCompatActivity {
             allOk = false;
         }
         
-        // Accessibility prüfen
-        if (!isAccessibilityEnabled()) {
+        // Accessibility prüfen - EINFACH!
+        AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
             missing.append("❌ Accessibility (Sonderfunktionen) fehlt\n");
             if (isHonorOrHuawei()) {
                 missing.append("→ HONOR: AUS/EIN schalten und 'App neu starten'!\n");
@@ -252,7 +212,6 @@ public class MainActivity extends AppCompatActivity {
         
         if (requestCode == OVERLAY_PERMISSION_REQUEST || 
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
-            // Bei Honor: App neu starten!
             if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
                 Toast.makeText(this, 
                     "🔄 Bitte 'App neu starten' klicken für Aktivierung!", 
