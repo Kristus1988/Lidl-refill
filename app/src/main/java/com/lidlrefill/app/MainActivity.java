@@ -68,16 +68,12 @@ public class MainActivity extends AppCompatActivity {
             Process.killProcess(Process.myPid());
         });
         
-        // ============ FORCE START (UMGEHT HONOR PROBLEM) ============
+        // ============ FORCE START ============
         btnForceStart.setOnClickListener(v -> {
-            // Überspringe die Accessibility-Prüfung und starte trotzdem
             Toast.makeText(this, 
                 "⚠️ FORCE START:\n" +
-                "Accessibility wird ignoriert!\n" +
-                "Stelle sicher, dass es in den Einstellungen aktiviert ist.", 
+                "Screen-Capture wird gestartet...", 
                 Toast.LENGTH_LONG).show();
-            
-            // MediaProjection direkt anfordern
             requestMediaProjection();
         });
         
@@ -92,7 +88,7 @@ public class MainActivity extends AppCompatActivity {
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
         status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        // Accessibility - NUR NOCH EINFACHE PRÜFUNG
+        // Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
@@ -152,8 +148,7 @@ public class MainActivity extends AppCompatActivity {
                     "2. 'Lidl Refill' AUS-schalten\n" +
                     "3. Wieder EIN-schalten\n" +
                     "4. Muster/Passwort bestätigen\n" +
-                    "5. Zurück zur App\n" +
-                    "6. '🔄 App neu starten' oder '⚠️ FORCE START'", 
+                    "5. 'FORCE START' verwenden!", 
                     Toast.LENGTH_LONG).show();
             }
         }
@@ -179,21 +174,16 @@ public class MainActivity extends AppCompatActivity {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
         
-        // Overlay prüfen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            missing.append("❌ Overlay (Fenster einblenden) fehlt\n");
+            missing.append("❌ Overlay fehlt\n");
             allOk = false;
         }
         
-        // Accessibility prüfen - EINFACH, aber mit Honor-Hinweis
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
-        boolean accOk = am != null && am.isEnabled();
-        
-        if (!accOk) {
-            missing.append("❌ Accessibility (Sonderfunktionen) fehlt\n");
+        if (am == null || !am.isEnabled()) {
+            missing.append("❌ Accessibility fehlt\n");
             if (isHonorOrHuawei()) {
-                missing.append("→ HONOR: AUS/EIN schalten, App neu starten\n");
-                missing.append("→ Oder '⚠️ FORCE START' verwenden!\n");
+                missing.append("→ HONOR: 'FORCE START' verwenden!\n");
             }
             allOk = false;
         }
@@ -221,7 +211,10 @@ public class MainActivity extends AppCompatActivity {
         }
         
         Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
-        finish();
+        
+        // ============ WICHTIG: finish() ENTFERNT! ============
+        // App bleibt offen und Overlay erscheint
+        // finish();  ← KOMMENTIERT / ENTFERNT!
     }
     
     @Override
@@ -232,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
             if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
                 Toast.makeText(this, 
-                    "🔄 Bitte 'App neu starten' oder 'FORCE START' verwenden!", 
+                    "🔄 Bitte 'FORCE START' verwenden!", 
                     Toast.LENGTH_LONG).show();
             }
             updatePermissionStatus();
@@ -244,11 +237,13 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
                 startOverlayService(projection);
+                // App bleibt offen!
             } else {
                 Toast.makeText(this, 
                     "❌ Screen-Capture Berechtigung benötigt!\n" +
-                    "Bitte erneut versuchen.", 
+                    "Bitte erneut versuchen und 'Gesamter Bildschirm' auswählen.", 
                     Toast.LENGTH_LONG).show();
+                // Erneut versuchen
                 requestMediaProjection();
             }
         }
