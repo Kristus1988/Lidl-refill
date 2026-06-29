@@ -14,7 +14,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -22,8 +21,11 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,6 +38,7 @@ public class OverlayService extends AccessibilityService {
     private WindowManager windowManager;
     private FrameLayout floatingView;
     private TextView tvStatus, tvCoordinates, tvLearning;
+    private Spinner spinnerConsumption;
     private Button btnSwipePlace, btnRefillPlace;
     private Button btnSwipeNow, btnRefillNow, btnStopAuto, btnStartAuto;
     private Button btnClose;
@@ -50,7 +53,6 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_SWIPE_PLACED = "swipe_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
     
-    // ============ BILDSCHIRMGRÖSSE ============
     private int screenWidth;
     private int screenHeight;
     
@@ -75,21 +77,39 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
+    // ============ NUR 3 VERBRAUCHS-OPTIONEN ============
+    private static final double[] CONSUMPTION_OPTIONS = {
+        0.05,   // Standard: 0.05 GB/min
+        0.08,   // FullHD: 0.08 GB/min
+        0.15    // 4K: 0.15 GB/min
+    };
+    private static final String[] CONSUMPTION_LABELS = {
+        "📱 Standard (17-20 Min)",
+        "📺 FullHD (10-13 Min)",
+        "🎬 4K (5-8 Min)"
+    };
+    private double selectedConsumptionRate = 0.05;
+    
     // ============ SIMULATIONS-PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
-    private static final double SIMULATED_CONSUMPTION_RATE = 0.05;
     private static final double SIMULATED_START_DATA = 0.90;
     private static final long MIN_WAIT_TIME = 120000;
     private static final long MAX_WAIT_TIME = 1800000;
     private static final long INITIAL_WAIT_TIME = 600000;
-    private static final long MIN_HUMAN_WAIT = 900000;
-    private static final long MAX_HUMAN_WAIT = 1200000;
+    
+    // Zeiträume für menschliche Abweichungen
+    private static final long[][] WAIT_RANGES = {
+        {900000, 1200000},  // Standard: 15-20 Minuten
+        {600000, 780000},   // FullHD: 10-13 Minuten
+        {300000, 480000}    // 4K: 5-8 Minuten
+    };
     
     private double currentDataValue = SIMULATED_START_DATA;
-    private double consumptionRate = SIMULATED_CONSUMPTION_RATE;
+    private double consumptionRate = 0.05;
     private int cycleCount = 0;
     private int totalSwipes = 0;
     private long currentWaitTime = INITIAL_WAIT_TIME;
+    private int currentModeIndex = 0;
     
     private DecimalFormat df = new DecimalFormat("0.000");
     private Random random = new Random();
@@ -118,6 +138,12 @@ public class OverlayService extends AccessibilityService {
         
         loadPositions();
         
+        // Gespeicherten Verbrauch laden
+        int savedIndex = prefs.getInt("consumption_index", 0);
+        currentModeIndex = savedIndex;
+        selectedConsumptionRate = CONSUMPTION_OPTIONS[savedIndex];
+        consumptionRate = selectedConsumptionRate;
+        
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
                     AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
@@ -129,7 +155,7 @@ public class OverlayService extends AccessibilityService {
         createOverlay();
         createVisualHelpers();
         
-        updateStatus("● Bereit - Simulations-Modus");
+        updateStatus("● " + CONSUMPTION_LABELS[savedIndex]);
         updateLearningStatus();
     }
     
@@ -174,12 +200,43 @@ public class OverlayService extends AccessibilityService {
         tvStatus = controlView.findViewById(R.id.tvStatus);
         tvCoordinates = controlView.findViewById(R.id.tvCoordinates);
         tvLearning = controlView.findViewById(R.id.tvLearning);
+        spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
         btnSwipeNow = controlView.findViewById(R.id.btnSwipeNow);
         btnRefillNow = controlView.findViewById(R.id.btnRefillNow);
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
+        
+        // ============ SPINNER - NUR 3 OPTIONEN ============
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+            this, 
+            android.R.layout.simple_spinner_dropdown_item,
+            CONSUMPTION_LABELS
+        );
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerConsumption.setAdapter(adapter);
+        
+        int savedIndex = prefs.getInt("consumption_index", 0);
+        spinnerConsumption.setSelection(savedIndex);
+        
+        spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                currentModeIndex = position;
+                selectedConsumptionRate = CONSUMPTION_OPTIONS[position];
+                consumptionRate = selectedConsumptionRate;
+                prefs.edit().putInt("consumption_index", position).apply();
+                updateStatus("● " + CONSUMPTION_LABELS[position]);
+                updateLearningStatus();
+                Toast.makeText(OverlayService.this, 
+                    "📊 " + CONSUMPTION_LABELS[position], 
+                    Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
         
         btnClose = new Button(this);
         btnClose.setText("✕");
@@ -480,7 +537,8 @@ public class OverlayService extends AccessibilityService {
         currentWaitTime = calculateHumanWaitTime();
         
         updateLearningStatus();
-        updateStatus("⏱ Warte " + (currentWaitTime/1000/60) + " Minuten bis Refill");
+        long minutes = currentWaitTime / 60000;
+        updateStatus("⏱ Warte ca. " + minutes + " Minuten bis Refill");
         
         handler.postDelayed(() -> {
             if (isRunning) {
@@ -492,11 +550,12 @@ public class OverlayService extends AccessibilityService {
         }, currentWaitTime);
     }
     
+    // ============ MENSCHLICHE WARTEZEIT ============
     private long calculateHumanWaitTime() {
-        long minWait = MIN_HUMAN_WAIT;
-        long maxWait = MAX_HUMAN_WAIT;
+        long minWait = WAIT_RANGES[currentModeIndex][0];
+        long maxWait = WAIT_RANGES[currentModeIndex][1];
         long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
-        waitTime += (long)((random.nextDouble() - 0.5) * 60000);
+        waitTime += (long)((random.nextDouble() - 0.5) * 30000);
         return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
     }
     
@@ -600,8 +659,8 @@ public class OverlayService extends AccessibilityService {
         updateStatus("🟢 Automatik läuft");
         Toast.makeText(this, 
             "🚀 Automatik gestartet!\n" +
-            "📊 Simulation: 0.05 GB/min\n" +
-            "⏱ Refill alle 15-20 Minuten", 
+            "📊 " + CONSUMPTION_LABELS[currentModeIndex] + "\n" +
+            "⏱ Refill ca. alle " + ((WAIT_RANGES[currentModeIndex][0] + WAIT_RANGES[currentModeIndex][1]) / 2 / 60000) + " Minuten", 
             Toast.LENGTH_LONG).show();
         
         currentDataValue = SIMULATED_START_DATA;
