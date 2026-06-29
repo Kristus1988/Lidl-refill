@@ -13,12 +13,15 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityServiceInfo;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
@@ -107,8 +110,9 @@ public class MainActivity extends AppCompatActivity {
         if (!isEnabled) {
             try {
                 // Prüfe ob unser Service in der Liste der aktiven Dienste ist
-                java.util.List<AccessibilityServiceInfo> services = am.getEnabledAccessibilityServiceList(
-                    AccessibilityServiceInfo.FEEDBACK_GENERIC);
+                List<AccessibilityServiceInfo> services = 
+                    am.getEnabledAccessibilityServiceList(
+                        AccessibilityServiceInfo.FEEDBACK_GENERIC);
                 for (AccessibilityServiceInfo info : services) {
                     if (info.getResolveInfo() != null && 
                         info.getResolveInfo().serviceInfo != null) {
@@ -131,7 +135,7 @@ public class MainActivity extends AppCompatActivity {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
                 == PackageManager.PERMISSION_GRANTED;
         }
-        return true; // Honor mit Scoped Storage
+        return true;
     }
     
     private void requestAllPermissions() {
@@ -239,7 +243,6 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == OVERLAY_PERMISSION_REQUEST || 
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST ||
             requestCode == BATTERY_OPTIMIZATION_REQUEST) {
-            // Wichtig: Bei Honor muss die App neu gestartet werden!
             if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
                 Toast.makeText(this, 
                     "🔄 Bitte App NEU STARTEN für Aktivierung!", 
