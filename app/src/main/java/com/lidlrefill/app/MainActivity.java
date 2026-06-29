@@ -29,11 +29,27 @@ public class MainActivity extends AppCompatActivity {
     private MediaProjectionManager mediaProjectionManager;
     private TextView tvPermissionStatus;
     private Button btnStartService, btnRestartApp, btnForceStart;
+    private static boolean isRestarting = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        
+        // Prüfen ob wir von Screen-Capture zurückkommen
+        if (isRestarting) {
+            isRestarting = false;
+            // OverlayService starten (falls schon gestartet)
+            Intent serviceIntent = new Intent(this, OverlayService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+            Toast.makeText(this, "🔄 Overlay wird neu gestartet...", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
         
         mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         
@@ -56,7 +72,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // ============ NEUSTART BUTTON ============
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
             Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -68,7 +83,6 @@ public class MainActivity extends AppCompatActivity {
             Process.killProcess(Process.myPid());
         });
         
-        // ============ FORCE START ============
         btnForceStart.setOnClickListener(v -> {
             Toast.makeText(this, 
                 "⚠️ FORCE START:\n" +
@@ -84,11 +98,9 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder status = new StringBuilder();
         status.append("📋 Berechtigungen:\n");
         
-        // Overlay
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
         status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        // Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
@@ -103,9 +115,16 @@ public class MainActivity extends AppCompatActivity {
             status.append("6. Oder '⚠️ FORCE START' verwenden!");
         }
         
-        // Storage
         boolean storageOk = checkStoragePermission();
         status.append(storageOk ? "✅" : "❌").append(" Speicher\n");
+        
+        // Honor-Hinweis für Screen-Capture
+        if (isHonorOrHuawei()) {
+            status.append("\n⚠️ HONOR SCREEN-CAPTURE:\n");
+            status.append("Nach 'Zulassen' wird die App geschlossen.\n");
+            status.append("→ 'FORCE START' erneut klicken!\n");
+            status.append("→ Oder App manuell neu starten.");
+        }
         
         tvPermissionStatus.setText(status.toString());
     }
@@ -126,7 +145,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void requestAllPermissions() {
-        // 1. OVERLAY PERMISSION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -135,7 +153,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // 2. ACCESSIBILITY PERMISSION
         AccessibilityManager am = (AccessibilityManager) getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
@@ -153,7 +170,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         
-        // 3. STORAGE PERMISSION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             String[] permissions = {
                 Manifest.permission.READ_MEDIA_IMAGES,
@@ -212,9 +228,8 @@ public class MainActivity extends AppCompatActivity {
         
         Toast.makeText(this, "🚀 Overlay mit Screen-Capture gestartet!", Toast.LENGTH_LONG).show();
         
-        // ============ WICHTIG: finish() ENTFERNT! ============
-        // App bleibt offen und Overlay erscheint
-        // finish();  ← KOMMENTIERT / ENTFERNT!
+        // App NICHT schließen! Nur minimieren
+        moveTaskToBack(true);
     }
     
     @Override
@@ -223,11 +238,6 @@ public class MainActivity extends AppCompatActivity {
         
         if (requestCode == OVERLAY_PERMISSION_REQUEST || 
             requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
-            if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST && isHonorOrHuawei()) {
-                Toast.makeText(this, 
-                    "🔄 Bitte 'FORCE START' verwenden!", 
-                    Toast.LENGTH_LONG).show();
-            }
             updatePermissionStatus();
             checkAllPermissions();
             return;
@@ -237,27 +247,37 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 MediaProjection projection = mediaProjectionManager.getMediaProjection(resultCode, data);
                 startOverlayService(projection);
-                // App bleibt offen!
             } else {
                 Toast.makeText(this, 
                     "❌ Screen-Capture Berechtigung benötigt!\n" +
                     "Bitte erneut versuchen und 'Gesamter Bildschirm' auswählen.", 
                     Toast.LENGTH_LONG).show();
-                // Erneut versuchen
                 requestMediaProjection();
             }
         }
     }
     
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    protected void onResume() {
+        super.onResume();
+        // Prüfen ob OverlayService läuft
+        if (isRestarting) {
+            isRestarting = false;
+            Intent serviceIntent = new Intent(this, OverlayService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+            Toast.makeText(this, "🔄 Overlay neu gestartet!", Toast.LENGTH_SHORT).show();
+            finish();
+        }
         updatePermissionStatus();
     }
     
     @Override
-    protected void onResume() {
-        super.onResume();
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         updatePermissionStatus();
     }
 }
