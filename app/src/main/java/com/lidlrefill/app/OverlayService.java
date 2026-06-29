@@ -10,7 +10,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.graphics.Rect;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,8 +28,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 public class OverlayService extends AccessibilityService {
@@ -52,6 +49,10 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_REFILL_Y = "refill_y";
     private static final String PREF_SWIPE_PLACED = "swipe_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
+    
+    // ============ BILDSCHIRMGRÖSSE ============
+    private int screenWidth;
+    private int screenHeight;
     
     // Positionen
     private Point swipeStart = new Point(0, 0);
@@ -76,13 +77,13 @@ public class OverlayService extends AccessibilityService {
     
     // ============ SIMULATIONS-PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
-    private static final double SIMULATED_CONSUMPTION_RATE = 0.05; // 0.05 GB/min
+    private static final double SIMULATED_CONSUMPTION_RATE = 0.05;
     private static final double SIMULATED_START_DATA = 0.90;
-    private static final long MIN_WAIT_TIME = 120000;   // 2 Minuten
-    private static final long MAX_WAIT_TIME = 1800000;  // 30 Minuten
-    private static final long INITIAL_WAIT_TIME = 600000; // 10 Minuten
-    private static final long MIN_HUMAN_WAIT = 900000;   // 15 Minuten
-    private static final long MAX_HUMAN_WAIT = 1200000;  // 20 Minuten
+    private static final long MIN_WAIT_TIME = 120000;
+    private static final long MAX_WAIT_TIME = 1800000;
+    private static final long INITIAL_WAIT_TIME = 600000;
+    private static final long MIN_HUMAN_WAIT = 900000;
+    private static final long MAX_HUMAN_WAIT = 1200000;
     
     private double currentDataValue = SIMULATED_START_DATA;
     private double consumptionRate = SIMULATED_CONSUMPTION_RATE;
@@ -108,8 +109,8 @@ public class OverlayService extends AccessibilityService {
         Display display = wm.getDefaultDisplay();
         Point size = new Point();
         display.getSize(size);
-        int screenWidth = size.x;
-        int screenHeight = size.y;
+        screenWidth = size.x;
+        screenHeight = size.y;
         
         swipeStart.set(screenWidth / 2, 100);
         swipeEnd.set(screenWidth / 2, screenHeight - 100);
@@ -467,18 +468,15 @@ public class OverlayService extends AccessibilityService {
     private void performSimulationCycle() {
         if (!isRunning) return;
         
-        // Datenverbrauch simulieren
         double timeSinceLast = currentWaitTime / 60000.0;
         double decrease = consumptionRate * timeSinceLast;
         currentDataValue = Math.max(0.05, currentDataValue - decrease);
         
-        // Wenn unter Refill-Schwelle, Refill auslösen
         if (currentDataValue <= REFILL_THRESHOLD) {
             triggerRefill();
             return;
         }
         
-        // Wartezeit berechnen (menschlich: 15-20 Minuten)
         currentWaitTime = calculateHumanWaitTime();
         
         updateLearningStatus();
@@ -487,7 +485,6 @@ public class OverlayService extends AccessibilityService {
         handler.postDelayed(() -> {
             if (isRunning) {
                 performSwipeGesture();
-                // Nach Swipe: Simulation fortsetzen
                 handler.postDelayed(() -> {
                     performSimulationCycle();
                 }, 2000);
@@ -495,15 +492,11 @@ public class OverlayService extends AccessibilityService {
         }, currentWaitTime);
     }
     
-    // ============ MENSCHLICHE WARTEZEIT (15-20 Minuten) ============
     private long calculateHumanWaitTime() {
-        // Zufällige Wartezeit zwischen 15 und 20 Minuten (menschlich)
         long minWait = MIN_HUMAN_WAIT;
         long maxWait = MAX_HUMAN_WAIT;
         long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
-        
-        // Leichte Abweichungen (wie ein Mensch)
-        waitTime += (long)((random.nextDouble() - 0.5) * 60000); // ±30 Sekunden
+        waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
     }
     
@@ -514,7 +507,6 @@ public class OverlayService extends AccessibilityService {
         totalSwipes++;
         updateStatus("🔄 Swipe #" + totalSwipes);
         
-        // Menschliche Abweichungen beim Swipe
         int randomOffsetX = (int)((Math.random() - 0.5) * 40);
         int randomOffsetY = (int)((Math.random() - 0.5) * 40);
         long randomDuration = 400 + (long)(Math.random() * 400);
@@ -559,7 +551,6 @@ public class OverlayService extends AccessibilityService {
         handler.postDelayed(() -> {
             if (isRunning) {
                 clickRefillButton();
-                // Nach Refill: Reset und weiter
                 handler.postDelayed(() -> {
                     if (isRunning) {
                         currentDataValue = SIMULATED_START_DATA;
@@ -576,7 +567,6 @@ public class OverlayService extends AccessibilityService {
         if (!refillPlaced) return;
         updateStatus("🔄 Refill...");
         
-        // Menschliche Abweichungen beim Klick
         int randomOffsetX = (int)((Math.random() - 0.5) * 30);
         int randomOffsetY = (int)((Math.random() - 0.5) * 30);
         long clickDuration = 50 + (long)(Math.random() * 150);
@@ -618,7 +608,6 @@ public class OverlayService extends AccessibilityService {
         cycleCount = 0;
         totalSwipes = 0;
         
-        // Ersten Zyklus starten
         handler.postDelayed(() -> {
             if (isRunning) {
                 performSwipeGesture();
