@@ -22,7 +22,25 @@
         android:layout_marginBottom="4dp"
         android:layout_gravity="center"/>
 
-    <!-- Platzierungs-Buttons - GRÖSSER (von 48dp auf 56dp) -->
+    <!-- Verbrauchs-Auswahl - NUR 3 OPTIONEN -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📊 VERBRAUCH:"
+        android:textColor="#4FC3F7"
+        android:textSize="10sp"
+        android:gravity="center"
+        android:layout_marginBottom="2dp"/>
+
+    <Spinner
+        android:id="@+id/spinnerConsumption"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:background="#33000000"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Platzierungs-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -55,7 +73,7 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Aktions-Buttons - GRÖSSER (von 34dp auf 40dp) -->
+    <!-- Aktions-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -99,7 +117,7 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Start-Button - GRÖSSER (von 32dp auf 38dp) -->
+    <!-- Start-Button -->
     <Button
         android:id="@+id/btnStartAuto"
         android:layout_width="match_parent"
@@ -112,7 +130,7 @@
         android:padding="0dp"
         android:gravity="center"/>
 
-    <!-- Koordinaten - GRÖSSER -->
+    <!-- Koordinaten -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
@@ -124,7 +142,7 @@
         android:padding="2dp"
         android:layout_marginTop="2dp"/>
 
-    <!-- Lern-Status - GRÖSSER -->
+    <!-- Lern-Status -->
     <TextView
         android:id="@+id/tvLearning"
         android:layout_width="match_parent"
