@@ -751,7 +751,6 @@ public class OverlayService extends AccessibilityService {
         totalSwipes++;
         updateStatus("🔄 Swipe #" + totalSwipes);
         
-        // ============ MENSCHLICHE ABWEICHUNGEN ============
         int randomOffsetX = (int)((Math.random() - 0.5) * 40);
         int randomOffsetY = (int)((Math.random() - 0.5) * 40);
         long randomDuration = 400 + (long)(Math.random() * 400);
@@ -764,10 +763,13 @@ public class OverlayService extends AccessibilityService {
         
         Path path = new Path();
         path.moveTo(startX, startY);
-        path.lineTo(endX, endY);
+        
+        // ============ KORRIGIERT: quadTo() mit 4 Parametern ============
         path.quadTo(
             (startX + endX) / 2 + (int)((Math.random() - 0.5) * 100),
-            (startY + endY) / 2 + (int)((Math.random() - 0.5) * 50)
+            (startY + endY) / 2 + (int)((Math.random() - 0.5) * 50),
+            endX,
+            endY
         );
         
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
@@ -863,7 +865,6 @@ public class OverlayService extends AccessibilityService {
         if (!refillPlaced) return;
         updateStatus("🔄 Refill...");
         
-        // ============ MENSCHLICHE ABWEICHUNGEN ============
         int randomOffsetX = (int)((Math.random() - 0.5) * 30);
         int randomOffsetY = (int)((Math.random() - 0.5) * 30);
         long clickDuration = 50 + (long)(Math.random() * 150);
