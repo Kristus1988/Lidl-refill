@@ -1,6 +1,6 @@
 package com.lidlrefill.app;
 
-import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -11,8 +11,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
@@ -76,8 +74,6 @@ public class MainActivity extends AppCompatActivity {
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
-        // KEINE Speicherberechtigung mehr!
-        // KEIN Screen-Capture mehr!
         status.append("✅ Simulations-Modus (kein OCR/Screen-Capture benötigt)");
         
         tvPermissionStatus.setText(status.toString());
