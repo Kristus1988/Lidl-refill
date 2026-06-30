@@ -19,7 +19,6 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
@@ -77,6 +76,7 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
+    // ============ VERBRAUCHS-OPTIONEN ============
     private static final double[] CONSUMPTION_OPTIONS = {
         0.05, 0.08, 0.15
     };
@@ -87,6 +87,7 @@ public class OverlayService extends AccessibilityService {
     };
     private double selectedConsumptionRate = 0.05;
     
+    // ============ SIMULATIONS-PARAMETER ============
     private static final double REFILL_THRESHOLD = 0.30;
     private static final double SIMULATED_START_DATA = 0.90;
     private static final long MIN_WAIT_TIME = 120000;
@@ -105,6 +106,8 @@ public class OverlayService extends AccessibilityService {
     private int totalSwipes = 0;
     private long currentWaitTime = INITIAL_WAIT_TIME;
     private int currentModeIndex = 0;
+    private boolean useRealVolume = false;
+    private String realVolume = "0.00";
     
     private DecimalFormat df = new DecimalFormat("0.000");
     private Random random = new Random();
@@ -138,6 +141,19 @@ public class OverlayService extends AccessibilityService {
         selectedConsumptionRate = CONSUMPTION_OPTIONS[savedIndex];
         consumptionRate = selectedConsumptionRate;
         
+        // Versuche echtes Volumen zu laden
+        if (prefs.getBoolean("volume_loaded", false)) {
+            useRealVolume = true;
+            realVolume = prefs.getString("current_volume", "0.00").replace(" GB", "");
+            currentDataValue = Double.parseDouble(realVolume);
+            try {
+                currentDataValue = Double.parseDouble(realVolume);
+            } catch (Exception e) {
+                currentDataValue = SIMULATED_START_DATA;
+                useRealVolume = false;
+            }
+        }
+        
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
                     AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
@@ -149,7 +165,7 @@ public class OverlayService extends AccessibilityService {
         createOverlay();
         createVisualHelpers();
         
-        updateStatus("● " + CONSUMPTION_LABELS[savedIndex]);
+        updateStatus("● " + CONSUMPTION_LABELS[savedIndex] + (useRealVolume ? " (📊 echt)" : " (⚡ simuliert)"));
         updateLearningStatus();
     }
     
@@ -198,7 +214,7 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         
-        // ============ SPINNER MIT WEISSEM TEXT ============
+        // Spinner
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this, 
             android.R.layout.simple_spinner_dropdown_item,
@@ -237,7 +253,7 @@ public class OverlayService extends AccessibilityService {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         
-        // ============ GRÖSSERER SCHLIEßEN-BUTTON ============
+        // Schließen-Button
         btnClose = new Button(this);
         btnClose.setText("✕");
         btnClose.setTextColor(Color.WHITE);
@@ -315,7 +331,7 @@ public class OverlayService extends AccessibilityService {
         );
         params.gravity = Gravity.BOTTOM | Gravity.END;
         params.x = 20;
-        params.y = 40;   // 0,5cm höher
+        params.y = 40;
         params.alpha = 0.92f;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
@@ -520,8 +536,13 @@ public class OverlayService extends AccessibilityService {
         status += " | 📊 " + df.format(currentDataValue) + " GB";
         status += " | ⚡ " + df.format(consumptionRate) + " GB/min";
         status += " | ⏱ " + (currentWaitTime/1000) + "s";
+        if (useRealVolume) {
+            status += " | 📊 echt";
+        }
         tvLearning.setText(status);
     }
+    
+    // ============ SIMULATIONS-LOGIK ============
     
     private void performSimulationCycle() {
         if (!isRunning) return;
@@ -610,7 +631,19 @@ public class OverlayService extends AccessibilityService {
                 clickRefillButton();
                 handler.postDelayed(() -> {
                     if (isRunning) {
-                        currentDataValue = SIMULATED_START_DATA;
+                        // Bei echtem Volumen: aus SharedPreferences neu laden
+                        if (prefs.getBoolean("volume_loaded", false)) {
+                            String vol = prefs.getString("current_volume", "0.00").replace(" GB", "");
+                            try {
+                                currentDataValue = Double.parseDouble(vol);
+                                useRealVolume = true;
+                            } catch (Exception e) {
+                                currentDataValue = SIMULATED_START_DATA;
+                                useRealVolume = false;
+                            }
+                        } else {
+                            currentDataValue = SIMULATED_START_DATA;
+                        }
                         cycleCount++;
                         updateStatus("📊 Neuer Zyklus #" + cycleCount);
                         performSimulationCycle();
@@ -658,10 +691,13 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, 
             "🚀 Automatik gestartet!\n" +
             "📊 " + CONSUMPTION_LABELS[currentModeIndex] + "\n" +
+            (useRealVolume ? "📊 Echtes Volumen: " + df.format(currentDataValue) + " GB" : "⚡ Simulations-Modus") + "\n" +
             "⏱ Refill ca. alle " + ((WAIT_RANGES[currentModeIndex][0] + WAIT_RANGES[currentModeIndex][1]) / 2 / 60000) + " Minuten", 
             Toast.LENGTH_LONG).show();
         
-        currentDataValue = SIMULATED_START_DATA;
+        if (!useRealVolume) {
+            currentDataValue = SIMULATED_START_DATA;
+        }
         cycleCount = 0;
         totalSwipes = 0;
         
