@@ -5,8 +5,9 @@
     android:orientation="vertical"
     android:padding="0dp">
 
-    <!-- ============ WEBVIEW ============ -->
+    <!-- ============ WEBVIEW + OVERLAY ============ -->
     <FrameLayout
+        android:id="@+id/overlayContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1.2"
@@ -46,6 +47,18 @@
             android:textColor="#666666"
             android:layout_marginBottom="8dp"/>
 
+        <!-- REFILL-POSITION -->
+        <TextView
+            android:id="@+id/tvRefillPos"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📍 Refill: nicht platziert"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:background="#FFF3E0"
+            android:padding="6dp"
+            android:layout_marginBottom="8dp"/>
+
         <!-- ============ VERBRAUCHS-AUSWAHL ============ -->
         <TextView
             android:layout_width="match_parent"
@@ -76,14 +89,31 @@
             android:lineSpacingExtra="4dp"
             android:textColor="#333333"/>
 
-        <Button
-            android:id="@+id/btnCheckVolume"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🔄 WebView aktualisieren"
-            android:backgroundTint="#2196F3"
-            android:layout_marginBottom="8dp"
-            android:textSize="14sp"/>
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btnSetRefillPos"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📍 Refill positionieren"
+                android:backgroundTint="#FF9800"
+                android:textSize="12sp"
+                android:layout_marginEnd="4dp"/>
+
+            <Button
+                android:id="@+id/btnCheckVolume"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔄 Aktualisieren"
+                android:backgroundTint="#2196F3"
+                android:textSize="12sp"/>
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -117,7 +147,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✅ Refill-Button wird automatisch erkannt und menschlich geklickt"
+            android:text="✅ Roten Kreis auf Refill-Button ziehen → START"
             android:textSize="9sp"
             android:textColor="#4CAF50"
             android:gravity="center"
