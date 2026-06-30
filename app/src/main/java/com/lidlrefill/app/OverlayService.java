@@ -19,6 +19,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;  // ← WICHTIG: HIER HINZUGEFÜGT!
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
@@ -145,7 +146,6 @@ public class OverlayService extends AccessibilityService {
         if (prefs.getBoolean("volume_loaded", false)) {
             useRealVolume = true;
             realVolume = prefs.getString("current_volume", "0.00").replace(" GB", "");
-            currentDataValue = Double.parseDouble(realVolume);
             try {
                 currentDataValue = Double.parseDouble(realVolume);
             } catch (Exception e) {
