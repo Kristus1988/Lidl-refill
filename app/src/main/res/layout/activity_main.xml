@@ -27,6 +27,34 @@
             android:textColor="#666666"
             android:layout_marginBottom="30dp"/>
 
+        <!-- VOLUMEN-ANZEIGE -->
+        <TextView
+            android:id="@+id/tvVolumeStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📊 Volumen wird geladen..."
+            android:textSize="14sp"
+            android:background="#E8F5E9"
+            android:padding="12dp"
+            android:layout_marginBottom="20dp"
+            android:lineSpacingExtra="4dp"
+            android:textColor="#333333"/>
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:visibility="gone"/>
+
+        <Button
+            android:id="@+id/btnCheckVolume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📊 Volumen prüfen"
+            android:backgroundTint="#4CAF50"
+            android:layout_marginBottom="10dp"/>
+
         <TextView
             android:id="@+id/tvPermissionStatus"
             android:layout_width="match_parent"
@@ -90,7 +118,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📌 SIMULATIONS-MODUS:"
+            android:text="📌 WEBVIEW-MODUS:"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#4CAF50"
@@ -99,7 +127,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✅ Kein OCR-Rechteck nötig\n✅ Kein Screen-Capture\n✅ Keine Speicherberechtigung\n✅ Funktioniert über ALLEN Apps!\n\n⏱ Refill alle 15-20 Minuten\n📊 Simulierter Verbrauch: 0.05 GB/min"
+            android:text="🔑 Einmalig auf der Webseite anmelden\n📊 Volumen wird automatisch erkannt\n✅ Kein Screen-Capture nötig!\n⏱ Refill alle 15-20 Minuten"
             android:textSize="13sp"
             android:textColor="#555555"
             android:background="#E8F5E9"
@@ -109,7 +137,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="\n⚠️ Die App funktioniert über ALLEN Apps!\nSogar über dem Sperrbildschirm."
+            android:text="\n⚠️ Die App funktioniert über ALLEN Apps!"
             android:textSize="12sp"
             android:textColor="#D32F2F"
             android:gravity="center"
