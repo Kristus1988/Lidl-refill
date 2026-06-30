@@ -1,9 +1,12 @@
 package com.lidlrefill.app;
 
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.preference.PreferenceManager;
+import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -12,6 +15,7 @@ import android.webkit.WebViewClient;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -19,11 +23,21 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     
-    private TextView tvVolumeStatus;
+    private TextView tvVolumeStatus, tvRefillPos;
     private Spinner spinnerConsumption;
-    private Button btnCheckVolume, btnStartAuto, btnStopAuto;
+    private Button btnCheckVolume, btnStartAuto, btnStopAuto, btnSetRefillPos;
     private WebView webView;
+    private FrameLayout overlayContainer;
+    private View refillMarker;
     private Handler handler = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
+    
+    // Refill-Position
+    private float refillX = 500;
+    private float refillY = 500;
+    private boolean refillPlaced = false;
+    private boolean isDragging = false;
+    private float dragOffsetX, dragOffsetY;
     
     // Automatik
     private boolean isRunning = false;
@@ -54,12 +68,45 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
+        prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        loadRefillPosition();
+        
         tvVolumeStatus = findViewById(R.id.tvVolumeStatus);
+        tvRefillPos = findViewById(R.id.tvRefillPos);
         spinnerConsumption = findViewById(R.id.spinnerConsumption);
         btnCheckVolume = findViewById(R.id.btnCheckVolume);
         btnStartAuto = findViewById(R.id.btnStartAuto);
         btnStopAuto = findViewById(R.id.btnStopAuto);
+        btnSetRefillPos = findViewById(R.id.btnSetRefillPos);
         webView = findViewById(R.id.webView);
+        overlayContainer = findViewById(R.id.overlayContainer);
+        
+        // ============ REFILL-MARKER (roter Kreis) ============
+        refillMarker = new View(this);
+        refillMarker.setBackgroundResource(R.drawable.refill_marker);
+        refillMarker.setVisibility(View.GONE);
+        FrameLayout.LayoutParams markerParams = new FrameLayout.LayoutParams(60, 60);
+        refillMarker.setLayoutParams(markerParams);
+        refillMarker.setOnTouchListener(touchListener);
+        overlayContainer.addView(refillMarker);
+        
+        // ============ REFILL POSITIONIEREN BUTTON ============
+        btnSetRefillPos.setOnClickListener(v -> {
+            if (refillMarker.getVisibility() == View.VISIBLE) {
+                refillMarker.setVisibility(View.GONE);
+                btnSetRefillPos.setText("📍 Refill positionieren");
+                refillPlaced = true;
+                saveRefillPosition();
+                updateRefillStatus();
+                Toast.makeText(this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
+            } else {
+                refillMarker.setVisibility(View.VISIBLE);
+                refillMarker.setX(refillX - 30);
+                refillMarker.setY(refillY - 30);
+                btnSetRefillPos.setText("✅ Position bestätigen");
+                Toast.makeText(this, "Ziehe den roten Kreis auf den Refill-Button", Toast.LENGTH_LONG).show();
+            }
+        });
         
         // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, 
@@ -67,7 +114,7 @@ public class MainActivity extends AppCompatActivity {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
         
-        int savedIndex = getPreferences(MODE_PRIVATE).getInt("consumption_index", 0);
+        int savedIndex = prefs.getInt("consumption_index", 0);
         spinnerConsumption.setSelection(savedIndex);
         consumptionRate = CONSUMPTION_OPTIONS[savedIndex];
         
@@ -75,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 consumptionRate = CONSUMPTION_OPTIONS[position];
-                getPreferences(MODE_PRIVATE).edit().putInt("consumption_index", position).apply();
+                prefs.edit().putInt("consumption_index", position).apply();
                 Toast.makeText(MainActivity.this, 
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
@@ -92,7 +139,38 @@ public class MainActivity extends AppCompatActivity {
         
         setupWebView();
         updateVolumeStatus();
+        updateRefillStatus();
     }
+    
+    // ============ TOUCH-LISTENER FÜR REFILL-MARKER ============
+    private View.OnTouchListener touchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    isDragging = true;
+                    dragOffsetX = event.getX();
+                    dragOffsetY = event.getY();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (isDragging) {
+                        float newX = event.getRawX() - dragOffsetX;
+                        float newY = event.getRawY() - dragOffsetY;
+                        refillMarker.setX(newX);
+                        refillMarker.setY(newY);
+                        refillX = newX + 30;
+                        refillY = newY + 30;
+                        tvRefillPos.setText("📍 Refill: (" + (int)refillX + ", " + (int)refillY + ")");
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    isDragging = false;
+                    updateRefillStatus();
+                    return true;
+            }
+            return false;
+        }
+    };
     
     private void setupWebView() {
         webView.getSettings().setJavaScriptEnabled(true);
@@ -115,7 +193,6 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 
-                // Desktop-Viewport erzwingen
                 view.evaluateJavascript(
                     "document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=1280');" +
                     "document.body.style.width = '1280px';" +
@@ -130,7 +207,6 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
     }
     
-    // ============ VOLUMEN PRÜFEN (NUR STATUS) ============
     private void checkVolumeFromWeb() {
         Toast.makeText(this, "📊 WebView wird aktualisiert...", Toast.LENGTH_SHORT).show();
         webView.reload();
@@ -138,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void updateVolumeStatus() {
-        String status = "📊 Verbrauch: " + CONSUMPTION_LABELS[getPreferences(MODE_PRIVATE).getInt("consumption_index", 0)];
+        String status = "📊 Verbrauch: " + CONSUMPTION_LABELS[prefs.getInt("consumption_index", 0)];
         status += "\n⚡ Simulations-Modus";
         if (isRunning) {
             status += "\n🔄 Zyklus: " + cycleCount;
@@ -147,21 +223,44 @@ public class MainActivity extends AppCompatActivity {
         tvVolumeStatus.setText(status);
     }
     
+    private void updateRefillStatus() {
+        if (refillPlaced) {
+            tvRefillPos.setText("📍 Refill: (" + (int)refillX + ", " + (int)refillY + ") ✅");
+        } else {
+            tvRefillPos.setText("📍 Refill: nicht platziert");
+        }
+    }
+    
+    private void loadRefillPosition() {
+        refillX = prefs.getFloat("refill_x", 500);
+        refillY = prefs.getFloat("refill_y", 500);
+        refillPlaced = prefs.getBoolean("refill_placed", false);
+    }
+    
+    private void saveRefillPosition() {
+        prefs.edit().putFloat("refill_x", refillX).apply();
+        prefs.edit().putFloat("refill_y", refillY).apply();
+        prefs.edit().putBoolean("refill_placed", refillPlaced).apply();
+    }
+    
     // ============ REFILL BUTTON MIT MENSCHLICHEN ABWEICHUNGEN ============
     private void clickRefillButton() {
+        if (!refillPlaced) {
+            Toast.makeText(this, "⚠️ Refill-Button nicht positioniert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         // ============ MENSCHLICHE ABWEICHUNGEN ============
-        // Zufällige Verzögerung: 200-800ms
         long randomDelay = 200 + (long)(Math.random() * 600);
         
         handler.postDelayed(() -> {
-            // ============ 1. ÜBER ARIA-LABEL ============
+            // Klick über JavaScript auf den Button
             String jsCode = 
                 "var buttons = document.querySelectorAll('button[aria-label=\"Datenvolumen per Refill wieder auffüllen\"]');" +
                 "if (buttons.length > 0) {" +
                 "    buttons[0].click();" +
                 "    'clicked';" +
                 "} else {" +
-                "    // ============ 2. FALLBACK: ÜBER TEXT ============" +
                 "    var allButtons = document.querySelectorAll('button');" +
                 "    for (var i = 0; i < allButtons.length; i++) {" +
                 "        if (allButtons[i].textContent.trim() === 'Refill aktivieren') {" +
@@ -197,6 +296,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         
+        if (!refillPlaced) {
+            Toast.makeText(this, "⚠️ Bitte zuerst Refill-Button positionieren!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
         isRunning = true;
         btnStartAuto.setText("▶ Läuft...");
         btnStartAuto.setEnabled(false);
@@ -217,28 +321,22 @@ public class MainActivity extends AppCompatActivity {
         
         cycleCount++;
         
-        // WebView aktualisieren
         webView.reload();
         
-        // Nach dem Refresh: Verbrauch berechnen
         handler.postDelayed(() -> {
             if (!isRunning) return;
             
-            // Verbrauch berechnen
             double timeHours = currentWaitTime / 3600000.0;
             double decrease = consumptionRate * timeHours;
             currentDataValue = Math.max(0.05, currentDataValue - decrease);
             
             updateVolumeStatus();
             
-            // Prüfen ob Refill
             if (currentDataValue <= REFILL_THRESHOLD) {
-                // MENSCHLICH: Zufällige Verzögerung vor Refill
                 long randomRefillDelay = 1000 + (long)(Math.random() * 2000);
                 handler.postDelayed(() -> {
                     if (isRunning) {
                         clickRefillButton();
-                        // Nach Refill: neu starten
                         handler.postDelayed(() -> {
                             if (isRunning) {
                                 currentDataValue = SIMULATED_START_DATA;
@@ -250,7 +348,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Wartezeit berechnen (menschlich 15-20 Minuten)
             currentWaitTime = calculateHumanWaitTime();
             long minutes = currentWaitTime / 60000;
             
@@ -258,7 +355,6 @@ public class MainActivity extends AppCompatActivity {
                 "\n⏱ Warte ca. " + minutes + " Minuten" +
                 "\n📊 " + String.format("%.2f", currentDataValue) + " GB");
             
-            // Warten und nächsten Zyklus
             handler.postDelayed(() -> {
                 if (isRunning) {
                     performCycle();
