@@ -39,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
     private String currentRefill = "1 GB / 1 GB";
     private boolean isLoggedIn = false;
     private boolean isVolumeLoaded = false;
+    private boolean isLoginPageShown = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
     
     private void setupWebView() {
         webView = new WebView(this);
-        webView.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);  // ← SICHTBAR MACHEN!
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setLoadWithOverviewMode(true);
@@ -125,6 +126,8 @@ public class MainActivity extends AppCompatActivity {
                 String cookies = CookieManager.getInstance().getCookie(url);
                 if (cookies != null && !cookies.isEmpty()) {
                     isLoggedIn = true;
+                    isLoginPageShown = false;
+                    tvVolumeStatus.setText("🔑 Eingeloggt – Volumen wird geladen...");
                 }
                 
                 // HTML parsen nach Volumen
@@ -137,10 +140,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 );
                 
-                // Wenn Login-Seite erkannt, WebView sichtbar machen
+                // Wenn Login-Seite erkannt, WebView sichtbar lassen
                 if (url.contains("login") || url.contains("anmelden")) {
-                    tvVolumeStatus.setText("🔑 Bitte einmalig in der App anmelden...");
+                    isLoginPageShown = true;
+                    tvVolumeStatus.setText("🔑 Bitte in der Webseite anmelden...");
                     webView.setVisibility(View.VISIBLE);
+                    Toast.makeText(MainActivity.this, 
+                        "🔑 Bitte logge dich in der Webseite ein!", 
+                        Toast.LENGTH_LONG).show();
                 }
             }
             
@@ -159,14 +166,15 @@ public class MainActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         tvVolumeStatus.setText("📊 Lade Lidl-Seite...");
         
+        // WebView sichtbar machen
+        webView.setVisibility(View.VISIBLE);
+        
         String cookies = CookieManager.getInstance().getCookie("kundenkonto.lidl-connect.de");
         if (cookies != null && !cookies.isEmpty()) {
             isLoggedIn = true;
             tvVolumeStatus.setText("🔑 Eingeloggt – Volumen wird geladen...");
         } else {
             tvVolumeStatus.setText("🔑 Nicht eingeloggt – bitte anmelden...");
-            webView.setVisibility(View.VISIBLE);
-            progressBar.setVisibility(View.GONE);
             Toast.makeText(this, 
                 "🔑 Bitte in der Webseite anmelden!\n" +
                 "Nach dem Login wird das Volumen automatisch erkannt.", 
@@ -206,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
                 currentRefill = used + " GB / " + total + " GB";
                 currentVolume = used + " GB";
                 isVolumeLoaded = true;
+                isLoggedIn = true;
                 updateVolumeStatus();
                 
                 // Volumen in SharedPreferences speichern für OverlayService
@@ -214,6 +223,11 @@ public class MainActivity extends AppCompatActivity {
                 prefs.edit().putBoolean("volume_loaded", true).apply();
                 
                 Toast.makeText(this, "📊 Volumen: " + currentVolume, Toast.LENGTH_SHORT).show();
+                
+                // WebView nach erfolgreichem Laden ausblenden
+                handler.postDelayed(() -> {
+                    webView.setVisibility(View.GONE);
+                }, 2000);
             }
             
         } catch (Exception e) {
