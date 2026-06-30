@@ -4,6 +4,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -174,9 +175,9 @@ public class MainActivity extends AppCompatActivity {
             
             webView.evaluateJavascript(jsCode, value -> {
                 if (value != null && value.contains("clicked")) {
-                    Toast.makeText(this, "🔄 Refill-Button geklickt! ✅", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "🔄 Refill-Button geklickt! ✅", Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
                 }
             });
         }, randomDelay);
