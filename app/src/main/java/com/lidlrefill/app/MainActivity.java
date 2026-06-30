@@ -182,16 +182,16 @@ public class MainActivity extends AppCompatActivity {
         }, 8000);
     }
     
-    // ============ PARSING - SUCHT NACH "Unlimited Refill" ============
+    // ============ PARSING: NUR ZAHLEN MIT 0, oder 0. ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
         parseAttempts++;
         
         try {
-            // Suche nach "Unlimited Refill" und nimm die Zahl danach
+            // Sucht nach "Unlimited Refill" und nimmt die Zahl mit 0, oder 0.
             Pattern pattern = Pattern.compile(
-                "Unlimited\\s*Refill.*?(\\d+[\\.\\,]?\\d*)\\s*GB",
+                "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL
             );
             Matcher matcher = pattern.matcher(html);
@@ -216,7 +216,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Fallback: Wenn kein "Unlimited Refill" gefunden
+            // Fallback
             if (parseAttempts >= 3 && !isVolumeLoaded) {
                 if (html.contains("login") || html.contains("anmelden")) {
                     tvVolumeStatus.setText("🔑 Bitte anmelden...");
