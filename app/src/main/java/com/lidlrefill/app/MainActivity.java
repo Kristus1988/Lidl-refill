@@ -38,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private String currentRefill = "1 GB / 1 GB";
     private boolean isLoggedIn = false;
     private boolean isVolumeLoaded = false;
+    private int parseAttempts = 0;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
         updatePermissionStatus();
         updateVolumeStatus();
         
+        // Automatisch Volumen prüfen beim Start
         handler.postDelayed(() -> {
             checkVolumeFromWeb();
         }, 1500);
@@ -119,12 +121,7 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(android.view.View.GONE);
                 
-                String cookies = CookieManager.getInstance().getCookie(url);
-                if (cookies != null && !cookies.isEmpty()) {
-                    isLoggedIn = true;
-                    tvVolumeStatus.setText("🔑 Eingeloggt – Volumen wird geladen...");
-                }
-                
+                // HTML parsen nach Volumen
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
                     value -> {
@@ -134,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 );
                 
+                // Prüfen ob Login-Seite
                 if (url.contains("login") || url.contains("anmelden")) {
                     tvVolumeStatus.setText("🔑 Bitte in der Webseite anmelden...");
                     Toast.makeText(MainActivity.this, 
@@ -157,28 +155,32 @@ public class MainActivity extends AppCompatActivity {
         progressBar.setVisibility(android.view.View.VISIBLE);
         tvVolumeStatus.setText("📊 Lade Lidl-Seite...");
         webView.setVisibility(android.view.View.VISIBLE);
-        
-        String cookies = CookieManager.getInstance().getCookie("kundenkonto.lidl-connect.de");
-        if (cookies != null && !cookies.isEmpty()) {
-            isLoggedIn = true;
-            tvVolumeStatus.setText("🔑 Eingeloggt – Volumen wird geladen...");
-        } else {
-            tvVolumeStatus.setText("🔑 Nicht eingeloggt – bitte anmelden...");
-            Toast.makeText(this, 
-                "🔑 Bitte in der Webseite anmelden!\n" +
-                "Nach dem Login wird das Volumen automatisch erkannt.", 
-                Toast.LENGTH_LONG).show();
-            return;
-        }
+        parseAttempts = 0;
         
         webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
+        
+        // Mehrmals versuchen zu parsen
+        handler.postDelayed(() -> {
+            if (!isVolumeLoaded) {
+                webView.evaluateJavascript(
+                    "document.documentElement.outerHTML",
+                    value -> {
+                        if (value != null && !value.equals("null")) {
+                            parseHtml(value);
+                        }
+                    }
+                );
+            }
+        }, 3000);
         
         handler.postDelayed(() -> {
             progressBar.setVisibility(android.view.View.GONE);
             if (!isVolumeLoaded) {
+                // Wenn kein Volumen erkannt: Simulation
                 double simulatedValue = 0.3 + Math.random() * 0.7;
                 currentVolume = String.format("%.2f GB", simulatedValue);
                 currentRefill = "1 GB / 1 GB";
+                isLoggedIn = false;
                 updateVolumeStatus();
                 Toast.makeText(this, "📊 Volumen: " + currentVolume + " (Simulation)", Toast.LENGTH_SHORT).show();
             }
@@ -188,31 +190,69 @@ public class MainActivity extends AppCompatActivity {
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
+        parseAttempts++;
+        
         try {
-            Pattern pattern = Pattern.compile(
+            // ============ SUCHE NACH UNLIMITED REFILL VOLUMEN ============
+            // Muster 1: "0,92 GB / 1 GB" oder "0.92 GB / 1 GB"
+            Pattern pattern1 = Pattern.compile(
                 "(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*(\\d+)\\s*GB", 
                 Pattern.CASE_INSENSITIVE
             );
-            Matcher matcher = pattern.matcher(html);
+            Matcher matcher1 = pattern1.matcher(html);
             
-            if (matcher.find()) {
-                String used = matcher.group(1).replace(",", ".");
-                String total = matcher.group(2);
+            // Muster 2: "Unlimited Refill" Bereich
+            Pattern pattern2 = Pattern.compile(
+                "Unlimited\\s*Refill.*?(\\d+[\\.\\,]?\\d*)\\s*GB",
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+            );
+            Matcher matcher2 = pattern2.matcher(html);
+            
+            String used = null;
+            String total = null;
+            
+            // Versuche Muster 1
+            if (matcher1.find()) {
+                used = matcher1.group(1).replace(",", ".");
+                total = matcher1.group(2);
+                isLoggedIn = true;
+            }
+            
+            // Versuche Muster 2 (Fallback)
+            if (used == null && matcher2.find()) {
+                used = matcher2.group(1).replace(",", ".");
+                total = "1"; // Unlimited Refill ist immer 1 GB
+                isLoggedIn = true;
+            }
+            
+            if (used != null) {
                 currentRefill = used + " GB / " + total + " GB";
                 currentVolume = used + " GB";
                 isVolumeLoaded = true;
                 isLoggedIn = true;
                 updateVolumeStatus();
                 
+                // Volumen speichern
                 prefs.edit().putString("current_volume", currentVolume).apply();
                 prefs.edit().putString("current_refill", currentRefill).apply();
                 prefs.edit().putBoolean("volume_loaded", true).apply();
                 
-                Toast.makeText(this, "📊 Volumen: " + currentVolume, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
                 
+                // WebView nach erfolgreichem Laden ausblenden
                 handler.postDelayed(() -> {
                     webView.setVisibility(android.view.View.GONE);
                 }, 2000);
+                return;
+            }
+            
+            // Wenn nach 3 Versuchen nichts gefunden
+            if (parseAttempts >= 3 && !isVolumeLoaded) {
+                // Prüfen ob Login-Seite (dann kein Fehler)
+                if (html.contains("login") || html.contains("anmelden") || html.contains("passwort")) {
+                    tvVolumeStatus.setText("🔑 Bitte anmelden...");
+                    isLoggedIn = false;
+                }
             }
             
         } catch (Exception e) {
@@ -233,7 +273,7 @@ public class MainActivity extends AppCompatActivity {
         
         status.append("\n📊 WebView-Modus:\n");
         status.append(isLoggedIn ? "✅ Eingeloggt" : "❌ Bitte anmelden!");
-        status.append(isVolumeLoaded ? "\n✅ Volumen geladen" : "\n⏳ Volumen wird geladen...");
+        status.append(isVolumeLoaded ? "\n✅ Volumen geladen: " + currentVolume : "\n⏳ Volumen wird geladen...");
         
         tvPermissionStatus.setText(status.toString());
     }
@@ -243,6 +283,9 @@ public class MainActivity extends AppCompatActivity {
         status.append("📊 Volumen:\n");
         status.append("📱 Unlimited Refill: ").append(currentRefill).append("\n");
         status.append("💾 Verfügbar: ").append(currentVolume);
+        if (isLoggedIn) {
+            status.append("\n✅ Eingeloggt!");
+        }
         tvVolumeStatus.setText(status.toString());
     }
     
@@ -290,6 +333,12 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void startOverlayService() {
+        // Volumen vor Overlay-Start speichern
+        if (isVolumeLoaded) {
+            prefs.edit().putString("current_volume", currentVolume).apply();
+            prefs.edit().putBoolean("volume_loaded", true).apply();
+        }
+        
         Intent intent = new Intent(this, OverlayService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
