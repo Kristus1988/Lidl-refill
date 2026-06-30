@@ -9,7 +9,6 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Status -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="wrap_content"
@@ -22,7 +21,6 @@
         android:layout_marginBottom="4dp"
         android:layout_gravity="center"/>
 
-    <!-- Verbrauchs-Auswahl -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -41,7 +39,6 @@
         android:textSize="14sp"
         android:layout_marginBottom="6dp"/>
 
-    <!-- Platzierungs-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -74,7 +71,6 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Aktions-Buttons -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -107,7 +103,6 @@
             android:gravity="center"/>
     </LinearLayout>
 
-    <!-- Start-Button -->
     <Button
         android:id="@+id/btnStartAuto"
         android:layout_width="match_parent"
@@ -121,7 +116,6 @@
         android:gravity="center"
         android:layout_marginBottom="4dp"/>
 
-    <!-- Stop-Button -->
     <Button
         android:id="@+id/btnStopAuto"
         android:layout_width="match_parent"
@@ -134,7 +128,6 @@
         android:padding="0dp"
         android:gravity="center"/>
 
-    <!-- Koordinaten -->
     <TextView
         android:id="@+id/tvCoordinates"
         android:layout_width="match_parent"
@@ -146,7 +139,6 @@
         android:padding="3dp"
         android:layout_marginTop="4dp"/>
 
-    <!-- Lern-Status -->
     <TextView
         android:id="@+id/tvLearning"
         android:layout_width="match_parent"
