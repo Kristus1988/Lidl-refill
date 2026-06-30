@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:padding="0dp">
 
-    <!-- ============ WEBVIEW BEREICH (OBEN) ============ -->
+    <!-- ============ WEBVIEW (OBEN) ============ -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
