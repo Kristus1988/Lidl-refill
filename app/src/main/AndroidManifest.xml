@@ -2,32 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ============ OVERLAY & ACCESSIBILITY ============ -->
+    <!-- Overlay & Accessibility -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     
-    <!-- ============ SCREENSHOT / MEDIAPROJECTION ============ -->
+    <!-- Internet für WebView -->
     <uses-permission android:name="android.permission.INTERNET" />
     
-    <!-- ============ SPEICHERZUGRIFF FÜR SCREENSHOTS ============ -->
-    <!-- Android 12 und niedriger -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="29" 
-        tools:ignore="ScopedStorage" />
-    
-    <!-- Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    
-    <!-- ============ SPERRBILDSCHIRM ============ -->
+    <!-- Sperrbildschirm -->
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
-    <!-- ============ BENACHRICHTIGUNGEN (Android 13+) ============ -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- ============ ALLE APPS ERKENNEN ============ -->
+    <!-- Alle Apps erkennen -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" 
         tools:ignore="QueryAllPackagesPermission" />
 
@@ -64,11 +50,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-        
-        <service
-            android:name=".FloatingButtonService"
-            android:exported="false"
-            android:process=":overlay" />
         
     </application>
 </manifest>
