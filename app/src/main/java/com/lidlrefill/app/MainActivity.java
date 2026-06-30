@@ -106,6 +106,12 @@ public class MainActivity extends AppCompatActivity {
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setLoadWithOverviewMode(true);
         webView.getSettings().setUseWideViewPort(true);
+        
+        // ============ ALS DESKTOP ANMELDEN ============
+        webView.getSettings().setUserAgentString(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        );
+        
         webView.setVisibility(android.view.View.VISIBLE);
         
         CookieManager cookieManager = CookieManager.getInstance();
@@ -182,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
         }, 8000);
     }
     
-    // ============ PARSING MIT MEHREREN MUSTERN ============
+    // ============ PARSING ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
@@ -190,19 +196,10 @@ public class MainActivity extends AppCompatActivity {
         
         try {
             String[] patterns = {
-                // Muster 1: "Unlimited Refill" direkt gefolgt von Zahl
                 "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                
-                // Muster 2: "Unlimited Refill" mit beliebigem Text dazwischen
                 "Unlimited\\s*Refill[\\s\\S]*?(0[\\.\\,]\\d+)\\s*GB",
-                
-                // Muster 3: Suche nach "0,9 GB" direkt nach "Unlimited Refill"
                 "Unlimited\\s*Refill\\s*(0[\\.\\,]\\d+)\\s*GB",
-                
-                // Muster 4: "Refill" + Zahl mit 0,
                 "Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                
-                // Muster 5: "0,9 GB" wo immer es steht (nur als Fallback)
                 "(0[\\.\\,]\\d+)\\s*GB"
             };
             
@@ -214,7 +211,6 @@ public class MainActivity extends AppCompatActivity {
                     String used = matcher.group(1).replace(",", ".");
                     double value = Double.parseDouble(used);
                     
-                    // NUR Werte zwischen 0 und 1 akzeptieren
                     if (value > 0 && value <= 1.0) {
                         currentVolume = used + " GB";
                         currentRefill = used + " GB / 1 GB";
@@ -236,7 +232,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             
-            // Fallback
             if (parseAttempts >= 3 && !isVolumeLoaded) {
                 if (html.contains("login") || html.contains("anmelden")) {
                     tvVolumeStatus.setText("🔑 Bitte anmelden...");
