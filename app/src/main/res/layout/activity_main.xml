@@ -5,11 +5,11 @@
     android:orientation="vertical"
     android:padding="0dp">
 
-    <!-- ============ WEBVIEW (OBEN) ============ -->
+    <!-- ============ WEBVIEW (NUR 50% des Bildschirms) ============ -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1.2"
+        android:layout_weight="0.5"
         android:background="#FFFFFF">
 
         <WebView
@@ -27,13 +27,13 @@
 
     </FrameLayout>
 
-    <!-- ============ APP-BEREICH (UNTEN) ============ -->
+    <!-- ============ APP-BEREICH (UNTERE HÄLFTE) ============ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_weight="0.5"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="8dp"
         android:background="#F5F5F5"
         android:gravity="center_horizontal">
 
@@ -41,17 +41,17 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🔄 Lidl Refill"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textStyle="bold"
-            android:layout_marginBottom="4dp"/>
+            android:layout_marginBottom="2dp"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Automatisches 1GB Aufladen"
-            android:textSize="11sp"
+            android:textSize="10sp"
             android:textColor="#666666"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="4dp"/>
 
         <!-- VOLUMEN-ANZEIGE -->
         <TextView
@@ -59,11 +59,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="📊 Volumen wird geladen..."
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:background="#E8F5E9"
-            android:padding="8dp"
-            android:layout_marginBottom="8dp"
-            android:lineSpacingExtra="3dp"
+            android:padding="6dp"
+            android:layout_marginBottom="4dp"
+            android:lineSpacingExtra="2dp"
             android:textColor="#333333"/>
 
         <Button
@@ -72,8 +72,8 @@
             android:layout_height="wrap_content"
             android:text="📊 Volumen prüfen"
             android:backgroundTint="#4CAF50"
-            android:layout_marginBottom="6dp"
-            android:textSize="12sp"/>
+            android:layout_marginBottom="4dp"
+            android:textSize="11sp"/>
 
         <!-- PERMISSION STATUS -->
         <TextView
@@ -81,18 +81,18 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="📋 Berechtigungen werden geprüft..."
-            android:textSize="10sp"
+            android:textSize="9sp"
             android:background="#F5F5F5"
-            android:padding="6dp"
-            android:layout_marginBottom="6dp"
-            android:lineSpacingExtra="2dp"/>
+            android:padding="4dp"
+            android:layout_marginBottom="4dp"
+            android:lineSpacingExtra="1dp"/>
 
-        <!-- BUTTONS - ZWEI REIHEN -->
+        <!-- BUTTONS - ZWEI REIHEN (kleiner) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="2dp">
 
             <Button
                 android:id="@+id/btnRequestPermissions"
@@ -101,8 +101,8 @@
                 android:layout_weight="1"
                 android:text="🔓 Berechtigungen"
                 android:backgroundTint="#2196F3"
-                android:textSize="10sp"
-                android:layout_marginEnd="4dp"/>
+                android:textSize="9sp"
+                android:layout_marginEnd="2dp"/>
 
             <Button
                 android:id="@+id/btnCheckPermissions"
@@ -111,14 +111,14 @@
                 android:layout_weight="1"
                 android:text="✅ Prüfen"
                 android:backgroundTint="#FF9800"
-                android:textSize="10sp"/>
+                android:textSize="9sp"/>
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="2dp">
 
             <Button
                 android:id="@+id/btnRefreshAccessibility"
@@ -127,9 +127,9 @@
                 android:layout_weight="1"
                 android:text="🔄 Accessibility"
                 android:backgroundTint="#E91E63"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:textColor="#FFFFFF"
-                android:layout_marginEnd="4dp"/>
+                android:layout_marginEnd="2dp"/>
 
             <Button
                 android:id="@+id/btnRestartApp"
@@ -138,7 +138,7 @@
                 android:layout_weight="1"
                 android:text="🔄 App neu"
                 android:backgroundTint="#9C27B0"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:textColor="#FFFFFF"/>
         </LinearLayout>
 
@@ -148,19 +148,19 @@
             android:layout_height="wrap_content"
             android:text="🚀 Overlay starten"
             android:backgroundTint="#4CAF50"
-            android:layout_marginBottom="6dp"
-            android:textSize="12sp"
+            android:layout_marginBottom="2dp"
+            android:textSize="11sp"
             android:enabled="false"/>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="📌 Einmalig auf der Webseite anmelden"
-            android:textSize="9sp"
+            android:textSize="8sp"
             android:textColor="#4CAF50"
             android:gravity="center"
             android:background="#E8F5E9"
-            android:padding="4dp"/>
+            android:padding="2dp"/>
 
     </LinearLayout>
 </LinearLayout>
