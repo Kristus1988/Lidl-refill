@@ -182,38 +182,58 @@ public class MainActivity extends AppCompatActivity {
         }, 8000);
     }
     
-    // ============ PARSING: NUR ZAHLEN MIT 0, oder 0. ============
+    // ============ PARSING MIT MEHREREN MUSTERN ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
         parseAttempts++;
         
         try {
-            // Sucht nach "Unlimited Refill" und nimmt die Zahl mit 0, oder 0.
-            Pattern pattern = Pattern.compile(
+            String[] patterns = {
+                // Muster 1: "Unlimited Refill" direkt gefolgt von Zahl
                 "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            );
-            Matcher matcher = pattern.matcher(html);
+                
+                // Muster 2: "Unlimited Refill" mit beliebigem Text dazwischen
+                "Unlimited\\s*Refill[\\s\\S]*?(0[\\.\\,]\\d+)\\s*GB",
+                
+                // Muster 3: Suche nach "0,9 GB" direkt nach "Unlimited Refill"
+                "Unlimited\\s*Refill\\s*(0[\\.\\,]\\d+)\\s*GB",
+                
+                // Muster 4: "Refill" + Zahl mit 0,
+                "Refill.*?(0[\\.\\,]\\d+)\\s*GB",
+                
+                // Muster 5: "0,9 GB" wo immer es steht (nur als Fallback)
+                "(0[\\.\\,]\\d+)\\s*GB"
+            };
             
-            if (matcher.find()) {
-                String used = matcher.group(1).replace(",", ".");
-                currentVolume = used + " GB";
-                currentRefill = used + " GB / 1 GB";
-                isVolumeLoaded = true;
-                isLoggedIn = true;
+            for (String patternStr : patterns) {
+                Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+                Matcher matcher = pattern.matcher(html);
                 
-                updateVolumeStatus();
-                prefs.edit().putString("current_volume", currentVolume).apply();
-                prefs.edit().putString("current_refill", currentRefill).apply();
-                prefs.edit().putBoolean("volume_loaded", true).apply();
-                
-                Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
-                
-                handler.postDelayed(() -> {
-                    webView.setVisibility(android.view.View.GONE);
-                }, 2000);
-                return;
+                if (matcher.find()) {
+                    String used = matcher.group(1).replace(",", ".");
+                    double value = Double.parseDouble(used);
+                    
+                    // NUR Werte zwischen 0 und 1 akzeptieren
+                    if (value > 0 && value <= 1.0) {
+                        currentVolume = used + " GB";
+                        currentRefill = used + " GB / 1 GB";
+                        isVolumeLoaded = true;
+                        isLoggedIn = true;
+                        
+                        updateVolumeStatus();
+                        prefs.edit().putString("current_volume", currentVolume).apply();
+                        prefs.edit().putString("current_refill", currentRefill).apply();
+                        prefs.edit().putBoolean("volume_loaded", true).apply();
+                        
+                        Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
+                        
+                        handler.postDelayed(() -> {
+                            webView.setVisibility(android.view.View.GONE);
+                        }, 2000);
+                        return;
+                    }
+                }
             }
             
             // Fallback
