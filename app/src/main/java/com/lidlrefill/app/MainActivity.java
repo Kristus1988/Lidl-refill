@@ -9,6 +9,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
+import android.view.accessibility.AccessibilityManager;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -94,7 +95,6 @@ public class MainActivity extends AppCompatActivity {
         updatePermissionStatus();
         updateVolumeStatus();
         
-        // Automatisch Volumen prüfen beim Start
         handler.postDelayed(() -> {
             checkVolumeFromWeb();
         }, 1500);
@@ -189,7 +189,6 @@ public class MainActivity extends AppCompatActivity {
         if (html == null || html.isEmpty()) return;
         
         try {
-            // Suche nach Zahlen mit Punkt ODER Komma
             Pattern pattern = Pattern.compile(
                 "(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*(\\d+)\\s*GB", 
                 Pattern.CASE_INSENSITIVE
@@ -211,7 +210,6 @@ public class MainActivity extends AppCompatActivity {
                 
                 Toast.makeText(this, "📊 Volumen: " + currentVolume, Toast.LENGTH_SHORT).show();
                 
-                // WebView nach erfolgreichem Laden ausblenden
                 handler.postDelayed(() -> {
                     webView.setVisibility(android.view.View.GONE);
                 }, 2000);
