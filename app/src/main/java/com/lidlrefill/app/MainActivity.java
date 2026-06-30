@@ -146,12 +146,12 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     
-    // ============ NEUES PARSING ============
+    // ============ VOLUMEN PARSEN ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
         try {
-            // ============ MUSTER 1: unit-display text-xs ============
+            // ============ MUSTER 1: unit-display ============
             Pattern pattern = Pattern.compile(
                 "unit-display[^\"]*?\"[^>]*?>\\s*\\$?(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*1\\s*GB",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL
