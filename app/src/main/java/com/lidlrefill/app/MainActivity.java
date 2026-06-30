@@ -1,21 +1,18 @@
 package com.lidlrefill.app;
 
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.provider.Settings;
-import android.view.accessibility.AccessibilityManager;
+import android.view.MotionEvent;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.ProgressBar;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -24,21 +21,47 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int OVERLAY_PERMISSION_REQUEST = 1;
-    private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
     
-    private TextView tvPermissionStatus, tvVolumeStatus;
-    private Button btnStartService, btnRestartApp, btnRefreshAccessibility, btnCheckVolume;
+    private TextView tvVolumeStatus, tvRefillPos;
+    private Button btnCheckVolume, btnStartAuto, btnStopAuto, btnSetRefillPos;
     private WebView webView;
-    private ProgressBar progressBar;
-    private SharedPreferences prefs;
+    private FrameLayout overlayContainer;
+    private View refillMarker;
     private Handler handler = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
     
+    // Refill-Position
+    private float refillX = 500;
+    private float refillY = 500;
+    private boolean refillPlaced = false;
+    private boolean isDragging = false;
+    private float dragOffsetX, dragOffsetY;
+    
+    // Volumen
     private String currentVolume = "0.00 GB";
-    private String currentRefill = "1 GB / 1 GB";
-    private boolean isLoggedIn = false;
     private boolean isVolumeLoaded = false;
-    private int parseAttempts = 0;
+    private boolean useRealVolume = false;
+    private double currentDataValue = 0.90;
+    
+    // Automatik
+    private boolean isRunning = false;
+    private int cycleCount = 0;
+    private double consumptionRate = 0.05;
+    private long currentWaitTime = 600000;
+    
+    // Parameter
+    private static final double REFILL_THRESHOLD = 0.30;
+    private static final double SIMULATED_START_DATA = 0.90;
+    private static final long MIN_WAIT_TIME = 120000;
+    private static final long MAX_WAIT_TIME = 1800000;
+    private static final long INITIAL_WAIT_TIME = 600000;
+    private static final long MIN_HUMAN_WAIT = 900000;
+    private static final long MAX_HUMAN_WAIT = 1200000;
+    
+    // Verbrauchs-Optionen
+    private double[] consumptionOptions = {0.05, 0.08, 0.15};
+    private String[] consumptionLabels = {"Standard (17-20 Min)", "FullHD (10-13 Min)", "4K (5-8 Min)"};
+    private int selectedOption = 0;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,99 +69,104 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        loadRefillPosition();
+        selectedOption = prefs.getInt("consumption_index", 0);
+        consumptionRate = consumptionOptions[selectedOption];
         
-        tvPermissionStatus = findViewById(R.id.tvPermissionStatus);
         tvVolumeStatus = findViewById(R.id.tvVolumeStatus);
-        btnStartService = findViewById(R.id.btnStartService);
-        btnRestartApp = findViewById(R.id.btnRestartApp);
-        btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
+        tvRefillPos = findViewById(R.id.tvRefillPos);
         btnCheckVolume = findViewById(R.id.btnCheckVolume);
-        progressBar = findViewById(R.id.progressBar);
+        btnStartAuto = findViewById(R.id.btnStartAuto);
+        btnStopAuto = findViewById(R.id.btnStopAuto);
+        btnSetRefillPos = findViewById(R.id.btnSetRefillPos);
         webView = findViewById(R.id.webView);
+        overlayContainer = findViewById(R.id.overlayContainer);
         
-        Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
-        Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
+        // Refill-Marker (roter Kreis) erstellen
+        refillMarker = new View(this);
+        refillMarker.setBackgroundResource(R.drawable.refill_marker);
+        refillMarker.setVisibility(View.GONE);
+        FrameLayout.LayoutParams markerParams = new FrameLayout.LayoutParams(40, 40);
+        refillMarker.setLayoutParams(markerParams);
+        refillMarker.setOnTouchListener(touchListener);
+        overlayContainer.addView(refillMarker);
         
-        btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
-        btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
-        
-        btnStartService.setOnClickListener(v -> {
-            if (checkAllPermissions()) {
-                startOverlayService();
+        // Refill-Position setzen Button
+        btnSetRefillPos.setOnClickListener(v -> {
+            if (refillMarker.getVisibility() == View.VISIBLE) {
+                refillMarker.setVisibility(View.GONE);
+                btnSetRefillPos.setText("📍 Refill positionieren");
+                refillPlaced = true;
+                saveRefillPosition();
+                updateRefillStatus();
+                Toast.makeText(this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
+                refillMarker.setVisibility(View.VISIBLE);
+                refillMarker.setX(refillX - 20);
+                refillMarker.setY(refillY - 20);
+                btnSetRefillPos.setText("✅ Position bestätigen");
+                Toast.makeText(this, "Ziehe den roten Kreis auf den Refill-Button", Toast.LENGTH_LONG).show();
             }
         });
         
-        btnRestartApp.setOnClickListener(v -> {
-            Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
-            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-            finish();
-            android.os.Process.killProcess(android.os.Process.myPid());
-        });
-        
-        btnRefreshAccessibility.setOnClickListener(v -> {
-            Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
-            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
-        });
-        
-        btnCheckVolume.setOnClickListener(v -> {
-            Toast.makeText(this, "📊 Prüfe Volumen...", Toast.LENGTH_SHORT).show();
-            checkVolumeFromWeb();
-        });
+        btnCheckVolume.setOnClickListener(v -> checkVolumeFromWeb());
+        btnStartAuto.setOnClickListener(v -> startAutomation());
+        btnStopAuto.setOnClickListener(v -> stopAutomation());
         
         setupWebView();
-        updatePermissionStatus();
         updateVolumeStatus();
+        updateRefillStatus();
         
         handler.postDelayed(() -> {
             checkVolumeFromWeb();
         }, 1500);
     }
     
+    private View.OnTouchListener touchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    isDragging = true;
+                    dragOffsetX = event.getX();
+                    dragOffsetY = event.getY();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (isDragging) {
+                        float newX = event.getRawX() - dragOffsetX;
+                        float newY = event.getRawY() - dragOffsetY;
+                        refillMarker.setX(newX);
+                        refillMarker.setY(newY);
+                        refillX = newX + 20;
+                        refillY = newY + 20;
+                        tvRefillPos.setText("📍 Refill: (" + (int)refillX + ", " + (int)refillY + ")");
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    isDragging = false;
+                    updateRefillStatus();
+                    return true;
+            }
+            return false;
+        }
+    };
+    
     private void setupWebView() {
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        
-        // ============ DESKTOP-VIEWPORT ERZWINGEN ============
-        webView.setInitialScale(100);
+        webView.getSettings().setLoadWithOverviewMode(true);
         webView.getSettings().setUseWideViewPort(true);
-        webView.getSettings().setLoadWithOverviewMode(false);  // ← WICHTIG!
-        webView.getSettings().setSupportZoom(true);
-        webView.getSettings().setBuiltInZoomControls(true);
-        webView.getSettings().setDisplayZoomControls(false);
-        
-        // ============ DESKTOP-USERAGENT ============
         webView.getSettings().setUserAgentString(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
         );
         
-        webView.setVisibility(android.view.View.VISIBLE);
-        
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            cookieManager.setAcceptThirdPartyCookies(webView, true);
-        }
         
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                progressBar.setVisibility(android.view.View.GONE);
-                
-                // Nach dem Laden: Desktop-Viewport erzwingen
-                view.evaluateJavascript(
-                    "document.documentElement.style.width = '1024px'; " +
-                    "document.body.style.width = '1024px'; " +
-                    "document.querySelector('meta[name=viewport]').content = 'width=1024';",
-                    null
-                );
                 
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
@@ -148,19 +176,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 );
-                
-                if (url.contains("login") || url.contains("anmelden")) {
-                    tvVolumeStatus.setText("🔑 Bitte in der Webseite anmelden...");
-                    Toast.makeText(MainActivity.this, 
-                        "🔑 Bitte logge dich in der Webseite ein!", 
-                        Toast.LENGTH_LONG).show();
-                }
-            }
-            
-            @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-                progressBar.setVisibility(android.view.View.VISIBLE);
             }
         });
         
@@ -169,48 +184,25 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void checkVolumeFromWeb() {
-        progressBar.setVisibility(android.view.View.VISIBLE);
         tvVolumeStatus.setText("📊 Lade Lidl-Seite...");
-        webView.setVisibility(android.view.View.VISIBLE);
-        parseAttempts = 0;
-        
-        webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
+        webView.reload();
         
         handler.postDelayed(() -> {
-            if (!isVolumeLoaded) {
-                webView.evaluateJavascript(
-                    "document.documentElement.outerHTML",
-                    value -> {
-                        if (value != null && !value.equals("null")) {
-                            parseHtml(value);
-                        }
-                    }
-                );
-            }
-        }, 3000);
-        
-        handler.postDelayed(() -> {
-            progressBar.setVisibility(android.view.View.GONE);
             if (!isVolumeLoaded) {
                 double simulatedValue = 0.3 + Math.random() * 0.7;
                 currentVolume = String.format("%.2f GB", simulatedValue);
-                currentRefill = "1 GB / 1 GB";
-                isLoggedIn = false;
+                currentDataValue = simulatedValue;
+                useRealVolume = false;
                 updateVolumeStatus();
                 Toast.makeText(this, "📊 Volumen: " + currentVolume + " (Simulation)", Toast.LENGTH_SHORT).show();
             }
         }, 8000);
     }
     
-    // ============ PARSING ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
-        parseAttempts++;
-        
         try {
-            // Suche nach "Unlimited Refill" und nimm die Zahl danach
-            // Die Zahl hat immer das Format 0,x oder 0.x
             Pattern pattern = Pattern.compile(
                 "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL
@@ -223,28 +215,11 @@ public class MainActivity extends AppCompatActivity {
                 
                 if (value > 0 && value <= 1.0) {
                     currentVolume = used + " GB";
-                    currentRefill = used + " GB / 1 GB";
+                    currentDataValue = value;
                     isVolumeLoaded = true;
-                    isLoggedIn = true;
-                    
+                    useRealVolume = true;
                     updateVolumeStatus();
-                    prefs.edit().putString("current_volume", currentVolume).apply();
-                    prefs.edit().putString("current_refill", currentRefill).apply();
-                    prefs.edit().putBoolean("volume_loaded", true).apply();
-                    
                     Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
-                    
-                    handler.postDelayed(() -> {
-                        webView.setVisibility(android.view.View.GONE);
-                    }, 2000);
-                    return;
-                }
-            }
-            
-            if (parseAttempts >= 3 && !isVolumeLoaded) {
-                if (html.contains("login") || html.contains("anmelden")) {
-                    tvVolumeStatus.setText("🔑 Bitte anmelden...");
-                    isLoggedIn = false;
                 }
             }
             
@@ -253,104 +228,136 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    private void updatePermissionStatus() {
-        StringBuilder status = new StringBuilder();
-        status.append("📋 Berechtigungen:\n");
-        
-        boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
-        status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
-        
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        boolean accOk = am != null && am.isEnabled();
-        status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
-        
-        status.append("\n📊 WebView-Modus:\n");
-        status.append(isLoggedIn ? "✅ Eingeloggt" : "❌ Bitte anmelden!");
-        status.append(isVolumeLoaded ? "\n✅ Volumen geladen: " + currentVolume : "\n⏳ Volumen wird geladen...");
-        
-        tvPermissionStatus.setText(status.toString());
-    }
-    
     private void updateVolumeStatus() {
-        StringBuilder status = new StringBuilder();
-        status.append("📊 Volumen:\n");
-        status.append("📱 Unlimited Refill: ").append(currentRefill).append("\n");
-        status.append("💾 Verfügbar: ").append(currentVolume);
-        if (isLoggedIn) {
-            status.append("\n✅ Eingeloggt!");
+        String status = "📊 Volumen: " + currentVolume;
+        if (useRealVolume) {
+            status += "\n✅ Echtes Volumen von Lidl";
+        } else {
+            status += "\n⚡ Simulations-Modus";
         }
-        tvVolumeStatus.setText(status.toString());
+        tvVolumeStatus.setText(status);
     }
     
-    private void requestAllPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
+    private void updateRefillStatus() {
+        if (refillPlaced) {
+            tvRefillPos.setText("📍 Refill: (" + (int)refillX + ", " + (int)refillY + ") ✅");
+        } else {
+            tvRefillPos.setText("📍 Refill: nicht platziert");
+        }
+    }
+    
+    private void loadRefillPosition() {
+        refillX = prefs.getFloat("refill_x", 500);
+        refillY = prefs.getFloat("refill_y", 500);
+        refillPlaced = prefs.getBoolean("refill_placed", false);
+    }
+    
+    private void saveRefillPosition() {
+        prefs.edit().putFloat("refill_x", refillX).apply();
+        prefs.edit().putFloat("refill_y", refillY).apply();
+        prefs.edit().putBoolean("refill_placed", refillPlaced).apply();
+    }
+    
+    private void clickRefillButton() {
+        // Simuliere Klick auf die gespeicherte Position
+        // In einer echten App würde hier ein Accessibility-Klick oder JavaScript-Event ausgeführt
+        Toast.makeText(this, "🔄 Refill-Button geklickt! (" + (int)refillX + ", " + (int)refillY + ")", Toast.LENGTH_SHORT).show();
+        
+        // Versuche über JavaScript zu klicken
+        webView.evaluateJavascript(
+            "document.querySelector('button:contains(\"Refill aktivieren\")')?.click();",
+            null
+        );
+    }
+    
+    private long calculateHumanWaitTime() {
+        long minWait = MIN_HUMAN_WAIT;
+        long maxWait = MAX_HUMAN_WAIT;
+        long waitTime = minWait + (long)(Math.random() * (maxWait - minWait));
+        waitTime += (long)((Math.random() - 0.5) * 30000);
+        return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
+    }
+    
+    private void startAutomation() {
+        if (isRunning) {
+            Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!refillPlaced) {
+            Toast.makeText(this, "⚠️ Bitte zuerst Refill-Button positionieren!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        isRunning = true;
+        btnStartAuto.setText("▶ Läuft...");
+        btnStartAuto.setEnabled(false);
+        btnStopAuto.setEnabled(true);
+        
+        Toast.makeText(this, "🚀 Automatik gestartet!", Toast.LENGTH_LONG).show();
+        
+        cycleCount = 0;
+        currentDataValue = useRealVolume ? currentDataValue : SIMULATED_START_DATA;
+        
+        performCycle();
+    }
+    
+    private void performCycle() {
+        if (!isRunning) return;
+        
+        cycleCount++;
+        
+        // WebView aktualisieren
+        webView.reload();
+        
+        handler.postDelayed(() -> {
+            if (!isRunning) return;
+            
+            // Verbrauch berechnen
+            double decrease = consumptionRate * (currentWaitTime / 60000.0);
+            currentDataValue = Math.max(0.05, currentDataValue - decrease);
+            
+            tvVolumeStatus.setText("📊 " + String.format("%.2f", currentDataValue) + " GB\n⏱ Zyklus " + cycleCount);
+            
+            // Prüfen ob Refill
+            if (currentDataValue <= REFILL_THRESHOLD) {
+                clickRefillButton();
+                handler.postDelayed(() -> {
+                    if (isRunning) {
+                        currentDataValue = useRealVolume ? currentDataValue : SIMULATED_START_DATA;
+                        performCycle();
+                    }
+                }, 5000);
+                return;
             }
-        }
-        
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
-            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
-        }
+            
+            // Wartezeit berechnen
+            currentWaitTime = calculateHumanWaitTime();
+            long minutes = currentWaitTime / 60000;
+            
+            tvVolumeStatus.setText("⏱ Warte ca. " + minutes + " Minuten\n📊 " + String.format("%.2f", currentDataValue) + " GB");
+            
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    performCycle();
+                }
+            }, currentWaitTime);
+            
+        }, 3000);
     }
     
-    private boolean checkAllPermissions() {
-        boolean allOk = true;
-        StringBuilder missing = new StringBuilder();
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            missing.append("❌ Overlay fehlt\n");
-            allOk = false;
-        }
-        
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
-            missing.append("❌ Accessibility fehlt\n");
-            allOk = false;
-        }
-        
-        if (!allOk) {
-            Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
-            btnStartService.setEnabled(false);
-        } else {
-            Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
-            btnStartService.setEnabled(true);
-        }
-        
-        updatePermissionStatus();
-        return allOk;
-    }
-    
-    private void startOverlayService() {
-        if (isVolumeLoaded) {
-            prefs.edit().putString("current_volume", currentVolume).apply();
-            prefs.edit().putBoolean("volume_loaded", true).apply();
-        }
-        
-        Intent intent = new Intent(this, OverlayService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-        Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
-        finish();
+    private void stopAutomation() {
+        isRunning = false;
+        btnStartAuto.setText("▶ Start");
+        btnStartAuto.setEnabled(true);
+        btnStopAuto.setEnabled(false);
+        handler.removeCallbacksAndMessages(null);
+        Toast.makeText(this, "⏹ Gestoppt - " + cycleCount + " Zyklen", Toast.LENGTH_SHORT).show();
     }
     
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        updatePermissionStatus();
-        checkAllPermissions();
-    }
-    
-    @Override
-    protected void onResume() {
-        super.onResume();
-        updatePermissionStatus();
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacksAndMessages(null);
     }
 }
