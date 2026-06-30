@@ -178,7 +178,7 @@
         android:id="@+id/tvCycle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🔄 0 Zyklen"
+        android:text="🔄 0 Zyklen | ⬇ 0"
         android:textColor="#888888"
         android:textSize="10sp"
         android:gravity="center"
