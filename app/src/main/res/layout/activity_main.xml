@@ -5,9 +5,8 @@
     android:orientation="vertical"
     android:padding="0dp">
 
-    <!-- ============ WEBVIEW + OVERLAY ============ -->
+    <!-- ============ WEBVIEW ============ -->
     <FrameLayout
-        android:id="@+id/overlayContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1.2"
@@ -21,7 +20,7 @@
 
     </FrameLayout>
 
-    <!-- ============ APP-BEREICH (UNTEN) ============ -->
+    <!-- ============ APP-BEREICH ============ -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -60,48 +59,20 @@
             android:lineSpacingExtra="4dp"
             android:textColor="#333333"/>
 
-        <!-- REFILL-POSITION -->
-        <TextView
-            android:id="@+id/tvRefillPos"
+        <Button
+            android:id="@+id/btnCheckVolume"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📍 Refill: nicht platziert"
-            android:textSize="11sp"
-            android:gravity="center"
-            android:background="#FFF3E0"
-            android:padding="6dp"
-            android:layout_marginBottom="8dp"/>
+            android:text="📊 Volumen prüfen"
+            android:backgroundTint="#2196F3"
+            android:layout_marginBottom="8dp"
+            android:textSize="14sp"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginBottom="8dp">
-
-            <Button
-                android:id="@+id/btnSetRefillPos"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📍 Refill positionieren"
-                android:backgroundTint="#FF9800"
-                android:textSize="12sp"
-                android:layout_marginEnd="4dp"/>
-
-            <Button
-                android:id="@+id/btnCheckVolume"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="📊 Volumen"
-                android:backgroundTint="#2196F3"
-                android:textSize="12sp"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btnStartAuto"
@@ -129,8 +100,8 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✅ Refill-Button positionieren (roter Kreis) und START"
-            android:textSize="9sp"
+            android:text="✅ Refill-Button wird automatisch erkannt & geklickt"
+            android:textSize="10sp"
             android:textColor="#4CAF50"
             android:gravity="center"
             android:background="#E8F5E9"
