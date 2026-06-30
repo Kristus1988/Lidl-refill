@@ -8,30 +8,28 @@ import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class MainActivity extends AppCompatActivity {
     
     private TextView tvVolumeStatus;
+    private Spinner spinnerConsumption;
     private Button btnCheckVolume, btnStartAuto, btnStopAuto;
     private WebView webView;
     private Handler handler = new Handler(Looper.getMainLooper());
     
-    private String currentVolume = "0.00 GB";
-    private boolean isVolumeLoaded = false;
-    private boolean useRealVolume = false;
-    private double currentDataValue = 0.90;
-    
+    // Automatik
     private boolean isRunning = false;
     private int cycleCount = 0;
     private double consumptionRate = 0.05;
     private long currentWaitTime = 600000;
+    private double currentDataValue = 0.90;
     
     // Parameter
     private static final double REFILL_THRESHOLD = 0.30;
@@ -43,22 +41,49 @@ public class MainActivity extends AppCompatActivity {
     private static final long MAX_HUMAN_WAIT = 1200000;
     
     // Verbrauchs-Optionen
-    private double[] consumptionOptions = {0.05, 0.08, 0.15};
-    private int selectedOption = 0;
+    private static final double[] CONSUMPTION_OPTIONS = {0.05, 0.08, 0.15};
+    private static final String[] CONSUMPTION_LABELS = {
+        "📱 Standard (17-20 Min)",
+        "📺 FullHD (10-13 Min)",
+        "🎬 4K (5-8 Min)"
+    };
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
-        selectedOption = getPreferences(MODE_PRIVATE).getInt("consumption_index", 0);
-        consumptionRate = consumptionOptions[selectedOption];
-        
         tvVolumeStatus = findViewById(R.id.tvVolumeStatus);
+        spinnerConsumption = findViewById(R.id.spinnerConsumption);
         btnCheckVolume = findViewById(R.id.btnCheckVolume);
         btnStartAuto = findViewById(R.id.btnStartAuto);
         btnStopAuto = findViewById(R.id.btnStopAuto);
         webView = findViewById(R.id.webView);
+        
+        // ============ SPINNER ============
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, 
+            android.R.layout.simple_spinner_dropdown_item, CONSUMPTION_LABELS);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerConsumption.setAdapter(adapter);
+        
+        int savedIndex = getPreferences(MODE_PRIVATE).getInt("consumption_index", 0);
+        spinnerConsumption.setSelection(savedIndex);
+        consumptionRate = CONSUMPTION_OPTIONS[savedIndex];
+        
+        spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                consumptionRate = CONSUMPTION_OPTIONS[position];
+                getPreferences(MODE_PRIVATE).edit().putInt("consumption_index", position).apply();
+                Toast.makeText(MainActivity.this, 
+                    "📊 " + CONSUMPTION_LABELS[position], 
+                    Toast.LENGTH_SHORT).show();
+                updateVolumeStatus();
+            }
+            
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
         
         btnCheckVolume.setOnClickListener(v -> checkVolumeFromWeb());
         btnStartAuto.setOnClickListener(v -> startAutomation());
@@ -66,10 +91,6 @@ public class MainActivity extends AppCompatActivity {
         
         setupWebView();
         updateVolumeStatus();
-        
-        handler.postDelayed(() -> {
-            checkVolumeFromWeb();
-        }, 1500);
     }
     
     private void setupWebView() {
@@ -101,16 +122,6 @@ public class MainActivity extends AppCompatActivity {
                     "var event = new Event('resize'); window.dispatchEvent(event);",
                     null
                 );
-                
-                // HTML parsen
-                view.evaluateJavascript(
-                    "document.documentElement.outerHTML",
-                    value -> {
-                        if (value != null && !value.equals("null")) {
-                            parseHtml(value);
-                        }
-                    }
-                );
             }
         });
         
@@ -118,109 +129,57 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
     }
     
-    // ============ REFILL BUTTON KLICKEN ============
-    private void clickRefillButton() {
-        String jsCode = 
-            "var buttons = document.querySelectorAll('button[aria-label=\"Datenvolumen per Refill wieder auffüllen\"]');" +
-            "if (buttons.length > 0) {" +
-            "    buttons[0].click();" +
-            "    'clicked';" +
-            "} else {" +
-            "    var allButtons = document.querySelectorAll('button');" +
-            "    for (var i = 0; i < allButtons.length; i++) {" +
-            "        if (allButtons[i].textContent.trim() === 'Refill aktivieren') {" +
-            "            allButtons[i].click();" +
-            "            'clicked';" +
-            "            break;" +
-            "        }" +
-            "    }" +
-            "    'not found';" +
-            "}";
-        
-        webView.evaluateJavascript(jsCode, value -> {
-            if (value != null && value.contains("clicked")) {
-                Toast.makeText(this, "🔄 Refill-Button geklickt! ✅", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-    
-    // ============ VOLUMEN PARSEN ============
-    private void parseHtml(String html) {
-        if (html == null || html.isEmpty()) return;
-        
-        try {
-            // ============ MUSTER 1: unit-display ============
-            Pattern pattern = Pattern.compile(
-                "unit-display[^\"]*?\"[^>]*?>\\s*\\$?(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*1\\s*GB",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            );
-            Matcher matcher = pattern.matcher(html);
-            
-            if (matcher.find()) {
-                String used = matcher.group(1).replace(",", ".");
-                double value = Double.parseDouble(used);
-                
-                if (value > 0 && value <= 1.0) {
-                    currentVolume = used + " GB";
-                    currentDataValue = value;
-                    isVolumeLoaded = true;
-                    useRealVolume = true;
-                    updateVolumeStatus();
-                    Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-            
-            // ============ MUSTER 2: Unlimited Refill ============
-            Pattern fallbackPattern = Pattern.compile(
-                "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            );
-            Matcher fallbackMatcher = fallbackPattern.matcher(html);
-            if (fallbackMatcher.find()) {
-                String used = fallbackMatcher.group(1).replace(",", ".");
-                double value = Double.parseDouble(used);
-                if (value > 0 && value <= 1.0) {
-                    currentVolume = used + " GB";
-                    currentDataValue = value;
-                    isVolumeLoaded = true;
-                    useRealVolume = true;
-                    updateVolumeStatus();
-                    Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
-                }
-            }
-            
-        } catch (Exception e) {
-            // Parsen fehlgeschlagen
-        }
-    }
-    
+    // ============ VOLUMEN PRÜFEN (NUR STATUS) ============
     private void checkVolumeFromWeb() {
-        tvVolumeStatus.setText("📊 Lade Lidl-Seite...");
+        Toast.makeText(this, "📊 WebView wird aktualisiert...", Toast.LENGTH_SHORT).show();
         webView.reload();
-        
-        handler.postDelayed(() -> {
-            if (!isVolumeLoaded) {
-                double simulatedValue = 0.3 + Math.random() * 0.7;
-                currentVolume = String.format("%.2f GB", simulatedValue);
-                currentDataValue = simulatedValue;
-                useRealVolume = false;
-                updateVolumeStatus();
-                Toast.makeText(this, "📊 Volumen: " + currentVolume + " (Simulation)", Toast.LENGTH_SHORT).show();
-            }
-        }, 8000);
+        updateVolumeStatus();
     }
     
     private void updateVolumeStatus() {
-        String status = "📊 Volumen: " + currentVolume;
-        if (useRealVolume) {
-            status += "\n✅ Echtes Volumen von Lidl";
-        } else {
-            status += "\n⚡ Simulations-Modus";
+        String status = "📊 Verbrauch: " + CONSUMPTION_LABELS[getPreferences(MODE_PRIVATE).getInt("consumption_index", 0)];
+        status += "\n⚡ Simulations-Modus";
+        if (isRunning) {
+            status += "\n🔄 Zyklus: " + cycleCount;
+            status += "\n📊 " + String.format("%.2f", currentDataValue) + " GB";
         }
         tvVolumeStatus.setText(status);
+    }
+    
+    // ============ REFILL BUTTON MIT MENSCHLICHEN ABWEICHUNGEN ============
+    private void clickRefillButton() {
+        // ============ MENSCHLICHE ABWEICHUNGEN ============
+        // Zufällige Verzögerung: 200-800ms
+        long randomDelay = 200 + (long)(Math.random() * 600);
+        
+        handler.postDelayed(() -> {
+            // ============ 1. ÜBER ARIA-LABEL ============
+            String jsCode = 
+                "var buttons = document.querySelectorAll('button[aria-label=\"Datenvolumen per Refill wieder auffüllen\"]');" +
+                "if (buttons.length > 0) {" +
+                "    buttons[0].click();" +
+                "    'clicked';" +
+                "} else {" +
+                "    // ============ 2. FALLBACK: ÜBER TEXT ============" +
+                "    var allButtons = document.querySelectorAll('button');" +
+                "    for (var i = 0; i < allButtons.length; i++) {" +
+                "        if (allButtons[i].textContent.trim() === 'Refill aktivieren') {" +
+                "            allButtons[i].click();" +
+                "            'clicked';" +
+                "            break;" +
+                "        }" +
+                "    }" +
+                "    'not found';" +
+                "}";
+            
+            webView.evaluateJavascript(jsCode, value -> {
+                if (value != null && value.contains("clicked")) {
+                    Toast.makeText(this, "🔄 Refill-Button geklickt! ✅", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "⚠️ Refill-Button nicht gefunden!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }, randomDelay);
     }
     
     private long calculateHumanWaitTime() {
@@ -242,10 +201,12 @@ public class MainActivity extends AppCompatActivity {
         btnStartAuto.setEnabled(false);
         btnStopAuto.setEnabled(true);
         
-        Toast.makeText(this, "🚀 Automatik gestartet!", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "🚀 Automatik gestartet!\n📊 " + CONSUMPTION_LABELS[spinnerConsumption.getSelectedItemPosition()], Toast.LENGTH_LONG).show();
         
         cycleCount = 0;
-        currentDataValue = useRealVolume ? currentDataValue : SIMULATED_START_DATA;
+        currentDataValue = SIMULATED_START_DATA;
+        currentWaitTime = INITIAL_WAIT_TIME;
+        updateVolumeStatus();
         
         performCycle();
     }
@@ -255,32 +216,48 @@ public class MainActivity extends AppCompatActivity {
         
         cycleCount++;
         
+        // WebView aktualisieren
         webView.reload();
         
+        // Nach dem Refresh: Verbrauch berechnen
         handler.postDelayed(() -> {
             if (!isRunning) return;
             
-            double decrease = consumptionRate * (currentWaitTime / 60000.0);
+            // Verbrauch berechnen
+            double timeHours = currentWaitTime / 3600000.0;
+            double decrease = consumptionRate * timeHours;
             currentDataValue = Math.max(0.05, currentDataValue - decrease);
             
-            tvVolumeStatus.setText("📊 " + String.format("%.2f", currentDataValue) + " GB\n⏱ Zyklus " + cycleCount);
+            updateVolumeStatus();
             
+            // Prüfen ob Refill
             if (currentDataValue <= REFILL_THRESHOLD) {
-                clickRefillButton();
+                // MENSCHLICH: Zufällige Verzögerung vor Refill
+                long randomRefillDelay = 1000 + (long)(Math.random() * 2000);
                 handler.postDelayed(() -> {
                     if (isRunning) {
-                        currentDataValue = useRealVolume ? currentDataValue : SIMULATED_START_DATA;
-                        performCycle();
+                        clickRefillButton();
+                        // Nach Refill: neu starten
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                currentDataValue = SIMULATED_START_DATA;
+                                performCycle();
+                            }
+                        }, 5000);
                     }
-                }, 5000);
+                }, randomRefillDelay);
                 return;
             }
             
+            // Wartezeit berechnen (menschlich 15-20 Minuten)
             currentWaitTime = calculateHumanWaitTime();
             long minutes = currentWaitTime / 60000;
             
-            tvVolumeStatus.setText("⏱ Warte ca. " + minutes + " Minuten\n📊 " + String.format("%.2f", currentDataValue) + " GB");
+            tvVolumeStatus.setText("📊 " + CONSUMPTION_LABELS[spinnerConsumption.getSelectedItemPosition()] +
+                "\n⏱ Warte ca. " + minutes + " Minuten" +
+                "\n📊 " + String.format("%.2f", currentDataValue) + " GB");
             
+            // Warten und nächsten Zyklus
             handler.postDelayed(() -> {
                 if (isRunning) {
                     performCycle();
@@ -297,6 +274,7 @@ public class MainActivity extends AppCompatActivity {
         btnStopAuto.setEnabled(false);
         handler.removeCallbacksAndMessages(null);
         Toast.makeText(this, "⏹ Gestoppt - " + cycleCount + " Zyklen", Toast.LENGTH_SHORT).show();
+        updateVolumeStatus();
     }
     
     @Override
