@@ -112,6 +112,10 @@ public class MainActivity extends AppCompatActivity {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
         );
         
+        webView.getSettings().setSupportZoom(true);
+        webView.getSettings().setBuiltInZoomControls(true);
+        webView.getSettings().setDisplayZoomControls(false);
+        
         webView.setVisibility(android.view.View.VISIBLE);
         
         CookieManager cookieManager = CookieManager.getInstance();
