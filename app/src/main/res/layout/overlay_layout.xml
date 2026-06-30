@@ -9,7 +9,7 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- Status - größer & weiß -->
+    <!-- Status -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="wrap_content"
@@ -22,7 +22,7 @@
         android:layout_marginBottom="4dp"
         android:layout_gravity="center"/>
 
-    <!-- Verbrauchs-Auswahl - Weißer Text -->
+    <!-- Verbrauchs-Auswahl -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -32,7 +32,6 @@
         android:gravity="center"
         android:layout_marginBottom="2dp"/>
 
-    <!-- Spinner - Weißer Text, größer -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
@@ -122,7 +121,7 @@
         android:gravity="center"
         android:layout_marginBottom="4dp"/>
 
-    <!-- Stop-Button - UNTER Start-Button -->
+    <!-- Stop-Button -->
     <Button
         android:id="@+id/btnStopAuto"
         android:layout_width="match_parent"
