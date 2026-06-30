@@ -46,15 +46,32 @@
             android:textColor="#666666"
             android:layout_marginBottom="8dp"/>
 
+        <!-- ============ VERBRAUCHS-AUSWAHL ============ -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📊 VERBRAUCH:"
+            android:textSize="11sp"
+            android:textColor="#333333"
+            android:gravity="center"
+            android:layout_marginBottom="4dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerConsumption"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="#FFFFFF"
+            android:layout_marginBottom="8dp"/>
+
         <!-- VOLUMEN-ANZEIGE -->
         <TextView
             android:id="@+id/tvVolumeStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📊 Volumen wird geladen..."
-            android:textSize="13sp"
+            android:text="📊 Verbrauch: Standard (17-20 Min)"
+            android:textSize="12sp"
             android:background="#E8F5E9"
-            android:padding="10dp"
+            android:padding="8dp"
             android:layout_marginBottom="8dp"
             android:lineSpacingExtra="4dp"
             android:textColor="#333333"/>
@@ -63,7 +80,7 @@
             android:id="@+id/btnCheckVolume"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📊 Volumen prüfen"
+            android:text="🔄 WebView aktualisieren"
             android:backgroundTint="#2196F3"
             android:layout_marginBottom="8dp"
             android:textSize="14sp"/>
@@ -100,8 +117,8 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✅ Refill-Button wird automatisch erkannt und geklickt"
-            android:textSize="10sp"
+            android:text="✅ Refill-Button wird automatisch erkannt und menschlich geklickt"
+            android:textSize="9sp"
             android:textColor="#4CAF50"
             android:gravity="center"
             android:background="#E8F5E9"
