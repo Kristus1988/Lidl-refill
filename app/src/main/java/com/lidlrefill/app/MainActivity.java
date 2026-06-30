@@ -1,6 +1,7 @@
 package com.lidlrefill.app;
 
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -82,16 +83,15 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.webView);
         overlayContainer = findViewById(R.id.overlayContainer);
         
-        // Refill-Marker (roter Kreis) erstellen
+        // Refill-Marker (roter Kreis) - GRÖSSER!
         refillMarker = new View(this);
         refillMarker.setBackgroundResource(R.drawable.refill_marker);
         refillMarker.setVisibility(View.GONE);
-        FrameLayout.LayoutParams markerParams = new FrameLayout.LayoutParams(40, 40);
+        FrameLayout.LayoutParams markerParams = new FrameLayout.LayoutParams(60, 60);  // 40→60
         refillMarker.setLayoutParams(markerParams);
         refillMarker.setOnTouchListener(touchListener);
         overlayContainer.addView(refillMarker);
         
-        // Refill-Position setzen Button
         btnSetRefillPos.setOnClickListener(v -> {
             if (refillMarker.getVisibility() == View.VISIBLE) {
                 refillMarker.setVisibility(View.GONE);
@@ -102,8 +102,8 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "✅ Refill-Button Position gespeichert!", Toast.LENGTH_SHORT).show();
             } else {
                 refillMarker.setVisibility(View.VISIBLE);
-                refillMarker.setX(refillX - 20);
-                refillMarker.setY(refillY - 20);
+                refillMarker.setX(refillX - 30);
+                refillMarker.setY(refillY - 30);
                 btnSetRefillPos.setText("✅ Position bestätigen");
                 Toast.makeText(this, "Ziehe den roten Kreis auf den Refill-Button", Toast.LENGTH_LONG).show();
             }
@@ -137,8 +137,8 @@ public class MainActivity extends AppCompatActivity {
                         float newY = event.getRawY() - dragOffsetY;
                         refillMarker.setX(newX);
                         refillMarker.setY(newY);
-                        refillX = newX + 20;
-                        refillY = newY + 20;
+                        refillX = newX + 30;
+                        refillY = newY + 30;
                         tvRefillPos.setText("📍 Refill: (" + (int)refillX + ", " + (int)refillY + ")");
                     }
                     return true;
@@ -151,23 +151,48 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     
+    // ============ DESKTOP-VIEWPORT ERZWINGEN ============
     private void setupWebView() {
+        // JavaScript aktivieren
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setLoadWithOverviewMode(true);
-        webView.getSettings().setUseWideViewPort(true);
-        webView.getSettings().setUserAgentString(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-        );
         
+        // ============ DESKTOP-VIEWPORT ERZWINGEN ============
+        webView.getSettings().setLoadWithOverviewMode(false);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.setInitialScale(100);
+        
+        // ============ DESKTOP-USERAGENT ============
+        String desktopUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        webView.getSettings().setUserAgentString(desktopUserAgent);
+        
+        // ============ COOKIES ============
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.setAcceptThirdPartyCookies(webView, true);
+        }
+        cookieManager.setCookie("kundenkonto.lidl-connect.de", "desktop=true; SameSite=None; Secure");
         
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 
+                // ============ JavaScript: Desktop-Viewport erzwingen ============
+                view.evaluateJavascript(
+                    "document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=1280');" +
+                    "document.body.style.width = '1280px';" +
+                    "document.documentElement.style.width = '1280px';" +
+                    "document.querySelector('html')?.style.setProperty('min-width', '1280px', 'important');" +
+                    "document.querySelector('body')?.style.setProperty('min-width', '1280px', 'important');" +
+                    "if (document.querySelector('.mobile-only')) document.querySelector('.mobile-only').style.display = 'none';" +
+                    "if (document.querySelector('.desktop-only')) document.querySelector('.desktop-only').style.display = 'block';" +
+                    "var event = new Event('resize'); window.dispatchEvent(event);",
+                    null
+                );
+                
+                // HTML parsen
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
                     value -> {
@@ -259,11 +284,8 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void clickRefillButton() {
-        // Simuliere Klick auf die gespeicherte Position
-        // In einer echten App würde hier ein Accessibility-Klick oder JavaScript-Event ausgeführt
         Toast.makeText(this, "🔄 Refill-Button geklickt! (" + (int)refillX + ", " + (int)refillY + ")", Toast.LENGTH_SHORT).show();
         
-        // Versuche über JavaScript zu klicken
         webView.evaluateJavascript(
             "document.querySelector('button:contains(\"Refill aktivieren\")')?.click();",
             null
@@ -307,19 +329,16 @@ public class MainActivity extends AppCompatActivity {
         
         cycleCount++;
         
-        // WebView aktualisieren
         webView.reload();
         
         handler.postDelayed(() -> {
             if (!isRunning) return;
             
-            // Verbrauch berechnen
             double decrease = consumptionRate * (currentWaitTime / 60000.0);
             currentDataValue = Math.max(0.05, currentDataValue - decrease);
             
             tvVolumeStatus.setText("📊 " + String.format("%.2f", currentDataValue) + " GB\n⏱ Zyklus " + cycleCount);
             
-            // Prüfen ob Refill
             if (currentDataValue <= REFILL_THRESHOLD) {
                 clickRefillButton();
                 handler.postDelayed(() -> {
@@ -331,7 +350,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Wartezeit berechnen
             currentWaitTime = calculateHumanWaitTime();
             long minutes = currentWaitTime / 60000;
             
