@@ -104,17 +104,19 @@ public class MainActivity extends AppCompatActivity {
     private void setupWebView() {
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setLoadWithOverviewMode(true);
+        
+        // ============ DESKTOP-VIEWPORT ERZWINGEN ============
+        webView.setInitialScale(100);
         webView.getSettings().setUseWideViewPort(true);
-        
-        // ============ ALS DESKTOP ANMELDEN ============
-        webView.getSettings().setUserAgentString(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-        );
-        
+        webView.getSettings().setLoadWithOverviewMode(false);  // ← WICHTIG!
         webView.getSettings().setSupportZoom(true);
         webView.getSettings().setBuiltInZoomControls(true);
         webView.getSettings().setDisplayZoomControls(false);
+        
+        // ============ DESKTOP-USERAGENT ============
+        webView.getSettings().setUserAgentString(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        );
         
         webView.setVisibility(android.view.View.VISIBLE);
         
@@ -129,6 +131,14 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(android.view.View.GONE);
+                
+                // Nach dem Laden: Desktop-Viewport erzwingen
+                view.evaluateJavascript(
+                    "document.documentElement.style.width = '1024px'; " +
+                    "document.body.style.width = '1024px'; " +
+                    "document.querySelector('meta[name=viewport]').content = 'width=1024';",
+                    null
+                );
                 
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
@@ -199,40 +209,35 @@ public class MainActivity extends AppCompatActivity {
         parseAttempts++;
         
         try {
-            String[] patterns = {
+            // Suche nach "Unlimited Refill" und nimm die Zahl danach
+            // Die Zahl hat immer das Format 0,x oder 0.x
+            Pattern pattern = Pattern.compile(
                 "Unlimited\\s*Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                "Unlimited\\s*Refill[\\s\\S]*?(0[\\.\\,]\\d+)\\s*GB",
-                "Unlimited\\s*Refill\\s*(0[\\.\\,]\\d+)\\s*GB",
-                "Refill.*?(0[\\.\\,]\\d+)\\s*GB",
-                "(0[\\.\\,]\\d+)\\s*GB"
-            };
+                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+            );
+            Matcher matcher = pattern.matcher(html);
             
-            for (String patternStr : patterns) {
-                Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-                Matcher matcher = pattern.matcher(html);
+            if (matcher.find()) {
+                String used = matcher.group(1).replace(",", ".");
+                double value = Double.parseDouble(used);
                 
-                if (matcher.find()) {
-                    String used = matcher.group(1).replace(",", ".");
-                    double value = Double.parseDouble(used);
+                if (value > 0 && value <= 1.0) {
+                    currentVolume = used + " GB";
+                    currentRefill = used + " GB / 1 GB";
+                    isVolumeLoaded = true;
+                    isLoggedIn = true;
                     
-                    if (value > 0 && value <= 1.0) {
-                        currentVolume = used + " GB";
-                        currentRefill = used + " GB / 1 GB";
-                        isVolumeLoaded = true;
-                        isLoggedIn = true;
-                        
-                        updateVolumeStatus();
-                        prefs.edit().putString("current_volume", currentVolume).apply();
-                        prefs.edit().putString("current_refill", currentRefill).apply();
-                        prefs.edit().putBoolean("volume_loaded", true).apply();
-                        
-                        Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
-                        
-                        handler.postDelayed(() -> {
-                            webView.setVisibility(android.view.View.GONE);
-                        }, 2000);
-                        return;
-                    }
+                    updateVolumeStatus();
+                    prefs.edit().putString("current_volume", currentVolume).apply();
+                    prefs.edit().putString("current_refill", currentRefill).apply();
+                    prefs.edit().putBoolean("volume_loaded", true).apply();
+                    
+                    Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
+                    
+                    handler.postDelayed(() -> {
+                        webView.setVisibility(android.view.View.GONE);
+                    }, 2000);
+                    return;
                 }
             }
             
