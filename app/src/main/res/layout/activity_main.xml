@@ -100,7 +100,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="✅ Refill-Button wird automatisch erkannt & geklickt"
+            android:text="✅ Refill-Button wird automatisch erkannt und geklickt"
             android:textSize="10sp"
             android:textColor="#4CAF50"
             android:gravity="center"
