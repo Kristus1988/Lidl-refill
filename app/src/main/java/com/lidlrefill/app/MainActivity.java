@@ -9,8 +9,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
-import android.view.View;
-import android.view.accessibility.AccessibilityManager;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -39,7 +37,6 @@ public class MainActivity extends AppCompatActivity {
     private String currentRefill = "1 GB / 1 GB";
     private boolean isLoggedIn = false;
     private boolean isVolumeLoaded = false;
-    private boolean isLoginPageShown = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
         btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
         btnCheckVolume = findViewById(R.id.btnCheckVolume);
         progressBar = findViewById(R.id.progressBar);
+        webView = findViewById(R.id.webView);
         
         Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
@@ -103,12 +101,11 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void setupWebView() {
-        webView = new WebView(this);
-        webView.setVisibility(View.VISIBLE);  // ← SICHTBAR MACHEN!
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setLoadWithOverviewMode(true);
         webView.getSettings().setUseWideViewPort(true);
+        webView.setVisibility(android.view.View.VISIBLE);
         
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -120,17 +117,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                progressBar.setVisibility(View.GONE);
+                progressBar.setVisibility(android.view.View.GONE);
                 
-                // Prüfen ob eingeloggt
                 String cookies = CookieManager.getInstance().getCookie(url);
                 if (cookies != null && !cookies.isEmpty()) {
                     isLoggedIn = true;
-                    isLoginPageShown = false;
                     tvVolumeStatus.setText("🔑 Eingeloggt – Volumen wird geladen...");
                 }
                 
-                // HTML parsen nach Volumen
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
                     value -> {
@@ -140,11 +134,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 );
                 
-                // Wenn Login-Seite erkannt, WebView sichtbar lassen
                 if (url.contains("login") || url.contains("anmelden")) {
-                    isLoginPageShown = true;
                     tvVolumeStatus.setText("🔑 Bitte in der Webseite anmelden...");
-                    webView.setVisibility(View.VISIBLE);
                     Toast.makeText(MainActivity.this, 
                         "🔑 Bitte logge dich in der Webseite ein!", 
                         Toast.LENGTH_LONG).show();
@@ -154,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                progressBar.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(android.view.View.VISIBLE);
             }
         });
         
@@ -163,11 +154,9 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void checkVolumeFromWeb() {
-        progressBar.setVisibility(View.VISIBLE);
+        progressBar.setVisibility(android.view.View.VISIBLE);
         tvVolumeStatus.setText("📊 Lade Lidl-Seite...");
-        
-        // WebView sichtbar machen
-        webView.setVisibility(View.VISIBLE);
+        webView.setVisibility(android.view.View.VISIBLE);
         
         String cookies = CookieManager.getInstance().getCookie("kundenkonto.lidl-connect.de");
         if (cookies != null && !cookies.isEmpty()) {
@@ -185,9 +174,8 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
         
         handler.postDelayed(() -> {
-            progressBar.setVisibility(View.GONE);
+            progressBar.setVisibility(android.view.View.GONE);
             if (!isVolumeLoaded) {
-                // Fallback: Simulation wenn keine Werte gefunden
                 double simulatedValue = 0.3 + Math.random() * 0.7;
                 currentVolume = String.format("%.2f GB", simulatedValue);
                 currentRefill = "1 GB / 1 GB";
@@ -201,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
         if (html == null || html.isEmpty()) return;
         
         try {
-            // Suche nach "0 GB / 25 GB" oder ähnlich
+            // Suche nach Zahlen mit Punkt ODER Komma
             Pattern pattern = Pattern.compile(
                 "(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*(\\d+)\\s*GB", 
                 Pattern.CASE_INSENSITIVE
@@ -217,7 +205,6 @@ public class MainActivity extends AppCompatActivity {
                 isLoggedIn = true;
                 updateVolumeStatus();
                 
-                // Volumen in SharedPreferences speichern für OverlayService
                 prefs.edit().putString("current_volume", currentVolume).apply();
                 prefs.edit().putString("current_refill", currentRefill).apply();
                 prefs.edit().putBoolean("volume_loaded", true).apply();
@@ -226,7 +213,7 @@ public class MainActivity extends AppCompatActivity {
                 
                 // WebView nach erfolgreichem Laden ausblenden
                 handler.postDelayed(() -> {
-                    webView.setVisibility(View.GONE);
+                    webView.setVisibility(android.view.View.GONE);
                 }, 2000);
             }
             
