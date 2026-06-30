@@ -96,7 +96,6 @@ public class MainActivity extends AppCompatActivity {
         updatePermissionStatus();
         updateVolumeStatus();
         
-        // Automatisch Volumen prüfen beim Start
         handler.postDelayed(() -> {
             checkVolumeFromWeb();
         }, 1500);
@@ -121,7 +120,6 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(android.view.View.GONE);
                 
-                // HTML parsen nach Volumen
                 view.evaluateJavascript(
                     "document.documentElement.outerHTML",
                     value -> {
@@ -131,7 +129,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 );
                 
-                // Prüfen ob Login-Seite
                 if (url.contains("login") || url.contains("anmelden")) {
                     tvVolumeStatus.setText("🔑 Bitte in der Webseite anmelden...");
                     Toast.makeText(MainActivity.this, 
@@ -159,7 +156,6 @@ public class MainActivity extends AppCompatActivity {
         
         webView.loadUrl("https://kundenkonto.lidl-connect.de/mein-lidl-connect/uebersicht.html");
         
-        // Mehrmals versuchen zu parsen
         handler.postDelayed(() -> {
             if (!isVolumeLoaded) {
                 webView.evaluateJavascript(
@@ -176,7 +172,6 @@ public class MainActivity extends AppCompatActivity {
         handler.postDelayed(() -> {
             progressBar.setVisibility(android.view.View.GONE);
             if (!isVolumeLoaded) {
-                // Wenn kein Volumen erkannt: Simulation
                 double simulatedValue = 0.3 + Math.random() * 0.7;
                 currentVolume = String.format("%.2f GB", simulatedValue);
                 currentRefill = "1 GB / 1 GB";
@@ -187,69 +182,43 @@ public class MainActivity extends AppCompatActivity {
         }, 8000);
     }
     
+    // ============ PARSING - SUCHT NACH "Unlimited Refill" ============
     private void parseHtml(String html) {
         if (html == null || html.isEmpty()) return;
         
         parseAttempts++;
         
         try {
-            // ============ SUCHE NACH UNLIMITED REFILL VOLUMEN ============
-            // Muster 1: "0,92 GB / 1 GB" oder "0.92 GB / 1 GB"
-            Pattern pattern1 = Pattern.compile(
-                "(\\d+[\\.\\,]?\\d*)\\s*GB\\s*/\\s*(\\d+)\\s*GB", 
-                Pattern.CASE_INSENSITIVE
-            );
-            Matcher matcher1 = pattern1.matcher(html);
-            
-            // Muster 2: "Unlimited Refill" Bereich
-            Pattern pattern2 = Pattern.compile(
+            // Suche nach "Unlimited Refill" und nimm die Zahl danach
+            Pattern pattern = Pattern.compile(
                 "Unlimited\\s*Refill.*?(\\d+[\\.\\,]?\\d*)\\s*GB",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL
             );
-            Matcher matcher2 = pattern2.matcher(html);
+            Matcher matcher = pattern.matcher(html);
             
-            String used = null;
-            String total = null;
-            
-            // Versuche Muster 1
-            if (matcher1.find()) {
-                used = matcher1.group(1).replace(",", ".");
-                total = matcher1.group(2);
-                isLoggedIn = true;
-            }
-            
-            // Versuche Muster 2 (Fallback)
-            if (used == null && matcher2.find()) {
-                used = matcher2.group(1).replace(",", ".");
-                total = "1"; // Unlimited Refill ist immer 1 GB
-                isLoggedIn = true;
-            }
-            
-            if (used != null) {
-                currentRefill = used + " GB / " + total + " GB";
+            if (matcher.find()) {
+                String used = matcher.group(1).replace(",", ".");
                 currentVolume = used + " GB";
+                currentRefill = used + " GB / 1 GB";
                 isVolumeLoaded = true;
                 isLoggedIn = true;
-                updateVolumeStatus();
                 
-                // Volumen speichern
+                updateVolumeStatus();
                 prefs.edit().putString("current_volume", currentVolume).apply();
                 prefs.edit().putString("current_refill", currentRefill).apply();
                 prefs.edit().putBoolean("volume_loaded", true).apply();
                 
                 Toast.makeText(this, "📊 Volumen: " + currentVolume + " ✅", Toast.LENGTH_SHORT).show();
                 
-                // WebView nach erfolgreichem Laden ausblenden
                 handler.postDelayed(() -> {
                     webView.setVisibility(android.view.View.GONE);
                 }, 2000);
                 return;
             }
             
-            // Wenn nach 3 Versuchen nichts gefunden
+            // Fallback: Wenn kein "Unlimited Refill" gefunden
             if (parseAttempts >= 3 && !isVolumeLoaded) {
-                // Prüfen ob Login-Seite (dann kein Fehler)
-                if (html.contains("login") || html.contains("anmelden") || html.contains("passwort")) {
+                if (html.contains("login") || html.contains("anmelden")) {
                     tvVolumeStatus.setText("🔑 Bitte anmelden...");
                     isLoggedIn = false;
                 }
@@ -333,7 +302,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void startOverlayService() {
-        // Volumen vor Overlay-Start speichern
         if (isVolumeLoaded) {
             prefs.edit().putString("current_volume", currentVolume).apply();
             prefs.edit().putBoolean("volume_loaded", true).apply();
