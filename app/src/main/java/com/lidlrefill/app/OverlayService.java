@@ -86,18 +86,18 @@ public class OverlayService extends AccessibilityService {
     private int currentModeIndex = 0;
     
     // ============ ZEITEN ============
-    private static final long MIN_WAIT_AFTER_SWIPE = 6000;   // 6 Sekunden Minimum
-    private static final long MAX_WAIT_AFTER_SWIPE = 7000;   // 7 Sekunden Maximum
-    private static final long MIN_WAIT_AFTER_REFILL = 6000;  // 6 Sekunden Minimum
-    private static final long MAX_WAIT_AFTER_REFILL = 7000;  // 7 Sekunden Maximum
+    // NEU: 8-10 Sekunden nach Swipe und nach Refill
+    private static final long MIN_WAIT_AFTER_SWIPE = 8000;   // 8 Sekunden Minimum
+    private static final long MAX_WAIT_AFTER_SWIPE = 10000;  // 10 Sekunden Maximum
+    private static final long MIN_WAIT_AFTER_REFILL = 8000;  // 8 Sekunden Minimum
+    private static final long MAX_WAIT_AFTER_REFILL = 10000; // 10 Sekunden Maximum
     private static final long MIN_WAIT_TIME = 60000;
     private static final long MAX_WAIT_TIME = 1800000;
     
-    // ============ OPTIMIERTE WARTEZEITEN ============
     private static final long[][] WAIT_RANGES = {
-        {1080000, 1320000},  // Surfen: 18-22 Minuten (4 Min Puffer)
-        {660000, 840000},    // FullHD: 11-14 Minuten (3 Min Puffer)
-        {360000, 540000}     // 4K: 6-9 Minuten (3 Min Puffer)
+        {1080000, 1320000},  // Surfen: 18-22 Minuten
+        {660000, 840000},    // FullHD: 11-14 Minuten
+        {360000, 540000}     // 4K: 6-9 Minuten
     };
     
     private int cycleCount = 0;
