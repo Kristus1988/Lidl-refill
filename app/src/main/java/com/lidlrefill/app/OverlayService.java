@@ -79,8 +79,8 @@ public class OverlayService extends AccessibilityService {
     // ============ VERBRAUCHS-OPTIONEN ============
     private static final double[] CONSUMPTION_OPTIONS = {0.03, 0.05, 0.10};
     private static final String[] CONSUMPTION_LABELS = {
-        "📱 Surfen (20-25 Min)",
-        "📺 FullHD (12-15 Min)",
+        "📱 Surfen (18-22 Min)",
+        "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)"
     };
     private int currentModeIndex = 0;
@@ -93,10 +93,11 @@ public class OverlayService extends AccessibilityService {
     private static final long MIN_WAIT_TIME = 60000;
     private static final long MAX_WAIT_TIME = 1800000;
     
+    // ============ OPTIMIERTE WARTEZEITEN ============
     private static final long[][] WAIT_RANGES = {
-        {1200000, 1500000},  // Surfen: 20-25 Minuten
-        {720000, 900000},    // FullHD: 12-15 Minuten
-        {360000, 540000}     // 4K: 6-9 Minuten
+        {1080000, 1320000},  // Surfen: 18-22 Minuten (4 Min Puffer)
+        {660000, 840000},    // FullHD: 11-14 Minuten (3 Min Puffer)
+        {360000, 540000}     // 4K: 6-9 Minuten (3 Min Puffer)
     };
     
     private int cycleCount = 0;
@@ -105,17 +106,7 @@ public class OverlayService extends AccessibilityService {
     private long countdownStartTime = 0;
     private boolean isWaiting = false;
     
-    // ============ ABLAUF-STEUERUNG ============
-    private enum Phase { 
-        IDLE,           // Bereit
-        SWIPE_1,        // 1. Swipe ausführen
-        WAIT_AFTER_SWIPE_1, // Warten nach 1. Swipe
-        REFILL,         // Refill ausführen
-        WAIT_AFTER_REFILL,  // Warten nach Refill
-        SWIPE_2,        // 2. Swipe ausführen
-        WAIT_AFTER_SWIPE_2, // Warten nach 2. Swipe (Countdown)
-        COUNTDOWN       // Countdown läuft
-    }
+    private enum Phase { IDLE, SWIPE_1, WAIT_AFTER_SWIPE_1, REFILL, WAIT_AFTER_REFILL, SWIPE_2, COUNTDOWN }
     private Phase currentPhase = Phase.IDLE;
     
     private Random random = new Random();
@@ -555,9 +546,7 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    // ============ PHASE 2: SWIPE_2 → COUNTDOWN ============
                     if (currentPhase == Phase.SWIPE_2) {
-                        // 2. Swipe wurde ausgeführt → jetzt Countdown starten!
                         currentPhase = Phase.COUNTDOWN;
                         currentWaitTime = calculateHumanWaitTime();
                         long minutes = currentWaitTime / 60000;
@@ -566,7 +555,6 @@ public class OverlayService extends AccessibilityService {
                         return;
                     }
                     
-                    // ============ PHASE 1: SWIPE_1 → WARTEN → REFILL ============
                     if (currentPhase == Phase.SWIPE_1) {
                         currentPhase = Phase.WAIT_AFTER_SWIPE_1;
                         long waitTime = randomWaitAfterSwipe();
@@ -615,7 +603,6 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    // ============ NACH REFILL → WARTEN → SWIPE_2 ============
                     currentPhase = Phase.WAIT_AFTER_REFILL;
                     long waitTime = randomWaitAfterRefill();
                     long seconds = waitTime / 1000;
@@ -654,7 +641,6 @@ public class OverlayService extends AccessibilityService {
                     updateCountdown("⏱ Warte: 00:00");
                     isWaiting = false;
                     if (isRunning) {
-                        // ============ COUNTDOWN ABGELAUFEN → ZURÜCK ZU SWIPE_1 ============
                         cycleCount++;
                         updateCycle();
                         currentPhase = Phase.SWIPE_1;
@@ -700,7 +686,6 @@ public class OverlayService extends AccessibilityService {
         updateStatus("🟢 Automatik läuft");
         updateCycle();
         
-        // ============ START: SWIPE_1 ============
         currentPhase = Phase.SWIPE_1;
         handler.postDelayed(() -> {
             if (isRunning) {
