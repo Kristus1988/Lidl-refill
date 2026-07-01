@@ -105,7 +105,17 @@ public class OverlayService extends AccessibilityService {
     private long countdownStartTime = 0;
     private boolean isWaiting = false;
     
-    private enum Phase { IDLE, SWIPE, WAIT_AFTER_SWIPE, REFILL, WAIT_AFTER_REFILL, COUNTDOWN }
+    // ============ ABLAUF-STEUERUNG ============
+    private enum Phase { 
+        IDLE,           // Bereit
+        SWIPE_1,        // 1. Swipe ausführen
+        WAIT_AFTER_SWIPE_1, // Warten nach 1. Swipe
+        REFILL,         // Refill ausführen
+        WAIT_AFTER_REFILL,  // Warten nach Refill
+        SWIPE_2,        // 2. Swipe ausführen
+        WAIT_AFTER_SWIPE_2, // Warten nach 2. Swipe (Countdown)
+        COUNTDOWN       // Countdown läuft
+    }
     private Phase currentPhase = Phase.IDLE;
     
     private Random random = new Random();
@@ -542,15 +552,28 @@ public class OverlayService extends AccessibilityService {
                     super.onCompleted(gestureDescription);
                     updateStatus("✅ Swipe #" + totalSwipes + " (menschlich)");
                     updateCycle();
-                    if (isRunning) {
-                        // Nach Swipe: 6-7 Sekunden warten
-                        currentPhase = Phase.WAIT_AFTER_SWIPE;
+                    
+                    if (!isRunning) return;
+                    
+                    // ============ PHASE 2: SWIPE_2 → COUNTDOWN ============
+                    if (currentPhase == Phase.SWIPE_2) {
+                        // 2. Swipe wurde ausgeführt → jetzt Countdown starten!
+                        currentPhase = Phase.COUNTDOWN;
+                        currentWaitTime = calculateHumanWaitTime();
+                        long minutes = currentWaitTime / 60000;
+                        updateStatus("⏱ Warte " + minutes + " Min");
+                        startCountdown(currentWaitTime);
+                        return;
+                    }
+                    
+                    // ============ PHASE 1: SWIPE_1 → WARTEN → REFILL ============
+                    if (currentPhase == Phase.SWIPE_1) {
+                        currentPhase = Phase.WAIT_AFTER_SWIPE_1;
                         long waitTime = randomWaitAfterSwipe();
                         long seconds = waitTime / 1000;
                         updateStatus("⏳ Warte " + seconds + "s...");
                         handler.postDelayed(() -> {
                             if (isRunning) {
-                                // Refill ausführen
                                 currentPhase = Phase.REFILL;
                                 updateStatus("🔴 Refill wird ausgeführt...");
                                 clickRefillButton();
@@ -589,21 +612,21 @@ public class OverlayService extends AccessibilityService {
                     super.onCompleted(gestureDescription);
                     updateStatus("✅ Refill geklickt! (menschlich)");
                     Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
-                    if (isRunning) {
-                        // Nach Refill: 6-7 Sekunden warten
-                        currentPhase = Phase.WAIT_AFTER_REFILL;
-                        long waitTime = randomWaitAfterRefill();
-                        long seconds = waitTime / 1000;
-                        updateStatus("⏳ Warte " + seconds + "s...");
-                        handler.postDelayed(() -> {
-                            if (isRunning) {
-                                // Swipe ausführen
-                                currentPhase = Phase.SWIPE;
-                                updateStatus("🔄 Swipe...");
-                                performSwipeGesture();
-                            }
-                        }, waitTime);
-                    }
+                    
+                    if (!isRunning) return;
+                    
+                    // ============ NACH REFILL → WARTEN → SWIPE_2 ============
+                    currentPhase = Phase.WAIT_AFTER_REFILL;
+                    long waitTime = randomWaitAfterRefill();
+                    long seconds = waitTime / 1000;
+                    updateStatus("⏳ Warte " + seconds + "s...");
+                    handler.postDelayed(() -> {
+                        if (isRunning) {
+                            currentPhase = Phase.SWIPE_2;
+                            updateStatus("🔄 Swipe...");
+                            performSwipeGesture();
+                        }
+                    }, waitTime);
                 }
             }, null);
         }, randomDelay);
@@ -615,7 +638,6 @@ public class OverlayService extends AccessibilityService {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
-        currentPhase = Phase.COUNTDOWN;
         
         handler.post(new Runnable() {
             @Override
@@ -632,10 +654,16 @@ public class OverlayService extends AccessibilityService {
                     updateCountdown("⏱ Warte: 00:00");
                     isWaiting = false;
                     if (isRunning) {
-                        // Countdown abgelaufen → Swipe ausführen
-                        currentPhase = Phase.SWIPE;
-                        updateStatus("🔄 Swipe...");
-                        performSwipeGesture();
+                        // ============ COUNTDOWN ABGELAUFEN → ZURÜCK ZU SWIPE_1 ============
+                        cycleCount++;
+                        updateCycle();
+                        currentPhase = Phase.SWIPE_1;
+                        updateStatus("🔄 Neuer Zyklus " + cycleCount + " - Swipe...");
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                performSwipeGesture();
+                            }
+                        }, 2000);
                     }
                     return;
                 }
@@ -651,34 +679,6 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ============ AUTOMATIK ============
-    
-    private void startAutomation() {
-        isRunning = true;
-        btnStartAuto.setText("▶ Läuft");
-        btnStartAuto.setEnabled(false);
-        btnStopAuto.setEnabled(true);
-        updateStatus("🟢 Automatik läuft");
-        currentPhase = Phase.IDLE;
-        
-        cycleCount = 0;
-        totalSwipes = 0;
-        updateCycle();
-        
-        handler.postDelayed(() -> {
-            if (isRunning) {
-                // Erste Aktion: Swipe
-                currentPhase = Phase.SWIPE;
-                updateStatus("🔄 Swipe...");
-                performSwipeGesture();
-            }
-        }, 2000);
-    }
-    
-    // ============ NACH COUNTDOWN ============
-    // Der Countdown startet selbst den Swipe, wenn er abgelaufen ist.
-    // Daher brauchen wir keine extra afterCountdown() Methode.
-    
     // ============ WARTEZEIT ============
     private long calculateHumanWaitTime() {
         long minWait = WAIT_RANGES[currentModeIndex][0];
@@ -688,56 +688,27 @@ public class OverlayService extends AccessibilityService {
         return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
     }
     
-    // ============ COUNTDOWN STARTEN (vom Overlay aus) ============
-    // Der Countdown wird nach dem 2. Swipe gestartet.
-    // Der 2. Swipe (nach dem Refill) führt zu performSwipeGesture(),
-    // der wiederum nach dem Swipe die 6-7 Sekunden Wartezeit startet.
-    // Danach wird Refill ausgeführt.
-    // Wir brauchen also eine Möglichkeit, den Countdown zu starten,
-    // ohne dass der Swipe direkt wieder zum Refill führt.
+    // ============ AUTOMATIK START ============
     
-    // Lösung: Wir unterscheiden zwischen "Swipe vor Refill" und "Swipe nach Refill".
-    // Dazu führen wir eine Variable ein.
-    
-    private boolean isSwipeAfterRefill = false;
-    
-    // Aber das wird kompliziert. Einfacher: Wir starten den Countdown nach dem 2. Swipe.
-    // Der 2. Swipe wird nach dem Refill ausgeführt.
-    // Nach dem 2. Swipe soll nicht wieder Refill kommen, sondern der Countdown.
-    
-    // Wir erkennen den 2. Swipe daran, dass isSwipeAfterRefill = true ist.
-    // Dann führen wir nach dem Swipe nicht Refill aus, sondern starten den Countdown.
-    
-    // Hier die korrigierte performSwipeGesture() Methode:
-    // (Ich überschreibe sie hier nochmal komplett)
-    
-    // Die Methode ist bereits oben definiert. Ich passe sie an:
-    
-    // In performSwipeGesture() wird nach dem Swipe immer Refill ausgeführt.
-    // Das ist für den 1. Swipe richtig, für den 2. Swipe aber falsch.
-    // Ich muss also eine Unterscheidung einbauen.
-    
-    // Ich ersetze den Code in performSwipeGesture() durch die folgende Logik:
-    
-    // performSwipeGesture() erkennt, ob es der 1. oder 2. Swipe ist.
-    // 1. Swipe: nach Swipe → 6-7s → Refill
-    // 2. Swipe: nach Swipe → Countdown starten
-    
-    // Dazu führe ich eine Variable ein: private int swipeCounter = 0;
-    // swipeCounter = 1 → 1. Swipe → Refill
-    // swipeCounter = 2 → 2. Swipe → Countdown
-    
-    private int swipeCounter = 0;
-    
-    // Ich überschreibe die performSwipeGesture() Methode komplett:
-    // (Der Compiler wird die neue Methode verwenden)
-    
-    // Hier die neue performSwipeGesture() Methode:
-    // (Ich muss sie im Code ersetzen)
-    
-    // Da ich die Methode oben schon definiert habe, muss ich sie hier überschreiben.
-    // Ich werde den gesamten Code nochmal als komplettes File geben,
-    // damit keine Verwirrung entsteht.
+    private void startAutomation() {
+        isRunning = true;
+        cycleCount = 0;
+        totalSwipes = 0;
+        btnStartAuto.setText("▶ Läuft");
+        btnStartAuto.setEnabled(false);
+        btnStopAuto.setEnabled(true);
+        updateStatus("🟢 Automatik läuft");
+        updateCycle();
+        
+        // ============ START: SWIPE_1 ============
+        currentPhase = Phase.SWIPE_1;
+        handler.postDelayed(() -> {
+            if (isRunning) {
+                updateStatus("🔄 Swipe...");
+                performSwipeGesture();
+            }
+        }, 2000);
+    }
     
     // ============ STOP ============
     
@@ -745,7 +716,6 @@ public class OverlayService extends AccessibilityService {
         isRunning = false;
         isWaiting = false;
         currentPhase = Phase.IDLE;
-        swipeCounter = 0;
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
         btnStopAuto.setEnabled(false);
