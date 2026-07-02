@@ -8,23 +8,12 @@ android {
 
     defaultConfig {
         applicationId "com.lidlrefill.app"
-        minSdk 24
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
     }
 
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-        debug {
-            minifyEnabled false
-            debuggable true
-        }
-    }
-    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -32,10 +21,6 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    // ============ ML Kit OCR ============
-    implementation 'com.google.mlkit:text-recognition:16.0.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Weitere Abhängigkeiten hier
 }
