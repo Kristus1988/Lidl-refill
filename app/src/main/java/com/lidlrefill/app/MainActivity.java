@@ -1,9 +1,7 @@
 package com.lidlrefill.app;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
@@ -21,20 +19,16 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_CODE_SCREENSHOT = 1;
-    private static final int REQUEST_CODE_PERMISSIONS = 2;
 
-    private Button btnCapture, btnStartOverlay;
-    private TextView tvStatus;
+    private Button btnStartBot, btnStopBot;
+    private TextView tvStatus, tvVerbrauch, tvAktion;
 
     private MediaProjectionManager mediaProjectionManager;
     private MediaProjection mediaProjection;
@@ -42,28 +36,66 @@ public class MainActivity extends AppCompatActivity {
     private ImageReader imageReader;
 
     private Handler handler = new Handler(Looper.getMainLooper());
+    private RefillBot refillBot;
+    private boolean isRunning = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        btnCapture = findViewById(R.id.btn_capture);
-        btnStartOverlay = findViewById(R.id.btn_start_overlay);
+        btnStartBot = findViewById(R.id.btn_start_bot);
+        btnStopBot = findViewById(R.id.btn_stop_bot);
         tvStatus = findViewById(R.id.tv_status);
+        tvVerbrauch = findViewById(R.id.tv_verbrauch);
+        tvAktion = findViewById(R.id.tv_aktion);
 
         mediaProjectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        btnStartOverlay.setOnClickListener(v -> startOverlayService());
-        btnCapture.setOnClickListener(v -> requestScreenshotPermission());
+        btnStartBot.setOnClickListener(v -> startBot());
+        btnStopBot.setOnClickListener(v -> stopBot());
+
+        refillBot = new RefillBot(this, this::updateUI, this::takeScreenshot);
+    }
+
+    private void startBot() {
+        if (!isRunning) {
+            // Prüfen ob Accessibility Service aktiv ist
+            if (!isAccessibilityServiceEnabled()) {
+                Toast.makeText(this, "Bitte Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
+                startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                return;
+            }
+            requestScreenshotPermission();
+        }
+    }
+
+    private void stopBot() {
+        isRunning = false;
+        refillBot.stop();
+        handler.removeCallbacksAndMessages(null);
+        tvStatus.setText("Bot gestoppt");
+        tvAktion.setText("");
+        Toast.makeText(this, "Bot wurde gestoppt", Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean isAccessibilityServiceEnabled() {
+        String service = getPackageName() + "/" + RefillAccessibilityService.class.getCanonicalName();
+        try {
+            String enabledServices = android.provider.Settings.Secure.getString(
+                getContentResolver(),
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            );
+            return enabledServices != null && enabledServices.contains(service);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void requestScreenshotPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Intent intent = mediaProjectionManager.createScreenCaptureIntent();
             startActivityForResult(intent, REQUEST_CODE_SCREENSHOT);
-        } else {
-            Toast.makeText(this, "Nicht unterstützt auf dieser Android-Version", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -74,15 +106,24 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_CODE_SCREENSHOT) {
             if (resultCode == Activity.RESULT_OK) {
                 mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
-                takeScreenshot();
+                isRunning = true;
+                tvStatus.setText("Bot läuft...");
+                refillBot.start();
             } else {
-                tvStatus.setText("Berechtigung verweigert");
-                Toast.makeText(this, "Screenshot-Berechtigung benötigt", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Berechtigung benötigt!", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private void takeScreenshot() {
+    private void updateUI(String status, String verbrauch, String aktion) {
+        runOnUiThread(() -> {
+            if (status != null) tvStatus.setText(status);
+            if (verbrauch != null) tvVerbrauch.setText("Verbrauch: " + verbrauch);
+            if (aktion != null) tvAktion.setText("Aktion: " + aktion);
+        });
+    }
+
+    private void takeScreenshot(RefillBot.ScreenshotCallback callback) {
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = getResources().getDisplayMetrics().heightPixels;
         int density = getResources().getDisplayMetrics().densityDpi;
@@ -103,14 +144,12 @@ public class MainActivity extends AppCompatActivity {
             if (image != null) {
                 Bitmap bitmap = imageToBitmap(image);
                 image.close();
-
-                if (bitmap != null) {
-                    sendBitmapToOverlay(bitmap);
-                    tvStatus.setText("Screenshot erstellt!");
-                }
+                callback.onScreenshotTaken(bitmap);
+            } else {
+                callback.onScreenshotTaken(null);
             }
             stopScreenshot();
-        }, 500);
+        }, 300);
     }
 
     private Bitmap imageToBitmap(Image image) {
@@ -127,27 +166,6 @@ public class MainActivity extends AppCompatActivity {
         );
         bitmap.copyPixelsFromBuffer(buffer);
         return Bitmap.createBitmap(bitmap, 0, 0, image.getWidth(), image.getHeight());
-    }
-
-    private void sendBitmapToOverlay(Bitmap bitmap) {
-        Intent intent = new Intent(this, OverlayService.class);
-        intent.putExtra("bitmap", bitmap);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-    }
-
-    private void startOverlayService() {
-        Intent intent = new Intent(this, OverlayService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-        tvStatus.setText("Overlay gestartet");
-        Toast.makeText(this, "Overlay-Service gestartet", Toast.LENGTH_SHORT).show();
     }
 
     private void stopScreenshot() {
@@ -168,6 +186,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        stopBot();
         stopScreenshot();
     }
 }
