@@ -1,5 +1,46 @@
-- name: Make gradlew executable
-  run: chmod +x gradlew
+name: Build
 
-- name: Build Debug APK
-  run: ./gradlew assembleDebug
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:  # Ermöglicht manuelles Starten
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Code auschecken
+      uses: actions/checkout@v4
+
+    - name: JDK 17 installieren
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Android SDK einrichten
+      uses: android-actions/setup-android@v3
+
+    - name: Gradle ausführbar machen
+      run: chmod +x gradlew
+
+    - name: Debug APK bauen
+      run: ./gradlew assembleDebug
+
+    - name: Debug APK hochladen
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-apk
+        path: app/build/outputs/apk/debug/*.apk
+
+    - name: Release APK bauen
+      run: ./gradlew assembleRelease
+
+    - name: Release APK hochladen
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-apk
+        path: app/build/outputs/apk/release/*.apk
