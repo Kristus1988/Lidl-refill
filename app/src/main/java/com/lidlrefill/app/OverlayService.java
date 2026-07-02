@@ -38,6 +38,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
@@ -144,13 +146,9 @@ public class OverlayService extends AccessibilityService {
     private Random random = new Random();
     
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {}
-    @Override
-    public void onInterrupt() {}
-    
-    @Override
-    public void onServiceConnected() {
-        super.onServiceConnected();
+    public void onCreate() {
+        super.onCreate();
+        Log.d(TAG, "onCreate - Service wird initialisiert");
         
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         
@@ -169,21 +167,13 @@ public class OverlayService extends AccessibilityService {
         int savedIndex = prefs.getInt("consumption_index", 0);
         currentModeIndex = savedIndex;
         
-        // ============ OCR INITIALISIEREN ============
+        // OCR INITIALISIEREN
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
-        // ============ MEDIAPROJECTION ============
+        // MEDIAPROJECTION
         if (sMediaProjection != null) {
             setupVirtualDisplay(sMediaProjection);
         }
-        
-        AccessibilityServiceInfo info = new AccessibilityServiceInfo();
-        info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
-                    AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
-        info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
-        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
-        info.packageNames = null;
-        setServiceInfo(info);
         
         createOverlay();
         createVisualHelpers();
@@ -192,6 +182,26 @@ public class OverlayService extends AccessibilityService {
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
+    }
+    
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {}
+    
+    @Override
+    public void onInterrupt() {}
+    
+    @Override
+    public void onServiceConnected() {
+        super.onServiceConnected();
+        Log.d(TAG, "onServiceConnected - Accessibility verbunden");
+        
+        AccessibilityServiceInfo info = new AccessibilityServiceInfo();
+        info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
+                    AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
+        info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+        info.packageNames = null;
+        setServiceInfo(info);
     }
     
     // ============ MEDIAPROJECTION ============
@@ -231,6 +241,7 @@ public class OverlayService extends AccessibilityService {
             int pixelStride = planes[0].getPixelStride();
             int rowStride = planes[0].getRowStride();
             int rowPadding = rowStride - pixelStride * screenWidth;
+            
             Bitmap bitmap = Bitmap.createBitmap(
                 screenWidth + rowPadding / pixelStride,
                 screenHeight,
@@ -238,6 +249,7 @@ public class OverlayService extends AccessibilityService {
             );
             bitmap.copyPixelsFromBuffer(buffer);
             image.close();
+            
             return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
         } catch (Exception e) {
             Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
@@ -357,6 +369,12 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void createOverlay() {
+        // Altes Overlay entfernen, falls vorhanden
+        if (floatingView != null) {
+            try { windowManager.removeView(floatingView); } catch (Exception e) {}
+            floatingView = null;
+        }
+        
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         
         FrameLayout mainContainer = new FrameLayout(this);
