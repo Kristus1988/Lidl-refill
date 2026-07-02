@@ -24,16 +24,13 @@
             </intent-filter>
         </activity>
 
+        <!-- NUR EINMAL deklarieren! -->
         <service
             android:name=".OverlayService"
             android:enabled="true"
             android:exported="false"
+            android:foregroundServiceType="mediaProjection"
             android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
-
-        <!-- Für Android 14+ -->
-        <service
-            android:name=".OverlayService"
-            android:foregroundServiceType="mediaProjection" />
 
     </application>
 
