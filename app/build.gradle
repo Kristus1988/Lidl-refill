@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 android {
@@ -20,25 +19,23 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
     }
     
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
-    kotlinOptions {
-        jvmTarget = '17'
-    }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.10.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // ML Kit Text Recognition
-    implementation 'com.google.mlkit:text-recognition:16.0.0'
-    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
+    // ============ GOOGLE ML KIT OCR ============
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
 }
