@@ -1,192 +1,192 @@
 package com.lidlrefill.app;
 
-import android.app.Activity;
-import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.PixelFormat;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
-import android.os.Build;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.view.View;
-import android.widget.Button;
+import android.util.Log;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final int REQUEST_CODE_SCREENSHOT = 1;
-
-    private Button btnStartBot, btnStopBot;
-    private TextView tvStatus, tvVerbrauch, tvAktion;
-
-    private MediaProjectionManager mediaProjectionManager;
-    private MediaProjection mediaProjection;
-    private VirtualDisplay virtualDisplay;
-    private ImageReader imageReader;
-
-    private Handler handler = new Handler(Looper.getMainLooper());
+    private static final String TAG = "MainActivity";
     private RefillBot refillBot;
-    private boolean isRunning = false;
+    private TextView textViewResult;
+    private ImageView imageViewPreview;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        btnStartBot = findViewById(R.id.btn_start_bot);
-        btnStopBot = findViewById(R.id.btn_stop_bot);
-        tvStatus = findViewById(R.id.tv_status);
-        tvVerbrauch = findViewById(R.id.tv_verbrauch);
-        tvAktion = findViewById(R.id.tv_aktion);
+        // Views initialisieren
+        textViewResult = findViewById(R.id.textViewResult);
+        imageViewPreview = findViewById(R.id.imageViewPreview);
 
-        mediaProjectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+        // RefillBot initialisieren
+        refillBot = new RefillBot();
 
-        btnStartBot.setOnClickListener(v -> startBot());
-        btnStopBot.setOnClickListener(v -> stopBot());
+        // Beispiel: Text aus einem Bild extrahieren (z.B. von einer URL)
+        // String imageUrl = "https://example.com/image.jpg";
+        // extractTextFromImageUrl(imageUrl);
 
-        refillBot = new RefillBot(this, this::updateUI, this::takeScreenshot);
+        // Oder: Text aus einem lokalen Bild extrahieren (z.B. aus res/drawable)
+        // extractTextFromResource(R.drawable.sample_image);
     }
 
-    private void startBot() {
-        if (!isRunning) {
-            // Prüfen ob Accessibility Service aktiv ist
-            if (!isAccessibilityServiceEnabled()) {
-                Toast.makeText(this, "Bitte Accessibility Service aktivieren!", Toast.LENGTH_LONG).show();
-                startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
-                return;
+    /**
+     * Extrahiert Text aus einem Bild von einer URL
+     */
+    private void extractTextFromImageUrl(String imageUrl) {
+        Toast.makeText(this, "Text wird extrahiert...", Toast.LENGTH_SHORT).show();
+        
+        refillBot.extractTextFromUrl(imageUrl)
+                .thenAccept(text -> {
+                    runOnUiThread(() -> {
+                        displayResult(text);
+                        // Zusätzliche Analyse
+                        analyzeText(text);
+                    });
+                })
+                .exceptionally(e -> {
+                    runOnUiThread(() -> {
+                        Log.e(TAG, "Fehler bei Texterkennung", e);
+                        Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        textViewResult.setText("Fehler bei der Texterkennung");
+                    });
+                    return null;
+                });
+    }
+
+    /**
+     * Extrahiert Text aus einem lokalen Resource-Bild
+     */
+    private void extractTextFromResource(int resourceId) {
+        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resourceId);
+        if (bitmap != null) {
+            imageViewPreview.setImageBitmap(bitmap);
+            
+            refillBot.extractTextFromImage(bitmap)
+                    .thenAccept(text -> {
+                        runOnUiThread(() -> {
+                            displayResult(text);
+                            analyzeText(text);
+                        });
+                    })
+                    .exceptionally(e -> {
+                        runOnUiThread(() -> {
+                            Log.e(TAG, "Fehler bei Texterkennung", e);
+                            Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        });
+                        return null;
+                    });
+        }
+    }
+
+    /**
+     * Extrahiert Text aus einem Byte-Array (z.B. von einem API-Call)
+     */
+    private void extractTextFromBytes(byte[] imageData) {
+        refillBot.extractTextFromBytes(imageData)
+                .thenAccept(text -> {
+                    runOnUiThread(() -> displayResult(text));
+                })
+                .exceptionally(e -> {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+                    return null;
+                });
+    }
+
+    /**
+     * Zeigt das Ergebnis im TextView an
+     */
+    private void displayResult(String text) {
+        if (text != null && !text.isEmpty()) {
+            textViewResult.setText(text);
+            Toast.makeText(this, "Text extrahiert: " + text.length() + " Zeichen", Toast.LENGTH_SHORT).show();
+        } else {
+            textViewResult.setText("Kein Text gefunden");
+        }
+    }
+
+    /**
+     * Analysiert den extrahierten Text (Preise, Produkte)
+     */
+    private void analyzeText(String text) {
+        if (text == null || text.isEmpty()) return;
+
+        // Preise extrahieren
+        List<String> prices = refillBot.extractPrices(text);
+        if (!prices.isEmpty()) {
+            Log.d(TAG, "Gefundene Preise: " + prices);
+            // Hier können Sie die Preise weiterverarbeiten
+        }
+
+        // Produktnamen extrahieren
+        List<String> products = refillBot.extractProductNames(text);
+        if (!products.isEmpty()) {
+            Log.d(TAG, "Gefundene Produkte: " + products);
+            // Hier können Sie die Produkte weiterverarbeiten
+        }
+    }
+
+    /**
+     * Lädt ein Bild von einer URL herunter und zeigt es an
+     */
+    private void downloadAndShowImage(String imageUrl) {
+        new Thread(() -> {
+            try {
+                URL url = new URL(imageUrl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(5000);
+                connection.setReadTimeout(5000);
+
+                if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
+                    try (InputStream inputStream = connection.getInputStream()) {
+                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = inputStream.read(buffer)) != -1) {
+                            outputStream.write(buffer, 0, bytesRead);
+                        }
+                        byte[] imageData = outputStream.toByteArray();
+                        Bitmap bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
+                        
+                        runOnUiThread(() -> {
+                            imageViewPreview.setImageBitmap(bitmap);
+                            // Text aus dem Bild extrahieren
+                            extractTextFromBytes(imageData);
+                        });
+                    }
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Fehler beim Herunterladen des Bildes", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Bild konnte nicht geladen werden", Toast.LENGTH_SHORT).show();
+                });
             }
-            requestScreenshotPermission();
-        }
-    }
-
-    private void stopBot() {
-        isRunning = false;
-        refillBot.stop();
-        handler.removeCallbacksAndMessages(null);
-        tvStatus.setText("Bot gestoppt");
-        tvAktion.setText("");
-        Toast.makeText(this, "Bot wurde gestoppt", Toast.LENGTH_SHORT).show();
-    }
-
-    private boolean isAccessibilityServiceEnabled() {
-        String service = getPackageName() + "/" + RefillAccessibilityService.class.getCanonicalName();
-        try {
-            String enabledServices = android.provider.Settings.Secure.getString(
-                getContentResolver(),
-                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            );
-            return enabledServices != null && enabledServices.contains(service);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private void requestScreenshotPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Intent intent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(intent, REQUEST_CODE_SCREENSHOT);
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQUEST_CODE_SCREENSHOT) {
-            if (resultCode == Activity.RESULT_OK) {
-                mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
-                isRunning = true;
-                tvStatus.setText("Bot läuft...");
-                refillBot.start();
-            } else {
-                Toast.makeText(this, "Berechtigung benötigt!", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
-    private void updateUI(String status, String verbrauch, String aktion) {
-        runOnUiThread(() -> {
-            if (status != null) tvStatus.setText(status);
-            if (verbrauch != null) tvVerbrauch.setText("Verbrauch: " + verbrauch);
-            if (aktion != null) tvAktion.setText("Aktion: " + aktion);
-        });
-    }
-
-    private void takeScreenshot(RefillBot.ScreenshotCallback callback) {
-        int width = getResources().getDisplayMetrics().widthPixels;
-        int height = getResources().getDisplayMetrics().heightPixels;
-        int density = getResources().getDisplayMetrics().densityDpi;
-
-        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
-
-        virtualDisplay = mediaProjection.createVirtualDisplay(
-                "Screenshot",
-                width, height, density,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.getSurface(),
-                null,
-                null
-        );
-
-        handler.postDelayed(() -> {
-            Image image = imageReader.acquireLatestImage();
-            if (image != null) {
-                Bitmap bitmap = imageToBitmap(image);
-                image.close();
-                callback.onScreenshotTaken(bitmap);
-            } else {
-                callback.onScreenshotTaken(null);
-            }
-            stopScreenshot();
-        }, 300);
-    }
-
-    private Bitmap imageToBitmap(Image image) {
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer buffer = planes[0].getBuffer();
-        int pixelStride = planes[0].getPixelStride();
-        int rowStride = planes[0].getRowStride();
-        int rowPadding = rowStride - pixelStride * image.getWidth();
-
-        Bitmap bitmap = Bitmap.createBitmap(
-                image.getWidth() + rowPadding / pixelStride,
-                image.getHeight(),
-                Bitmap.Config.ARGB_8888
-        );
-        bitmap.copyPixelsFromBuffer(buffer);
-        return Bitmap.createBitmap(bitmap, 0, 0, image.getWidth(), image.getHeight());
-    }
-
-    private void stopScreenshot() {
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
-        }
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
-        }
-        if (imageReader != null) {
-            imageReader.close();
-            imageReader = null;
-        }
+        }).start();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        stopBot();
-        stopScreenshot();
+        // Ressourcen freigeben
+        if (refillBot != null) {
+            refillBot.close();
+        }
     }
 }
