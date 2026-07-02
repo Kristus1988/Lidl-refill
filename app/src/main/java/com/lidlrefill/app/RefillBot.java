@@ -18,7 +18,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 public class RefillBot {
     private static final String TAG = "RefillBot";
@@ -26,26 +25,18 @@ public class RefillBot {
     private boolean isRunning = false;
 
     public RefillBot() {
-        // Initialisiert den TextRecognizer mit lateinischer Schrift
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
     }
 
-    /**
-     * Startet den RefillBot (für Hintergrunddienste)
-     */
     public void start() {
         if (!isRunning) {
             isRunning = true;
             Log.d(TAG, "RefillBot gestartet");
-            // Hier können Sie Hintergrunddienste oder kontinuierliche Überwachung starten
         } else {
             Log.d(TAG, "RefillBot läuft bereits");
         }
     }
 
-    /**
-     * Stoppt den RefillBot
-     */
     public void stop() {
         if (isRunning) {
             isRunning = false;
@@ -56,16 +47,10 @@ public class RefillBot {
         }
     }
 
-    /**
-     * Prüft ob der RefillBot läuft
-     */
     public boolean isRunning() {
         return isRunning;
     }
 
-    /**
-     * Extrahiert Text aus einem Bild (Bitmap)
-     */
     public CompletableFuture<String> extractTextFromImage(Bitmap bitmap) {
         CompletableFuture<String> future = new CompletableFuture<>();
         
@@ -90,9 +75,6 @@ public class RefillBot {
         return future;
     }
 
-    /**
-     * Extrahiert Text aus einem Bild-URL
-     */
     public CompletableFuture<String> extractTextFromUrl(String imageUrl) {
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -105,22 +87,15 @@ public class RefillBot {
         });
     }
 
-    /**
-     * Extrahiert Text aus einem Byte-Array
-     */
     public CompletableFuture<String> extractTextFromBytes(byte[] imageData) {
         Bitmap bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
         return extractTextFromImage(bitmap);
     }
 
-    /**
-     * Extrahiert bestimmte Informationen aus dem Text (z.B. Preise, Produktnamen)
-     */
     public List<String> extractPrices(String text) {
         List<String> prices = new ArrayList<>();
         if (text == null) return prices;
 
-        // Einfache Regex für Preise (z.B. 1.99€, 2,50 €, 3.49)
         String[] lines = text.split("\n");
         for (String line : lines) {
             if (line.matches(".*[0-9]+[.,][0-9]{2}\\s?[€$]?.*")) {
@@ -130,16 +105,12 @@ public class RefillBot {
         return prices;
     }
 
-    /**
-     * Extrahiert Produktnamen aus dem Text
-     */
     public List<String> extractProductNames(String text) {
         List<String> products = new ArrayList<>();
         if (text == null) return products;
 
         String[] lines = text.split("\n");
         for (String line : lines) {
-            // Filtert Zeilen, die wahrscheinlich Produktnamen sind (mehr als 3 Zeichen, keine Zahlen-only)
             String trimmed = line.trim();
             if (trimmed.length() > 3 && !trimmed.matches("[0-9.,\\s]+")) {
                 products.add(trimmed);
@@ -148,9 +119,6 @@ public class RefillBot {
         return products;
     }
 
-    /**
-     * Lädt ein Bild von einer URL herunter
-     */
     private Bitmap downloadImage(String imageUrl) throws IOException {
         URL url = new URL(imageUrl);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -174,9 +142,6 @@ public class RefillBot {
         }
     }
 
-    /**
-     * Schließt die Ressourcen
-     */
     public void close() {
         if (recognizer != null) {
             try {
