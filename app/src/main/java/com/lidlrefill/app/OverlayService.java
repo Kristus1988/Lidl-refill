@@ -59,7 +59,7 @@ public class OverlayService extends AccessibilityService {
     private Spinner spinnerConsumption;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
-    private Button btnClose;
+    private Button btnClose, btnDebugStatus;
     
     private SharedPreferences prefs;
     private static final String PREF_SWIPE_START_X = "swipe_start_x";
@@ -78,6 +78,7 @@ public class OverlayService extends AccessibilityService {
     private int screenWidth, screenHeight;
     private int screenDensity;
     private boolean isScreenshotReady = false;
+    private boolean isMediaProjectionSet = false;
     
     public static void setMediaProjection(MediaProjection projection) {
         sMediaProjection = projection;
@@ -128,9 +129,9 @@ public class OverlayService extends AccessibilityService {
     private static final long MAX_WAIT_TIME = 1800000;
     
     private static final long[][] WAIT_RANGES = {
-        {1080000, 1320000},  // Surfen: 18-22 Minuten
-        {660000, 840000},    // FullHD: 11-14 Minuten
-        {360000, 540000}     // 4K: 6-9 Minuten
+        {1080000, 1320000},
+        {660000, 840000},
+        {360000, 540000}
     };
     
     private int cycleCount = 0;
@@ -199,6 +200,11 @@ public class OverlayService extends AccessibilityService {
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.packageNames = null;
         setServiceInfo(info);
+        
+        // MediaProjection erneut prüfen
+        if (sMediaProjection != null && !isMediaProjectionSet) {
+            setupVirtualDisplay(sMediaProjection);
+        }
     }
     
     // ============ MEDIAPROJECTION ============
@@ -209,7 +215,7 @@ public class OverlayService extends AccessibilityService {
         }
         try {
             if (imageReader != null) imageReader.close();
-            imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
+            imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 4);
             if (virtualDisplay != null) virtualDisplay.release();
             virtualDisplay = projection.createVirtualDisplay(
                 "ScreenCapture",
@@ -219,9 +225,12 @@ public class OverlayService extends AccessibilityService {
                 null, null
             );
             isScreenshotReady = true;
+            isMediaProjectionSet = true;
             Log.d(TAG, "VirtualDisplay erfolgreich erstellt");
+            updateStatus("✅ Screen-Capture aktiv");
         } catch (Exception e) {
             Log.e(TAG, "VirtualDisplay Fehler: " + e.getMessage());
+            updateStatus("❌ Screen-Capture Fehler");
         }
     }
     
@@ -230,28 +239,36 @@ public class OverlayService extends AccessibilityService {
             Log.w(TAG, "Screenshot nicht bereit");
             return null;
         }
-        try {
-            Image image = imageReader.acquireLatestImage();
-            if (image == null) return null;
-            Image.Plane[] planes = image.getPlanes();
-            ByteBuffer buffer = planes[0].getBuffer();
-            int pixelStride = planes[0].getPixelStride();
-            int rowStride = planes[0].getRowStride();
-            int rowPadding = rowStride - pixelStride * screenWidth;
-            
-            Bitmap bitmap = Bitmap.createBitmap(
-                screenWidth + rowPadding / pixelStride,
-                screenHeight,
-                Bitmap.Config.ARGB_8888
-            );
-            bitmap.copyPixelsFromBuffer(buffer);
-            image.close();
-            
-            return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
-        } catch (Exception e) {
-            Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
-            return null;
+        
+        // Maximal 5 Versuche
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                Image image = imageReader.acquireLatestImage();
+                if (image == null) {
+                    Thread.sleep(50);
+                    continue;
+                }
+                
+                Image.Plane[] planes = image.getPlanes();
+                ByteBuffer buffer = planes[0].getBuffer();
+                int pixelStride = planes[0].getPixelStride();
+                int rowStride = planes[0].getRowStride();
+                int rowPadding = rowStride - pixelStride * screenWidth;
+                
+                Bitmap bitmap = Bitmap.createBitmap(
+                    screenWidth + rowPadding / pixelStride,
+                    screenHeight,
+                    Bitmap.Config.ARGB_8888
+                );
+                bitmap.copyPixelsFromBuffer(buffer);
+                image.close();
+                
+                return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
+            } catch (Exception e) {
+                Log.e(TAG, "Screenshot Versuch " + (attempt+1) + " fehlgeschlagen: " + e.getMessage());
+            }
         }
+        return null;
     }
     
     // ============ OCR ============
@@ -268,8 +285,9 @@ public class OverlayService extends AccessibilityService {
         
         Bitmap screenshot = takeScreenshot();
         if (screenshot == null) {
-            updateStatus("⚠️ Screenshot fehlgeschlagen");
+            updateStatus("⚠️ Screenshot fehlgeschlagen (5x)");
             updateOcrResult("⚠️ Screenshot fehlgeschlagen");
+            Toast.makeText(this, "❌ Screenshot fehlgeschlagen!\nVersuche es nochmal.", Toast.LENGTH_LONG).show();
             return;
         }
         
@@ -395,6 +413,7 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         btnClose = controlView.findViewById(R.id.btnClose);
+        btnDebugStatus = controlView.findViewById(R.id.btnDebugStatus);
         
         // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
@@ -429,6 +448,20 @@ public class OverlayService extends AccessibilityService {
             
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        
+        // ============ DEBUG BUTTON ============
+        btnDebugStatus.setOnClickListener(v -> {
+            String status = "📊 STATUS:\n";
+            status += "MediaProjection: " + (sMediaProjection != null ? "✅" : "❌") + "\n";
+            status += "VirtualDisplay: " + (virtualDisplay != null ? "✅" : "❌") + "\n";
+            status += "ImageReader: " + (imageReader != null ? "✅" : "❌") + "\n";
+            status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
+            status += "isMediaProjectionSet: " + (isMediaProjectionSet ? "✅" : "❌") + "\n";
+            status += "screenWidth: " + screenWidth + "\n";
+            status += "screenHeight: " + screenHeight;
+            Toast.makeText(this, status, Toast.LENGTH_LONG).show();
+            Log.d(TAG, status);
         });
         
         // ============ BUTTONS ============
