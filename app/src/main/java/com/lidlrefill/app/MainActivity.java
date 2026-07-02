@@ -1,158 +1,201 @@
 package com.lidlrefill.app;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
-import android.widget.ImageView;
+import android.provider.Settings;
+import android.view.accessibility.AccessibilityManager;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.List;
-
 public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "MainActivity";
-    private RefillBot refillBot;
-    private TextView textViewResult;
-    private ImageView imageViewPreview;
-
+    private static final int OVERLAY_PERMISSION_REQUEST = 1;
+    private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
+    private static final int MEDIA_PROJECTION_REQUEST = 1001;
+    
+    private TextView tvPermissionStatus;
+    private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
+    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        textViewResult = findViewById(R.id.textViewResult);
-        imageViewPreview = findViewById(R.id.imageViewPreview);
-
-        refillBot = new RefillBot();
-        refillBot.start();
-    }
-
-    private void extractTextFromImageUrl(String imageUrl) {
-        Toast.makeText(this, "Text wird extrahiert...", Toast.LENGTH_SHORT).show();
         
-        refillBot.extractTextFromUrl(imageUrl)
-                .thenAccept(text -> {
-                    runOnUiThread(() -> {
-                        displayResult(text);
-                        analyzeText(text);
-                    });
-                })
-                .exceptionally(e -> {
-                    runOnUiThread(() -> {
-                        Log.e(TAG, "Fehler bei Texterkennung", e);
-                        Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        textViewResult.setText("Fehler bei der Texterkennung");
-                    });
-                    return null;
-                });
-    }
-
-    private void extractTextFromResource(int resourceId) {
-        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resourceId);
-        if (bitmap != null) {
-            imageViewPreview.setImageBitmap(bitmap);
-            
-            refillBot.extractTextFromImage(bitmap)
-                    .thenAccept(text -> {
-                        runOnUiThread(() -> {
-                            displayResult(text);
-                            analyzeText(text);
-                        });
-                    })
-                    .exceptionally(e -> {
-                        runOnUiThread(() -> {
-                            Log.e(TAG, "Fehler bei Texterkennung", e);
-                            Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        });
-                        return null;
-                    });
-        }
-    }
-
-    private void extractTextFromBytes(byte[] imageData) {
-        refillBot.extractTextFromBytes(imageData)
-                .thenAccept(text -> {
-                    runOnUiThread(() -> displayResult(text));
-                })
-                .exceptionally(e -> {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-                    return null;
-                });
-    }
-
-    private void displayResult(String text) {
-        if (text != null && !text.isEmpty()) {
-            textViewResult.setText(text);
-            Toast.makeText(this, "Text extrahiert: " + text.length() + " Zeichen", Toast.LENGTH_SHORT).show();
-        } else {
-            textViewResult.setText("Kein Text gefunden");
-        }
-    }
-
-    private void analyzeText(String text) {
-        if (text == null || text.isEmpty()) return;
-
-        List<String> prices = refillBot.extractPrices(text);
-        if (!prices.isEmpty()) {
-            Log.d(TAG, "Gefundene Preise: " + prices);
-        }
-
-        List<String> products = refillBot.extractProductNames(text);
-        if (!products.isEmpty()) {
-            Log.d(TAG, "Gefundene Produkte: " + products);
-        }
-    }
-
-    private void downloadAndShowImage(String imageUrl) {
-        new Thread(() -> {
-            try {
-                URL url = new URL(imageUrl);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(5000);
-
-                if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                    try (InputStream inputStream = connection.getInputStream()) {
-                        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                        byte[] buffer = new byte[4096];
-                        int bytesRead;
-                        while ((bytesRead = inputStream.read(buffer)) != -1) {
-                            outputStream.write(buffer, 0, bytesRead);
-                        }
-                        byte[] imageData = outputStream.toByteArray();
-                        Bitmap bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
-                        
-                        runOnUiThread(() -> {
-                            imageViewPreview.setImageBitmap(bitmap);
-                            extractTextFromBytes(imageData);
-                        });
-                    }
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Fehler beim Herunterladen des Bildes", e);
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Bild konnte nicht geladen werden", Toast.LENGTH_SHORT).show();
-                });
+        tvPermissionStatus = findViewById(R.id.tvPermissionStatus);
+        btnStartService = findViewById(R.id.btnStartService);
+        btnRestartApp = findViewById(R.id.btnRestartApp);
+        btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
+        
+        Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
+        Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
+        
+        btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
+        btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
+        
+        btnStartService.setOnClickListener(v -> {
+            if (checkAllPermissions()) {
+                startOverlayService();
+            } else {
+                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
             }
-        }).start();
+        });
+        
+        btnRestartApp.setOnClickListener(v -> {
+            Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
+            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+            finish();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
+        
+        btnRefreshAccessibility.setOnClickListener(v -> {
+            Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+        });
+        
+        updatePermissionStatus();
     }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (refillBot != null) {
-            refillBot.stop();
+    
+    private void updatePermissionStatus() {
+        StringBuilder status = new StringBuilder();
+        status.append("📋 Berechtigungen:\n");
+        
+        boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
+        status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
+        
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        boolean accOk = am != null && am.isEnabled();
+        status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
+        
+        status.append("\n📸 Screen-Capture (für OCR):\n");
+        status.append(OverlayService.isMediaProjectionReady() ? "✅ Aktiv" : "⏳ Wird bei OCR angefordert");
+        
+        tvPermissionStatus.setText(status.toString());
+    }
+    
+    private void requestAllPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
+                return;
+            }
         }
+        
+        requestAccessibilityPermission();
+    }
+    
+    private void requestAccessibilityPermission() {
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+        } else {
+            updatePermissionStatus();
+            checkAllPermissions();
+        }
+    }
+    
+    private void requestMediaProjection() {
+        MediaProjectionManager projectionManager = 
+            (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        if (projectionManager != null) {
+            Intent intent = projectionManager.createScreenCaptureIntent();
+            startActivityForResult(intent, MEDIA_PROJECTION_REQUEST);
+        }
+    }
+    
+    private boolean checkAllPermissions() {
+        boolean allOk = true;
+        StringBuilder missing = new StringBuilder();
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            missing.append("❌ Overlay fehlt\n");
+            allOk = false;
+        }
+        
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            missing.append("❌ Accessibility fehlt\n");
+            allOk = false;
+        }
+        
+        if (!allOk) {
+            Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
+            btnStartService.setEnabled(false);
+        } else {
+            Toast.makeText(this, "✅ Alle Berechtigungen erteilt!", Toast.LENGTH_SHORT).show();
+            btnStartService.setEnabled(true);
+        }
+        
+        updatePermissionStatus();
+        return allOk;
+    }
+    
+    private void startOverlayService() {
+        Intent intent = new Intent(this, OverlayService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+        Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
+        finish();
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
+            updatePermissionStatus();
+            if (checkAllPermissions()) {
+                // Alles schon erledigt
+            } else {
+                requestAccessibilityPermission();
+            }
+            return;
+        }
+        
+        if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
+            updatePermissionStatus();
+            checkAllPermissions();
+            // Nach Accessibility: MediaProjection anfordern
+            requestMediaProjection();
+            return;
+        }
+        
+        if (requestCode == MEDIA_PROJECTION_REQUEST) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                MediaProjectionManager projectionManager = 
+                    (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                if (projectionManager != null) {
+                    MediaProjection projection = projectionManager.getMediaProjection(resultCode, data);
+                    OverlayService.setMediaProjection(projection);
+                    Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "⚠️ Screen-Capture benötigt für OCR!", Toast.LENGTH_LONG).show();
+            }
+            updatePermissionStatus();
+        }
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updatePermissionStatus();
     }
 }
