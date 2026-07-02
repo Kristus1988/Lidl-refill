@@ -33,7 +33,6 @@
         android:layout_marginBottom="20dp"
         android:lineSpacingExtra="4dp"/>
 
-    <!-- ===== BEREITS VORHANDENE BUTTONS ===== -->
     <Button
         android:id="@+id/btnRequestPermissions"
         android:layout_width="match_parent"
@@ -59,7 +58,6 @@
         android:layout_marginBottom="10dp"
         android:textColor="#FFFFFF"/>
 
-    <!-- ===== NEUER BUTTON FÜR SCREEN-CAPTURE ===== -->
     <Button
         android:id="@+id/btnRequestScreenCapture"
         android:layout_width="match_parent"
@@ -87,7 +85,6 @@
         android:layout_marginBottom="20dp"
         android:enabled="false"/>
 
-    <!-- ===== WARNUNG ===== -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
