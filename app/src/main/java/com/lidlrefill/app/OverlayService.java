@@ -112,7 +112,6 @@ public class OverlayService extends AccessibilityService {
     private float overlayDragX, overlayDragY;
     
     // ============ VERBRAUCHS-OPTIONEN ============
-    private static final double[] CONSUMPTION_OPTIONS = {0.03, 0.05, 0.10};
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
@@ -167,10 +166,8 @@ public class OverlayService extends AccessibilityService {
         int savedIndex = prefs.getInt("consumption_index", 0);
         currentModeIndex = savedIndex;
         
-        // OCR INITIALISIEREN
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
-        // MEDIAPROJECTION
         if (sMediaProjection != null) {
             setupVirtualDisplay(sMediaProjection);
         }
@@ -257,7 +254,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ ECHTE OCR ============
+    // ============ OCR ============
     private void performOcr() {
         if (!isScreenshotReady || imageReader == null) {
             Toast.makeText(this, "⚠️ Screen-Capture nicht aktiv!\nBitte App neu starten.", Toast.LENGTH_LONG).show();
@@ -343,6 +340,7 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
+    // ============ POSITIONEN ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 100);
@@ -368,8 +366,8 @@ public class OverlayService extends AccessibilityService {
         editor.apply();
     }
     
+    // ============ OVERLAY ============
     private void createOverlay() {
-        // Altes Overlay entfernen, falls vorhanden
         if (floatingView != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
             floatingView = null;
@@ -579,7 +577,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     // ============ VISUELLE HILFEN ============
-    
     private void createVisualHelpers() {
         swipeVisual = new View(this) {
             @Override
@@ -707,7 +704,6 @@ public class OverlayService extends AccessibilityService {
     private void updateOcrResult(String text) { tvOcrResult.setText(text); }
     
     // ============ GESTEN ============
-    
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -822,7 +818,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     // ============ COUNTDOWN ============
-    
     private void startCountdown(long waitTime) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
@@ -884,8 +879,7 @@ public class OverlayService extends AccessibilityService {
         return MIN_WAIT_AFTER_REFILL + (long)(random.nextDouble() * (MAX_WAIT_AFTER_REFILL - MIN_WAIT_AFTER_REFILL));
     }
     
-    // ============ AUTOMATIK START ============
-    
+    // ============ AUTOMATIK ============
     private void startAutomation() {
         isRunning = true;
         cycleCount = 0;
@@ -904,8 +898,6 @@ public class OverlayService extends AccessibilityService {
             }
         }, 2000);
     }
-    
-    // ============ STOP ============
     
     private void stopAutomation() {
         isRunning = false;
