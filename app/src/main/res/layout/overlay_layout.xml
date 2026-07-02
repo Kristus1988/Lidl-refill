@@ -1,194 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="230dp"
-    android:layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#DD1A1A1A"
-    android:padding="10dp"
-    android:elevation="999dp"
-    android:clickable="true"
-    android:focusable="true">
+    android:background="#88000000"
+    android:gravity="center">
 
-    <!-- Status + Schließen -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="4dp">
-
-        <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="●"
-            android:textColor="#4CAF50"
-            android:textSize="14sp"
-            android:gravity="center"/>
-
-        <Button
-            android:id="@+id/btnClose"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:text="✕"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#D50000"
-            android:textSize="14sp"
-            android:padding="0dp"
-            android:gravity="center"/>
-    </LinearLayout>
-
-    <!-- ============ NEU: OCR-BUTTON ============ -->
     <Button
-        android:id="@+id/btnOcrArea"
-        android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:text="📷 OCR-Bereich"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#9C27B0"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:padding="0dp"
-        android:gravity="center"
-        android:layout_marginBottom="4dp"/>
-
-    <!-- ============ PLATZIERUNGS-BUTTONS ============ -->
-    <LinearLayout
-        android:layout_width="match_parent"
+        android:id="@+id/close_button"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
+        android:text="✕ Schließen"
+        android:layout_margin="16dp"
+        android:backgroundTint="#FF0000"
+        android:textColor="#FFFFFF" />
 
-        <Button
-            android:id="@+id/btnSwipePlace"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="S"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#4CAF50"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:layout_marginEnd="4dp"
-            android:gravity="center"/>
-
-        <Button
-            android:id="@+id/btnRefillPlace"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="R"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#FF9800"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:gravity="center"/>
-    </LinearLayout>
-
-    <!-- Test-Buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <Button
-            android:id="@+id/btnSwipeTest"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="⬇ Test"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#00E676"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:layout_marginEnd="4dp"
-            android:gravity="center"/>
-
-        <Button
-            android:id="@+id/btnRefillTest"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="R Test"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#FF1744"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:gravity="center"/>
-    </LinearLayout>
-
-    <!-- Start/Stop -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="4dp">
-
-        <Button
-            android:id="@+id/btnStartAuto"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:text="▶ Start"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#4CAF50"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:layout_marginEnd="4dp"
-            android:gravity="center"/>
-
-        <Button
-            android:id="@+id/btnStopAuto"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1"
-            android:text="⏹ Stop"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#D50000"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:padding="0dp"
-            android:gravity="center"
-            android:enabled="false"/>
-    </LinearLayout>
-
-    <!-- Verbrauchs-Auswahl (Spinner) -->
-    <Spinner
-        android:id="@+id/spinnerConsumption"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:background="#44000000"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp"
-        android:layout_marginBottom="4dp"/>
-
-    <!-- Countdown & Status -->
-    <TextView
-        android:id="@+id/tvCountdown"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="⏱ Warte: --:--"
-        android:textColor="#4FC3F7"
-        android:textSize="13sp"
-        android:gravity="center"
-        android:padding="3dp"
-        android:background="#22000000"/>
-
-    <TextView
-        android:id="@+id/tvCycle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔄 0 Zyklen | ⬇ 0"
-        android:textColor="#888888"
-        android:textSize="10sp"
-        android:gravity="center"
-        android:padding="2dp"/>
+    <ImageView
+        android:id="@+id/screenshot_preview"
+        android:layout_width="300dp"
+        android:layout_height="400dp"
+        android:scaleType="centerInside"
+        android:background="#FF666666"
+        android:layout_margin="16dp" />
 
 </LinearLayout>
