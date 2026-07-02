@@ -23,10 +23,44 @@ import java.util.concurrent.ExecutionException;
 public class RefillBot {
     private static final String TAG = "RefillBot";
     private final TextRecognizer recognizer;
+    private boolean isRunning = false;
 
     public RefillBot() {
         // Initialisiert den TextRecognizer mit lateinischer Schrift
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+    }
+
+    /**
+     * Startet den RefillBot (für Hintergrunddienste)
+     */
+    public void start() {
+        if (!isRunning) {
+            isRunning = true;
+            Log.d(TAG, "RefillBot gestartet");
+            // Hier können Sie Hintergrunddienste oder kontinuierliche Überwachung starten
+        } else {
+            Log.d(TAG, "RefillBot läuft bereits");
+        }
+    }
+
+    /**
+     * Stoppt den RefillBot
+     */
+    public void stop() {
+        if (isRunning) {
+            isRunning = false;
+            Log.d(TAG, "RefillBot gestoppt");
+            close();
+        } else {
+            Log.d(TAG, "RefillBot läuft nicht");
+        }
+    }
+
+    /**
+     * Prüft ob der RefillBot läuft
+     */
+    public boolean isRunning() {
+        return isRunning;
     }
 
     /**
@@ -147,6 +181,7 @@ public class RefillBot {
         if (recognizer != null) {
             try {
                 recognizer.close();
+                Log.d(TAG, "Recognizer geschlossen");
             } catch (Exception e) {
                 Log.e(TAG, "Fehler beim Schließen des Recognizers", e);
             }
