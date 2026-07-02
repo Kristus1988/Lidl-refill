@@ -169,8 +169,12 @@ public class OverlayService extends AccessibilityService {
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
+        // ===== MEDIAPROJECTION NEU AUFBAUEN =====
         if (sMediaProjection != null) {
             setupVirtualDisplay(sMediaProjection);
+        } else {
+            Log.w(TAG, "⚠️ MediaProjection ist null – bitte Screen-Capture aktivieren!");
+            updateStatus("⚠️ Screen-Capture fehlt");
         }
         
         createOverlay();
@@ -211,12 +215,20 @@ public class OverlayService extends AccessibilityService {
     private void setupVirtualDisplay(MediaProjection projection) {
         if (projection == null) {
             Log.w(TAG, "MediaProjection ist null!");
+            updateStatus("❌ MediaProjection null");
             return;
         }
         try {
-            if (imageReader != null) imageReader.close();
+            if (imageReader != null) {
+                imageReader.close();
+                imageReader = null;
+            }
+            if (virtualDisplay != null) {
+                virtualDisplay.release();
+                virtualDisplay = null;
+            }
+            
             imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 4);
-            if (virtualDisplay != null) virtualDisplay.release();
             virtualDisplay = projection.createVirtualDisplay(
                 "ScreenCapture",
                 screenWidth, screenHeight, screenDensity,
@@ -224,13 +236,14 @@ public class OverlayService extends AccessibilityService {
                 imageReader.getSurface(),
                 null, null
             );
+            
             isScreenshotReady = true;
             isMediaProjectionSet = true;
-            Log.d(TAG, "VirtualDisplay erfolgreich erstellt");
+            Log.d(TAG, "✅ VirtualDisplay erfolgreich erstellt");
             updateStatus("✅ Screen-Capture aktiv");
         } catch (Exception e) {
             Log.e(TAG, "VirtualDisplay Fehler: " + e.getMessage());
-            updateStatus("❌ Screen-Capture Fehler");
+            updateStatus("❌ Screen-Capture Fehler: " + e.getMessage());
         }
     }
     
