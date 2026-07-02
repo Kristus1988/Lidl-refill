@@ -23,6 +23,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvPermissionStatus;
     private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
     private Button btnRequestScreenCapture;
+    private Button btnRequestPermissions, btnCheckPermissions;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,10 +35,10 @@ public class MainActivity extends AppCompatActivity {
         btnRestartApp = findViewById(R.id.btnRestartApp);
         btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
         btnRequestScreenCapture = findViewById(R.id.btnRequestScreenCapture);
+        btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
+        btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         
-        Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
-        Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
-        
+        // ===== OVERLAY & ACCESSIBILITY =====
         btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
         btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
         
@@ -50,13 +51,11 @@ public class MainActivity extends AppCompatActivity {
         
         // ===== SCREEN-CAPTURE ANFORDERN =====
         btnRequestScreenCapture.setOnClickListener(v -> {
-            if (checkAllPermissions()) {
-                requestMediaProjection();
-            } else {
-                Toast.makeText(this, "❌ Bitte erst Overlay + Accessibility aktivieren", Toast.LENGTH_LONG).show();
-            }
+            Toast.makeText(this, "📸 Screen-Capture wird angefordert...", Toast.LENGTH_SHORT).show();
+            requestMediaProjection();
         });
         
+        // ===== OVERLAY STARTEN =====
         btnStartService.setOnClickListener(v -> {
             if (!OverlayService.isMediaProjectionReady()) {
                 Toast.makeText(this, "❌ Bitte zuerst Screen-Capture aktivieren!", Toast.LENGTH_LONG).show();
@@ -69,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
+        // ===== APP NEU STARTEN =====
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
             Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -129,6 +129,8 @@ public class MainActivity extends AppCompatActivity {
         if (projectionManager != null) {
             Intent intent = projectionManager.createScreenCaptureIntent();
             startActivityForResult(intent, MEDIA_PROJECTION_REQUEST);
+        } else {
+            Toast.makeText(this, "❌ MediaProjection nicht verfügbar", Toast.LENGTH_SHORT).show();
         }
     }
     
@@ -198,12 +200,14 @@ public class MainActivity extends AppCompatActivity {
                 if (projectionManager != null) {
                     MediaProjection projection = projectionManager.getMediaProjection(resultCode, data);
                     OverlayService.setMediaProjection(projection);
-                    Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_SHORT).show();
-                    // Jetzt Overlay starten
-                    startOverlayService();
+                    Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_LONG).show();
+                    updatePermissionStatus();
+                    
+                    // Automatisch Overlay starten (optional)
+                    // startOverlayService();
                 }
             } else {
-                Toast.makeText(this, "⚠️ Screen-Capture benötigt für OCR!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "⚠️ Screen-Capture wurde abgelehnt!", Toast.LENGTH_LONG).show();
             }
             updatePermissionStatus();
         }
