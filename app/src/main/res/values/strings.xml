@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lidl Refill</string>
-    <string name="accessibility_service_description">Ermöglicht dem Bot, Taps und Swipes auszuführen</string>
+    <string name="accessibility_service_description">Lidl Refill benötigt diese Berechtigung für Gesten und Bildschirmsteuerung.</string>
 </resources>
