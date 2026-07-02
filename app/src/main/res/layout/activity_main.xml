@@ -33,11 +33,12 @@
         android:layout_marginBottom="20dp"
         android:lineSpacingExtra="4dp"/>
 
+    <!-- ===== BEREITS VORHANDENE BUTTONS ===== -->
     <Button
         android:id="@+id/btnRequestPermissions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🔓 Berechtigungen erteilen"
+        android:text="🔓 Overlay & Accessibility aktivieren"
         android:backgroundTint="#2196F3"
         android:layout_marginBottom="10dp"/>
 
@@ -53,8 +54,18 @@
         android:id="@+id/btnRefreshAccessibility"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🔄 Accessibility refresh"
+        android:text="🔄 Accessibility refresh (Honor)"
         android:backgroundTint="#E91E63"
+        android:layout_marginBottom="10dp"
+        android:textColor="#FFFFFF"/>
+
+    <!-- ===== NEUER BUTTON FÜR SCREEN-CAPTURE ===== -->
+    <Button
+        android:id="@+id/btnRequestScreenCapture"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📸 Screen-Capture aktivieren (OCR)"
+        android:backgroundTint="#FF6F00"
         android:layout_marginBottom="10dp"
         android:textColor="#FFFFFF"/>
 
@@ -76,6 +87,7 @@
         android:layout_marginBottom="20dp"
         android:enabled="false"/>
 
+    <!-- ===== WARNUNG ===== -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
