@@ -3,98 +3,77 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="20dp"
-    android:gravity="center">
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="#FFFFFF">
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔄 Lidl Refill"
-        android:textSize="28sp"
+        android:text="Lidl Connect Refill Bot"
+        android:textSize="24sp"
+        android:textColor="#000000"
         android:textStyle="bold"
-        android:layout_marginBottom="10dp"/>
+        android:layout_marginBottom="32dp" />
 
     <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Automatisches 1GB Aufladen"
-        android:textSize="14sp"
-        android:textColor="#666666"
-        android:layout_marginBottom="30dp"/>
-
-    <TextView
-        android:id="@+id/tvPermissionStatus"
+        android:id="@+id/tv_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="📋 Berechtigungen werden geprüft..."
-        android:textSize="12sp"
-        android:background="#F5F5F5"
-        android:padding="12dp"
-        android:layout_marginBottom="20dp"
-        android:lineSpacingExtra="4dp"/>
-
-    <Button
-        android:id="@+id/btnRequestPermissions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔓 Berechtigungen erteilen"
-        android:backgroundTint="#2196F3"
-        android:layout_marginBottom="10dp"/>
-
-    <Button
-        android:id="@+id/btnCheckPermissions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="✅ Berechtigungen prüfen"
-        android:backgroundTint="#FF9800"
-        android:layout_marginBottom="10dp"/>
-
-    <Button
-        android:id="@+id/btnRefreshAccessibility"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔄 Accessibility refresh"
-        android:backgroundTint="#E91E63"
-        android:layout_marginBottom="10dp"
-        android:textColor="#FFFFFF"/>
-
-    <Button
-        android:id="@+id/btnRestartApp"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🔄 App neu starten"
-        android:backgroundTint="#9C27B0"
-        android:layout_marginBottom="10dp"
-        android:textColor="#FFFFFF"/>
-
-    <!-- ============ NEU: FORCE START BUTTON ============ -->
-    <Button
-        android:id="@+id/btnForceStart"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="⚠️ FORCE START (Honor-Problem umgehen)"
-        android:backgroundTint="#E65100"
-        android:layout_marginBottom="10dp"
-        android:textColor="#FFFFFF"/>
-
-    <Button
-        android:id="@+id/btnStartService"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="🚀 Overlay starten"
-        android:backgroundTint="#4CAF50"
-        android:layout_marginBottom="20dp"
-        android:enabled="false"/>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="\n⚠️ Bei Honor: Accessibility AUS/EIN schalten und FORCE START verwenden!"
-        android:textSize="12sp"
-        android:textColor="#D32F2F"
+        android:text="Bereit"
+        android:textSize="18sp"
+        android:textColor="#333333"
         android:gravity="center"
-        android:background="#FFEBEE"
-        android:padding="10dp"
-        android:layout_marginTop="20dp"/>
+        android:padding="12dp"
+        android:background="#F0F0F0"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/tv_verbrauch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Verbrauch: --"
+        android:textSize="20sp"
+        android:textColor="#0000FF"
+        android:gravity="center"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tv_aktion"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Aktion: --"
+        android:textSize="16sp"
+        android:textColor="#FF6600"
+        android:gravity="center"
+        android:padding="12dp"
+        android:layout_marginBottom="24dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_start_bot"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="▶ Start"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="#4CAF50" />
+
+        <Button
+            android:id="@+id/btn_stop_bot"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="⏹ Stop"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="#F44336" />
+
+    </LinearLayout>
 
 </LinearLayout>
