@@ -77,18 +77,30 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void requestAllPermissions() {
+        // ============ 1. ZUERST OVERLAY PERMISSION ============
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName()));
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
+                // Warte auf Ergebnis, bevor Accessibility kommt
+                return;
             }
         }
         
+        // ============ 2. DANN ACCESSIBILITY PERMISSION ============
+        requestAccessibilityPermission();
+    }
+    
+    private void requestAccessibilityPermission() {
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+        } else {
+            // Wenn schon aktiv, einfach Status aktualisieren
+            updatePermissionStatus();
+            checkAllPermissions();
         }
     }
     
@@ -96,11 +108,13 @@ public class MainActivity extends AppCompatActivity {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
         
+        // 1. Overlay prüfen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             missing.append("❌ Overlay fehlt\n");
             allOk = false;
         }
         
+        // 2. Accessibility prüfen
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             missing.append("❌ Accessibility fehlt\n");
@@ -133,8 +147,24 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        updatePermissionStatus();
-        checkAllPermissions();
+        
+        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
+            // Nach Overlay-Berechtigung: Accessibility anfordern
+            updatePermissionStatus();
+            if (checkAllPermissions()) {
+                // Alles schon erledigt
+            } else {
+                // Jetzt Accessibility anfordern
+                requestAccessibilityPermission();
+            }
+            return;
+        }
+        
+        if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
+            updatePermissionStatus();
+            checkAllPermissions();
+            return;
+        }
     }
     
     @Override
