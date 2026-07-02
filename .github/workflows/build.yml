@@ -1,46 +1,46 @@
-name: Build
+name: Build APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:  # Ermöglicht manuelles Starten
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
-    - name: Code auschecken
+    - name: 📥 Code auschecken
       uses: actions/checkout@v4
-
-    - name: JDK 17 installieren
+      
+    - name: ☕ JDK 17 installieren
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
         java-version: '17'
-
-    - name: Android SDK einrichten
+        distribution: 'temurin'
+        
+    - name: 📱 Android SDK einrichten
       uses: android-actions/setup-android@v3
-
-    - name: Gradle ausführbar machen
+      
+    - name: 🔧 Gradle ausführbar machen
       run: chmod +x gradlew
-
-    - name: Debug APK bauen
+      
+    - name: 🔨 Debug APK bauen
       run: ./gradlew assembleDebug
-
-    - name: Debug APK hochladen
-      uses: actions/upload-artifact@v4
-      with:
-        name: debug-apk
-        path: app/build/outputs/apk/debug/*.apk
-
-    - name: Release APK bauen
+      
+    - name: 🔨 Release APK bauen
       run: ./gradlew assembleRelease
-
-    - name: Release APK hochladen
+      
+    - name: 📤 Debug APK hochladen
       uses: actions/upload-artifact@v4
       with:
-        name: release-apk
+        name: LidlRefill-Debug
+        path: app/build/outputs/apk/debug/*.apk
+        
+    - name: 📤 Release APK hochladen
+      uses: actions/upload-artifact@v4
+      with:
+        name: LidlRefill-Release
         path: app/build/outputs/apk/release/*.apk
