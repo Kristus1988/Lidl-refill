@@ -57,15 +57,12 @@ public class MainActivity extends AppCompatActivity {
         
         // ===== OVERLAY STARTEN =====
         btnStartService.setOnClickListener(v -> {
-            if (!OverlayService.isMediaProjectionReady()) {
-                Toast.makeText(this, "❌ Bitte zuerst Screen-Capture aktivieren!", Toast.LENGTH_LONG).show();
+            // Prüfe nur Overlay + Accessibility
+            if (!checkOverlayAndAccessibility()) {
+                Toast.makeText(this, "❌ Bitte erst Overlay + Accessibility aktivieren", Toast.LENGTH_LONG).show();
                 return;
             }
-            if (checkAllPermissions()) {
-                startOverlayService();
-            } else {
-                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
-            }
+            startOverlayService();
         });
         
         // ===== APP NEU STARTEN =====
@@ -98,6 +95,13 @@ public class MainActivity extends AppCompatActivity {
         status.append(OverlayService.isMediaProjectionReady() ? "✅ Aktiv" : "⏳ Wird bei OCR angefordert");
         
         tvPermissionStatus.setText(status.toString());
+    }
+    
+    private boolean checkOverlayAndAccessibility() {
+        boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        boolean accOk = am != null && am.isEnabled();
+        return overlayOk && accOk;
     }
     
     private void requestAllPermissions() {
@@ -189,7 +193,6 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
             updatePermissionStatus();
             checkAllPermissions();
-            // NICHT hier MediaProjection anfordern!
             return;
         }
         
@@ -202,9 +205,6 @@ public class MainActivity extends AppCompatActivity {
                     OverlayService.setMediaProjection(projection);
                     Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_LONG).show();
                     updatePermissionStatus();
-                    
-                    // Automatisch Overlay starten (optional)
-                    // startOverlayService();
                 }
             } else {
                 Toast.makeText(this, "⚠️ Screen-Capture wurde abgelehnt!", Toast.LENGTH_LONG).show();
