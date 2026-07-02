@@ -21,7 +21,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int STORAGE_PERMISSION_REQUEST = 3;
     
     private TextView tvPermissionStatus;
-    private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
+    private Button btnStartService, btnRestartApp, btnRefreshAccessibility, btnForceStart;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,6 +32,7 @@ public class MainActivity extends AppCompatActivity {
         btnStartService = findViewById(R.id.btnStartService);
         btnRestartApp = findViewById(R.id.btnRestartApp);
         btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
+        btnForceStart = findViewById(R.id.btnForceStart);
         
         Button btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         Button btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
@@ -64,6 +65,16 @@ public class MainActivity extends AppCompatActivity {
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         });
         
+        // ============ FORCE START (UMGEHT HONOR PROBLEM) ============
+        btnForceStart.setOnClickListener(v -> {
+            Toast.makeText(this, 
+                "⚠️ FORCE START:\n" +
+                "Accessibility wird ignoriert!\n" +
+                "Stelle sicher, dass es in den Einstellungen aktiviert ist.", 
+                Toast.LENGTH_LONG).show();
+            startOverlayService();
+        });
+        
         updatePermissionStatus();
     }
     
@@ -74,15 +85,63 @@ public class MainActivity extends AppCompatActivity {
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
         status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
         
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        boolean accOk = am != null && am.isEnabled();
+        // ============ VERBESSERTE ACCESSIBILITY-ERKENNUNG FÜR HONOR ============
+        boolean accOk = isAccessibilityEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
-        // ============ NEU: SPEICHERBERECHTIGUNG ============
+        if (!accOk && isHonorOrHuawei()) {
+            status.append("\n🔧 HONOR ACCESSIBILITY FIX:\n");
+            status.append("1. Einstellungen → Barrierefreiheit → Bedienungshilfen\n");
+            status.append("2. Lidl Refill AUS-schalten\n");
+            status.append("3. Wieder EIN-schalten\n");
+            status.append("4. Muster/Passwort bestätigen\n");
+            status.append("5. '🔄 App neu starten' klicken\n");
+            status.append("6. Oder '⚠️ FORCE START' verwenden!");
+        }
+        
         boolean storageOk = checkStoragePermission();
         status.append(storageOk ? "✅" : "❌").append(" Speicher (für OCR)\n");
         
         tvPermissionStatus.setText(status.toString());
+    }
+    
+    // ============ HONOR-ERKENNUNG ============
+    private boolean isHonorOrHuawei() {
+        String manufacturer = Build.MANUFACTURER.toLowerCase();
+        return manufacturer.contains("honor") || 
+               manufacturer.contains("huawei") ||
+               manufacturer.contains("hihonor");
+    }
+    
+    // ============ VERBESSERTE ACCESSIBILITY-ERKENNUNG ============
+    private boolean isAccessibilityEnabled() {
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (am == null) return false;
+        
+        // Methode 1: Standard-Prüfung
+        boolean isEnabled = am.isEnabled();
+        
+        // Methode 2: Prüfen ob der Service läuft (für Honor)
+        if (!isEnabled) {
+            try {
+                java.util.List<android.view.accessibility.AccessibilityServiceInfo> services = 
+                    am.getEnabledAccessibilityServiceList(
+                        android.view.accessibility.AccessibilityServiceInfo.FEEDBACK_GENERIC);
+                for (android.view.accessibility.AccessibilityServiceInfo info : services) {
+                    if (info.getResolveInfo() != null && 
+                        info.getResolveInfo().serviceInfo != null) {
+                        String packageName = info.getResolveInfo().serviceInfo.packageName;
+                        if (getPackageName().equals(packageName)) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Ignorieren
+            }
+        }
+        
+        return isEnabled;
     }
     
     private boolean checkStoragePermission() {
@@ -97,12 +156,10 @@ public class MainActivity extends AppCompatActivity {
     
     private void requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+
             ActivityCompat.requestPermissions(this, 
                 new String[]{Manifest.permission.READ_MEDIA_IMAGES}, 
                 STORAGE_PERMISSION_REQUEST);
         } else {
-            // Android 6-12
             ActivityCompat.requestPermissions(this, 
                 new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 
                 STORAGE_PERMISSION_REQUEST);
@@ -135,6 +192,18 @@ public class MainActivity extends AppCompatActivity {
         if (am == null || !am.isEnabled()) {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+            
+            if (isHonorOrHuawei()) {
+                Toast.makeText(this, 
+                    "🔧 HONOR ACCESSIBILITY FIX:\n" +
+                    "1. Gehe zu 'Bedienungshilfen'\n" +
+                    "2. 'Lidl Refill' AUS-schalten\n" +
+                    "3. Wieder EIN-schalten\n" +
+                    "4. Muster/Passwort bestätigen\n" +
+                    "5. Zurück zur App\n" +
+                    "6. 'FORCE START' verwenden!", 
+                    Toast.LENGTH_LONG).show();
+            }
         } else {
             updatePermissionStatus();
             checkAllPermissions();
@@ -151,10 +220,10 @@ public class MainActivity extends AppCompatActivity {
             allOk = false;
         }
         
-        // 2. Accessibility
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
-            missing.append("❌ Accessibility fehlt\n");
+        // 2. Accessibility (mit Honor-Fix)
+        if (!isAccessibilityEnabled()) {
+            missing.append("❌ Accessibility fehlt (Honor-Problem!)\n");
+            missing.append("→ '🔄 Accessibility refresh' oder 'FORCE START' verwenden!\n");
             allOk = false;
         }
         
@@ -196,7 +265,6 @@ public class MainActivity extends AppCompatActivity {
             if (checkAllPermissions()) {
                 // Alles erledigt
             } else {
-                // Als nächstes Storage
                 if (!checkStoragePermission()) {
                     requestStoragePermission();
                 } else {
@@ -223,7 +291,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, "⚠️ Speicherberechtigung benötigt für OCR!", Toast.LENGTH_LONG).show();
             }
-            // Nach Storage: Accessibility anfordern
             requestAccessibilityPermission();
         }
     }
