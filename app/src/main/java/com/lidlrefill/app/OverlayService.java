@@ -3,6 +3,7 @@ package com.lidlrefill.app;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -200,7 +201,6 @@ public class OverlayService extends AccessibilityService {
     private void startMediaProjection() {
         if (mediaProjectionManager == null) return;
         
-        Intent intent = mediaProjectionManager.createScreenCaptureIntent();
         // Wir können den Intent nicht direkt starten, da wir im Service sind
         // Stattdessen starten wir die MainActivity für die Berechtigung
         Intent mainIntent = new Intent(this, MainActivity.class);
