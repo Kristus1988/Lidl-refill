@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="200dp"
         android:scaleType="centerCrop"
-        android:src="@drawable/ic_launcher_foreground"
+        android:src="@android:drawable/ic_menu_gallery"
         android:background="#f0f0f0" />
 
     <TextView
