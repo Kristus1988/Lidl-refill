@@ -1,14 +1,14 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'   // <-- Jetzt funktioniert es, weil classpath gesetzt ist
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.ihrprojekt.lidlrefill'
+    namespace 'com.lidlrefill.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.ihrprojekt.lidlrefill"
+        applicationId "com.lidlrefill.app"
         minSdk 24
         targetSdk 34
         versionCode 1
@@ -37,4 +37,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // ML Kit Text Recognition
+    implementation 'com.google.mlkit:text-recognition:16.0.0'
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.0'
 }
