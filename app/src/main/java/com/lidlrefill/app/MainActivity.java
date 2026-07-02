@@ -1,6 +1,8 @@
 package com.lidlrefill.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -10,10 +12,13 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
     private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
+    private static final int STORAGE_PERMISSION_REQUEST = 3;
     
     private TextView tvPermissionStatus;
     private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
@@ -73,22 +78,55 @@ public class MainActivity extends AppCompatActivity {
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
+        // ============ NEU: SPEICHERBERECHTIGUNG ============
+        boolean storageOk = checkStoragePermission();
+        status.append(storageOk ? "✅" : "❌").append(" Speicher (für OCR)\n");
+        
         tvPermissionStatus.setText(status.toString());
     }
     
+    private boolean checkStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+                == PackageManager.PERMISSION_GRANTED;
+        } else {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
+                == PackageManager.PERMISSION_GRANTED;
+        }
+    }
+    
+    private void requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+
+            ActivityCompat.requestPermissions(this, 
+                new String[]{Manifest.permission.READ_MEDIA_IMAGES}, 
+                STORAGE_PERMISSION_REQUEST);
+        } else {
+            // Android 6-12
+            ActivityCompat.requestPermissions(this, 
+                new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 
+                STORAGE_PERMISSION_REQUEST);
+        }
+    }
+    
     private void requestAllPermissions() {
-        // ============ 1. ZUERST OVERLAY PERMISSION ============
+        // ============ 1. OVERLAY PERMISSION ============
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName()));
                 startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
-                // Warte auf Ergebnis, bevor Accessibility kommt
                 return;
             }
         }
         
-        // ============ 2. DANN ACCESSIBILITY PERMISSION ============
+        // ============ 2. STORAGE PERMISSION ============
+        if (!checkStoragePermission()) {
+            requestStoragePermission();
+            return;
+        }
+        
+        // ============ 3. ACCESSIBILITY PERMISSION ============
         requestAccessibilityPermission();
     }
     
@@ -98,7 +136,6 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         } else {
-            // Wenn schon aktiv, einfach Status aktualisieren
             updatePermissionStatus();
             checkAllPermissions();
         }
@@ -108,16 +145,22 @@ public class MainActivity extends AppCompatActivity {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
         
-        // 1. Overlay prüfen
+        // 1. Overlay
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             missing.append("❌ Overlay fehlt\n");
             allOk = false;
         }
         
-        // 2. Accessibility prüfen
+        // 2. Accessibility
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             missing.append("❌ Accessibility fehlt\n");
+            allOk = false;
+        }
+        
+        // 3. Storage
+        if (!checkStoragePermission()) {
+            missing.append("❌ Speicher fehlt (für OCR)\n");
             allOk = false;
         }
         
@@ -149,13 +192,16 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         
         if (requestCode == OVERLAY_PERMISSION_REQUEST) {
-            // Nach Overlay-Berechtigung: Accessibility anfordern
             updatePermissionStatus();
             if (checkAllPermissions()) {
-                // Alles schon erledigt
+                // Alles erledigt
             } else {
-                // Jetzt Accessibility anfordern
-                requestAccessibilityPermission();
+                // Als nächstes Storage
+                if (!checkStoragePermission()) {
+                    requestStoragePermission();
+                } else {
+                    requestAccessibilityPermission();
+                }
             }
             return;
         }
@@ -164,6 +210,21 @@ public class MainActivity extends AppCompatActivity {
             updatePermissionStatus();
             checkAllPermissions();
             return;
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == STORAGE_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "✅ Speicherberechtigung erteilt!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "⚠️ Speicherberechtigung benötigt für OCR!", Toast.LENGTH_LONG).show();
+            }
+            // Nach Storage: Accessibility anfordern
+            requestAccessibilityPermission();
         }
     }
     
