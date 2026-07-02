@@ -26,21 +26,5 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'com.google.android.material:material:1.12.0'
-    
-    // Kotlin - ALLE auf gleicher Version
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
-    
-    // Weitere Dependencies hier...
-}
-
-// Falls es immer noch Konflikte gibt:
-configurations.all {
-    resolutionStrategy {
-        force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22"
-        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22"
-    }
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }
