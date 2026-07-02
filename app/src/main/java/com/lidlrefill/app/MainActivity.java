@@ -16,7 +16,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -29,24 +28,13 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Views initialisieren
         textViewResult = findViewById(R.id.textViewResult);
         imageViewPreview = findViewById(R.id.imageViewPreview);
 
-        // RefillBot initialisieren
         refillBot = new RefillBot();
-
-        // Beispiel: Text aus einem Bild extrahieren (z.B. von einer URL)
-        // String imageUrl = "https://example.com/image.jpg";
-        // extractTextFromImageUrl(imageUrl);
-
-        // Oder: Text aus einem lokalen Bild extrahieren (z.B. aus res/drawable)
-        // extractTextFromResource(R.drawable.sample_image);
+        refillBot.start();
     }
 
-    /**
-     * Extrahiert Text aus einem Bild von einer URL
-     */
     private void extractTextFromImageUrl(String imageUrl) {
         Toast.makeText(this, "Text wird extrahiert...", Toast.LENGTH_SHORT).show();
         
@@ -54,7 +42,6 @@ public class MainActivity extends AppCompatActivity {
                 .thenAccept(text -> {
                     runOnUiThread(() -> {
                         displayResult(text);
-                        // Zusätzliche Analyse
                         analyzeText(text);
                     });
                 })
@@ -68,9 +55,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * Extrahiert Text aus einem lokalen Resource-Bild
-     */
     private void extractTextFromResource(int resourceId) {
         Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resourceId);
         if (bitmap != null) {
@@ -93,9 +77,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Extrahiert Text aus einem Byte-Array (z.B. von einem API-Call)
-     */
     private void extractTextFromBytes(byte[] imageData) {
         refillBot.extractTextFromBytes(imageData)
                 .thenAccept(text -> {
@@ -109,9 +90,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * Zeigt das Ergebnis im TextView an
-     */
     private void displayResult(String text) {
         if (text != null && !text.isEmpty()) {
             textViewResult.setText(text);
@@ -121,30 +99,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * Analysiert den extrahierten Text (Preise, Produkte)
-     */
     private void analyzeText(String text) {
         if (text == null || text.isEmpty()) return;
 
-        // Preise extrahieren
         List<String> prices = refillBot.extractPrices(text);
         if (!prices.isEmpty()) {
             Log.d(TAG, "Gefundene Preise: " + prices);
-            // Hier können Sie die Preise weiterverarbeiten
         }
 
-        // Produktnamen extrahieren
         List<String> products = refillBot.extractProductNames(text);
         if (!products.isEmpty()) {
             Log.d(TAG, "Gefundene Produkte: " + products);
-            // Hier können Sie die Produkte weiterverarbeiten
         }
     }
 
-    /**
-     * Lädt ein Bild von einer URL herunter und zeigt es an
-     */
     private void downloadAndShowImage(String imageUrl) {
         new Thread(() -> {
             try {
@@ -167,7 +135,6 @@ public class MainActivity extends AppCompatActivity {
                         
                         runOnUiThread(() -> {
                             imageViewPreview.setImageBitmap(bitmap);
-                            // Text aus dem Bild extrahieren
                             extractTextFromBytes(imageData);
                         });
                     }
@@ -184,9 +151,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Ressourcen freigeben
         if (refillBot != null) {
-            refillBot.close();
+            refillBot.stop();
         }
     }
 }
