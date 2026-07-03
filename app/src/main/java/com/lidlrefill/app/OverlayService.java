@@ -194,7 +194,7 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Screenshot wird erstellt...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== SCREENSHOT ÜBER OVERLAY =====
+        // ===== SCREENSHOT ÜBER ACCESSIBILITY =====
         Bitmap screenshot = takeScreenshot();
         if (screenshot == null) {
             updateStatus("❌ Screenshot fehlgeschlagen");
@@ -213,16 +213,19 @@ public class OverlayService extends AccessibilityService {
         performOcrOnBitmap(screenshot);
     }
     
-    // ============ SCREENSHOT ÜBER OVERLAY ============
+    // ============ SCREENSHOT ÜBER ACCESSIBILITY ============
     private Bitmap takeScreenshot() {
-        View rootView = getWindowManager().getDefaultDisplay().getRootView();
-        if (rootView == null) {
-            Log.e(TAG, "RootView ist null");
-            return null;
-        }
-        
         try {
-            // RootView zeichnen
+            // Methode 1: Über den WindowManager
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            View rootView = wm.getDefaultDisplay().getRootView();
+            
+            if (rootView == null) {
+                Log.e(TAG, "RootView ist null");
+                return null;
+            }
+            
+            // Screenshot erstellen
             Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             rootView.draw(canvas);
@@ -231,6 +234,18 @@ public class OverlayService extends AccessibilityService {
             return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
+            
+            // Methode 2: Fallback über den FloatingView
+            try {
+                if (floatingView != null) {
+                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(bitmap);
+                    floatingView.draw(canvas);
+                    return bitmap;
+                }
+            } catch (Exception e2) {
+                Log.e(TAG, "Fallback Screenshot Fehler: " + e2.getMessage());
+            }
             return null;
         }
     }
@@ -475,7 +490,7 @@ public class OverlayService extends AccessibilityService {
             activeVisual = refillVisual;
         });
         
-        // ===== NEU: SCREENSHOT & OCR BUTTON =====
+        // ===== SCREENSHOT & OCR BUTTON =====
         btnOcrNow.setOnClickListener(v -> {
             if (!isScreenshotReady) {
                 Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
