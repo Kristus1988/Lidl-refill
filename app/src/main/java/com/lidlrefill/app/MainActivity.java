@@ -8,6 +8,8 @@ import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
@@ -24,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
     private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
     private Button btnRequestScreenCapture;
     private Button btnRequestPermissions, btnCheckPermissions;
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private boolean isRestarting = false;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,13 +70,7 @@ public class MainActivity extends AppCompatActivity {
         
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
-            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-            finish();
-            android.os.Process.killProcess(android.os.Process.myPid());
+            restartApp();
         });
         
         updatePermissionStatus();
@@ -164,8 +162,18 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
         Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
-        // ===== FINISH() ENTFERNT! =====
-        // finish(); // <-- DIESE ZEILE LÖSCHEN!
+        // Kein finish() – App bleibt offen!
+    }
+    
+    // ===== AUTOMATISCHER NEUSTART =====
+    private void restartApp() {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        }
+        finish();
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
     
     @Override
@@ -194,8 +202,11 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_LONG).show();
                     updatePermissionStatus();
                     
-                    // ===== OVERLAY AUTOMATISCH STARTEN =====
-                    startOverlayService();
+                    // ===== AUTOMATISCHER NEUSTART für Honor/Xiaomi =====
+                    Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
+                    handler.postDelayed(() -> {
+                        restartApp();
+                    }, 1500);
                 }
             } else {
                 Toast.makeText(this, "⚠️ Screen-Capture wurde abgelehnt!", Toast.LENGTH_LONG).show();
@@ -207,6 +218,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Wenn die App neu gestartet wurde, Status aktualisieren
         updatePermissionStatus();
     }
 }
