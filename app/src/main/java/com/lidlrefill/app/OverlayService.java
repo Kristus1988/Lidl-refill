@@ -42,9 +42,6 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -217,6 +214,7 @@ public class OverlayService extends AccessibilityService {
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, 0, duration));
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, 0, duration));
         
+        // ===== KORREKTER dispatchGesture AUFRUF (mit Handler) =====
         dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
             @Override
             public void onCompleted(GestureDescription gestureDescription) {
@@ -237,7 +235,7 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("❌ Screenshot fehlgeschlagen");
                 Toast.makeText(OverlayService.this, "❌ Screenshot fehlgeschlagen!", Toast.LENGTH_SHORT).show();
             }
-        });
+        }, null); // Handler ist null (wird im UI-Thread ausgeführt)
     }
     
     // ============ NEUSTEN SCREENSHOT FINDEN UND ANALYSIEREN ============
