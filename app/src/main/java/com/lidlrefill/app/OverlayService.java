@@ -216,9 +216,25 @@ public class OverlayService extends AccessibilityService {
     // ============ SCREENSHOT ÜBER ACCESSIBILITY ============
     private Bitmap takeScreenshot() {
         try {
-            // Methode 1: Über den WindowManager
+            // RootView über WindowManager holen
             WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-            View rootView = wm.getDefaultDisplay().getRootView();
+            View rootView = null;
+            
+            // Versuche über Display zu kommen
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Android 11+
+                try {
+                    java.lang.reflect.Method method = Display.class.getMethod("getRootView");
+                    rootView = (View) method.invoke(wm.getDefaultDisplay());
+                } catch (Exception e) {
+                    Log.e(TAG, "Reflection Fehler: " + e.getMessage());
+                }
+            }
+            
+            // Fallback: Wenn rootView null ist, verwende den FloatingView
+            if (rootView == null && floatingView != null) {
+                rootView = floatingView;
+            }
             
             if (rootView == null) {
                 Log.e(TAG, "RootView ist null");
@@ -234,18 +250,6 @@ public class OverlayService extends AccessibilityService {
             return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
-            
-            // Methode 2: Fallback über den FloatingView
-            try {
-                if (floatingView != null) {
-                    Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(bitmap);
-                    floatingView.draw(canvas);
-                    return bitmap;
-                }
-            } catch (Exception e2) {
-                Log.e(TAG, "Fallback Screenshot Fehler: " + e2.getMessage());
-            }
             return null;
         }
     }
