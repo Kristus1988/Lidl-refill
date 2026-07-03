@@ -38,24 +38,20 @@ public class MainActivity extends AppCompatActivity {
         btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         
-        // ===== OVERLAY & ACCESSIBILITY =====
         btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
         btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
         
-        // ===== REFRESH ACCESSIBILITY (für Honor) =====
         btnRefreshAccessibility.setOnClickListener(v -> {
             Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         });
         
-        // ===== SCREEN-CAPTURE ANFORDERN =====
         btnRequestScreenCapture.setOnClickListener(v -> {
             Toast.makeText(this, "📸 Screen-Capture wird angefordert...", Toast.LENGTH_SHORT).show();
             requestMediaProjection();
         });
         
-        // ===== OVERLAY STARTEN =====
         btnStartService.setOnClickListener(v -> {
             if (!OverlayService.isMediaProjectionReady()) {
                 Toast.makeText(this, "❌ Bitte zuerst Screen-Capture aktivieren!", Toast.LENGTH_LONG).show();
@@ -68,7 +64,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // ===== APP NEU STARTEN =====
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
             Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -169,7 +164,8 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
         Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
-        finish();
+        // ===== FINISH() ENTFERNT! =====
+        // finish(); // <-- DIESE ZEILE LÖSCHEN!
     }
     
     @Override
@@ -197,6 +193,9 @@ public class MainActivity extends AppCompatActivity {
                     OverlayService.setMediaProjection(projection);
                     Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_LONG).show();
                     updatePermissionStatus();
+                    
+                    // ===== OVERLAY AUTOMATISCH STARTEN =====
+                    startOverlayService();
                 }
             } else {
                 Toast.makeText(this, "⚠️ Screen-Capture wurde abgelehnt!", Toast.LENGTH_LONG).show();
