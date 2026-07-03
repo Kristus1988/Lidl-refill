@@ -71,7 +71,6 @@ public class OverlayService extends AccessibilityService {
     private boolean isScreenshotReady = false;
     private File lastScreenshotFile = null;
     
-    // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
     
@@ -94,7 +93,6 @@ public class OverlayService extends AccessibilityService {
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
-    // ============ VERBRAUCHS-OPTIONEN ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
@@ -102,7 +100,6 @@ public class OverlayService extends AccessibilityService {
     };
     private int currentModeIndex = 0;
     
-    // ============ ZEITEN ============
     private static final long MIN_WAIT_AFTER_SWIPE = 8000;
     private static final long MAX_WAIT_AFTER_SWIPE = 10000;
     private static final long MIN_WAIT_AFTER_REFILL = 8000;
@@ -130,8 +127,6 @@ public class OverlayService extends AccessibilityService {
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(TAG, "onCreate - Service wird initialisiert");
-        
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
         
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
@@ -166,7 +161,6 @@ public class OverlayService extends AccessibilityService {
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
-        Log.d(TAG, "onServiceConnected - Accessibility verbunden");
         
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
@@ -181,76 +175,62 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ 3-Finger-Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ 10x SCHNELLERE 3-FINGER-SCREENSHOT GESTE ============
+    // ============ 3-FINGER-SCREENSHOT (ALLE STARTEN ZEITGLEICH) ============
     private void triggerThreeFingerScreenshot() {
         updateStatus("📸 3-Finger-Geste wird ausgeführt...");
         updateOcrResult("📸 Screenshot...");
         
         // ===== EXAKTE KOORDINATEN =====
-        // Finger 1: x=320, y=300
-        // Finger 2: x=560, y=300
-        // Finger 3: x=850, y=300
-        
-        // Endpositionen (leicht nach unten)
         int endY = 550;
         
-        // Leichte zufällige Abweichung für menschliches Verhalten (MAXIMAL 15px)
-        int randomOffset = (int)((random.nextDouble() - 0.5) * 15);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 15);
+        int randomOffset = (int)((random.nextDouble() - 0.5) * 10);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 10);
         
-        // ===== FINGER 1 =====
+        // ===== FINGER 1: x=320 =====
         int x1_start = 320 + randomOffset;
         int y1_start = 300 + randomOffsetY;
         int x1_end = 320 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
-        int y1_end = endY + (int)((random.nextDouble() - 0.5) * 15);
+        int y1_end = endY + (int)((random.nextDouble() - 0.5) * 10);
         
-        // ===== FINGER 2 =====
+        // ===== FINGER 2: x=560 =====
         int x2_start = 560 + randomOffset;
         int y2_start = 300 + randomOffsetY;
         int x2_end = 560 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
-        int y2_end = endY + (int)((random.nextDouble() - 0.5) * 15);
+        int y2_end = endY + (int)((random.nextDouble() - 0.5) * 10);
         
-        // ===== FINGER 3 =====
+        // ===== FINGER 3: x=850 =====
         int x3_start = 850 + randomOffset;
         int y3_start = 300 + randomOffsetY;
         int x3_end = 850 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
-        int y3_end = endY + (int)((random.nextDouble() - 0.5) * 15);
+        int y3_end = endY + (int)((random.nextDouble() - 0.5) * 10);
         
-        // ===== 10x SCHNELLER (40-60ms statt 400-500ms) =====
-        long duration = 40 + (long)(random.nextDouble() * 20); // 40-60ms
+        // ===== ALLE 3 FINGER STARTEN ZEITGLEICH (0ms) =====
+        long duration = 300 + (long)(random.nextDouble() * 100);
         
-        // ===== LEICHT UNTERSCHIEDLICHER START (menschlich) =====
-        long startOffset1 = 0;
-        long startOffset2 = 5 + (long)(random.nextDouble() * 10); // 5-15ms
-        long startOffset3 = 10 + (long)(random.nextDouble() * 15); // 10-25ms
-        
-        // ===== PFADE MIT LEICHTEM BOGEN =====
-        // Finger 1
+        // ===== PFADE =====
         Path path1 = new Path();
         path1.moveTo(x1_start, y1_start);
         float midX1 = (x1_start + x1_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
         float midY1 = (y1_start + y1_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path1.quadTo(midX1, midY1, x1_end, y1_end);
         
-        // Finger 2
         Path path2 = new Path();
         path2.moveTo(x2_start, y2_start);
         float midX2 = (x2_start + x2_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
         float midY2 = (y2_start + y2_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path2.quadTo(midX2, midY2, x2_end, y2_end);
         
-        // Finger 3
         Path path3 = new Path();
         path3.moveTo(x3_start, y3_start);
         float midX3 = (x3_start + x3_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
         float midY3 = (y3_start + y3_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path3.quadTo(midX3, midY3, x3_end, y3_end);
         
-        // ===== GESTE AUSFÜHREN =====
+        // ===== GESTE AUSFÜHREN (ALLE STARTEN ZEITGLEICH!) =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, startOffset1, duration));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, startOffset2, duration));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, startOffset3, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, 0, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, 0, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, 0, duration));
         
         dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
             @Override
@@ -258,10 +238,7 @@ public class OverlayService extends AccessibilityService {
                 super.onCompleted(gestureDescription);
                 Log.d(TAG, "✅ 3-Finger-Geste ausgeführt");
                 updateStatus("📸 Screenshot erstellt, warte...");
-                
-                handler.postDelayed(() -> {
-                    findAndAnalyzeLatestScreenshot();
-                }, 1500);
+                handler.postDelayed(() -> findAndAnalyzeLatestScreenshot(), 1500);
             }
             
             @Override
@@ -274,7 +251,7 @@ public class OverlayService extends AccessibilityService {
         }, null);
     }
     
-    // ============ NEUSTEN SCREENSHOT FINDEN UND ANALYSIEREN ============
+    // ============ SCREENSHOT FINDEN ============
     private void findAndAnalyzeLatestScreenshot() {
         File[] possibleDirs = {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
@@ -289,12 +266,9 @@ public class OverlayService extends AccessibilityService {
         
         for (File dir : possibleDirs) {
             if (dir == null || !dir.exists()) continue;
-            
             File[] files = dir.listFiles((d, name) -> 
                 name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
-            
             if (files == null || files.length == 0) continue;
-            
             for (File file : files) {
                 if (file.lastModified() > System.currentTimeMillis() - 10000) {
                     if (file.lastModified() > latestTime) {
@@ -313,44 +287,35 @@ public class OverlayService extends AccessibilityService {
         }
         
         lastScreenshotFile = latestFile;
-        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
-        
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (bitmap == null) {
             updateStatus("❌ Screenshot konnte nicht geladen werden");
             Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
             return;
         }
-        
         performOcrOnBitmap(bitmap);
     }
     
-    // ============ SCREENSHOT LÖSCHEN ============
     private void deleteScreenshot() {
         if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
             boolean deleted = lastScreenshotFile.delete();
             if (deleted) {
                 Log.d(TAG, "🗑️ Screenshot gelöscht: " + lastScreenshotFile.getName());
                 updateStatus("🗑️ Screenshot gelöscht");
-            } else {
-                Log.w(TAG, "❌ Screenshot konnte nicht gelöscht werden");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    try {
-                        android.content.ContentResolver resolver = getContentResolver();
-                        android.net.Uri uri = android.net.Uri.fromFile(lastScreenshotFile);
-                        resolver.delete(uri, null, null);
-                        Log.d(TAG, "🗑️ Screenshot über ContentResolver gelöscht");
-                    } catch (Exception e) {
-                        Log.e(TAG, "❌ Löschen fehlgeschlagen: " + e.getMessage());
-                    }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    android.content.ContentResolver resolver = getContentResolver();
+                    android.net.Uri uri = android.net.Uri.fromFile(lastScreenshotFile);
+                    resolver.delete(uri, null, null);
+                    Log.d(TAG, "🗑️ Screenshot über ContentResolver gelöscht");
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Löschen fehlgeschlagen: " + e.getMessage());
                 }
             }
             lastScreenshotFile = null;
         }
     }
     
-    // ============ OCR ============
     private void performOcr() {
         if (!isScreenshotReady) {
             Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
@@ -371,61 +336,46 @@ public class OverlayService extends AccessibilityService {
         
         InputImage image = InputImage.fromBitmap(screenshot, 0);
         textRecognizer.process(image)
-            .addOnSuccessListener(new OnSuccessListener<com.google.mlkit.vision.text.Text>() {
-                @Override
-                public void onSuccess(com.google.mlkit.vision.text.Text visionText) {
-                    String resultText = visionText.getText();
-                    Log.d(TAG, "OCR Ergebnis: " + resultText);
-                    
-                    String volume = extractVolume(resultText);
-                    deleteScreenshot();
-                    
-                    if (volume != null) {
-                        ocrResult = "📸 " + volume + " GB";
-                        updateOcrResult(ocrResult);
-                        updateStatus("📸 OCR: " + volume + " GB");
-                        Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
-                    } else {
-                        ocrResult = "📸 Kein GB-Wert";
-                        updateOcrResult(ocrResult);
-                        updateStatus("📸 Kein GB-Wert");
-                        Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
-                    }
-                    screenshot.recycle();
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                String volume = extractVolume(resultText);
+                deleteScreenshot();
+                if (volume != null) {
+                    ocrResult = "📸 " + volume + " GB";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 OCR: " + volume + " GB");
+                    Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
+                } else {
+                    ocrResult = "📸 Kein GB-Wert";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 Kein GB-Wert");
+                    Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
                 }
+                screenshot.recycle();
             })
-            .addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(Exception e) {
-                    deleteScreenshot();
-                    updateStatus("❌ OCR Fehler");
-                    updateOcrResult("❌ OCR Fehler");
-                    Toast.makeText(OverlayService.this, "❌ OCR Fehler", Toast.LENGTH_LONG).show();
-                    screenshot.recycle();
-                }
+            .addOnFailureListener(e -> {
+                deleteScreenshot();
+                updateStatus("❌ OCR Fehler");
+                updateOcrResult("❌ OCR Fehler");
+                Toast.makeText(OverlayService.this, "❌ OCR Fehler", Toast.LENGTH_LONG).show();
+                screenshot.recycle();
             });
     }
     
     private String extractVolume(String text) {
         if (text == null || text.isEmpty()) return null;
         try {
-            Pattern pattern = Pattern.compile(
-                "(\\d+[\\.\\,]?\\d*)\\s*(GB|Gb|gB|gb)",
-                Pattern.CASE_INSENSITIVE
-            );
+            Pattern pattern = Pattern.compile("(\\d+[\\.\\,]?\\d*)\\s*(GB|Gb|gB|gb)", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(text);
             if (matcher.find()) {
                 String value = matcher.group(1).replace(",", ".");
                 double val = Double.parseDouble(value);
                 if (val > 0 && val < 10) return value;
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Extract Volume Fehler");
-        }
+        } catch (Exception e) { Log.e(TAG, "Extract Volume Fehler"); }
         return null;
     }
     
-    // ============ POSITIONEN ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 100);
@@ -450,7 +400,6 @@ public class OverlayService extends AccessibilityService {
         editor.apply();
     }
     
-    // ============ OVERLAY ============
     private void createOverlay() {
         if (floatingView != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
@@ -458,7 +407,6 @@ public class OverlayService extends AccessibilityService {
         }
         
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        
         FrameLayout mainContainer = new FrameLayout(this);
         mainContainer.setClickable(true);
         mainContainer.setFocusable(true);
@@ -481,9 +429,7 @@ public class OverlayService extends AccessibilityService {
         btnClose = controlView.findViewById(R.id.btnClose);
         btnDebugStatus = controlView.findViewById(R.id.btnDebugStatus);
         
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-            this, android.R.layout.simple_spinner_dropdown_item, CONSUMPTION_LABELS
-        ) {
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, CONSUMPTION_LABELS) {
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 View view = super.getView(position, convertView, parent);
@@ -495,10 +441,7 @@ public class OverlayService extends AccessibilityService {
         };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
-        
-        int savedIndex = prefs.getInt("consumption_index", 0);
-        spinnerConsumption.setSelection(savedIndex);
-        
+        spinnerConsumption.setSelection(prefs.getInt("consumption_index", 0));
         spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -516,7 +459,7 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "3-Finger-Geste: ✅ aktiv (40-60ms)\n";
+            status += "3-Finger-Geste: ✅ (320,560,850 @ 300px)\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌");
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
@@ -574,9 +517,7 @@ public class OverlayService extends AccessibilityService {
             clickRefillButton();
         });
         
-        btnStopAuto.setOnClickListener(v -> {
-            if (isRunning) stopAutomation();
-        });
+        btnStopAuto.setOnClickListener(v -> { if (isRunning) stopAutomation(); });
         
         btnStartAuto.setOnClickListener(v -> {
             if (isRunning) {
@@ -656,7 +597,6 @@ public class OverlayService extends AccessibilityService {
         windowManager.addView(floatingView, params);
     }
     
-    // ============ VISUELLE HILFEN ============
     private void createVisualHelpers() {
         swipeVisual = new View(this) {
             @Override
@@ -780,12 +720,8 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ============ GESTEN ============
     private void performSwipeGesture() {
-        if (!swipePlaced) {
-            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (!swipePlaced) { Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show(); return; }
         totalSwipes++;
         
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
@@ -800,12 +736,8 @@ public class OverlayService extends AccessibilityService {
         
         Path path = new Path();
         path.moveTo(startX, startY);
-        path.quadTo(
-            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
-            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50),
-            endX,
-            endY
-        );
+        path.quadTo((startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
+            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50), endX, endY);
         
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
@@ -843,10 +775,7 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void clickRefillButton() {
-        if (!refillPlaced) {
-            Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (!refillPlaced) { Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show(); return; }
         
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 30);
         int randomOffsetY = (int)((random.nextDouble() - 0.5) * 30);
@@ -885,7 +814,6 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ============ COUNTDOWN ============
     private void startCountdown(long waitTime) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
@@ -917,7 +845,6 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ============ WARTEZEIT ============
     private long calculateHumanWaitTime() {
         long minWait = WAIT_RANGES[currentModeIndex][0];
         long maxWait = WAIT_RANGES[currentModeIndex][1];
@@ -934,7 +861,6 @@ public class OverlayService extends AccessibilityService {
         return MIN_WAIT_AFTER_REFILL + (long)(random.nextDouble() * (MAX_WAIT_AFTER_REFILL - MIN_WAIT_AFTER_REFILL));
     }
     
-    // ============ AUTOMATIK ============
     private void startAutomation() {
         isRunning = true;
         cycleCount = 0;
