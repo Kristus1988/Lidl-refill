@@ -3,7 +3,6 @@ package com.lidlrefill.app;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -12,12 +11,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -47,7 +40,11 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
-import java.nio.ByteBuffer;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,22 +70,14 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_SWIPE_PLACED = "swipe_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
     
-    // ============ MEDIAPROJECTION ============
-    private static MediaProjection sMediaProjection = null;
-    private VirtualDisplay virtualDisplay;
-    private ImageReader imageReader;
+    // ============ KEIN MEDIAPROJECTION MEHR! ============
+    // Stattdessen: Accessibility-Screenshot
     private int screenWidth, screenHeight;
-    private int screenDensity;
+    
+    // ============ INTERNER SPEICHER ============
+    private File screenshotFile = null;
+    private Bitmap lastScreenshot = null;
     private boolean isScreenshotReady = false;
-    private boolean isMediaProjectionSet = false;
-    
-    public static void setMediaProjection(MediaProjection projection) {
-        sMediaProjection = projection;
-    }
-    
-    public static boolean isMediaProjectionReady() {
-        return sMediaProjection != null;
-    }
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -160,9 +149,6 @@ public class OverlayService extends AccessibilityService {
         display.getSize(size);
         screenWidth = size.x;
         screenHeight = size.y;
-        DisplayMetrics metrics = new DisplayMetrics();
-        display.getMetrics(metrics);
-        screenDensity = metrics.densityDpi;
         
         loadPositions();
         
@@ -171,18 +157,10 @@ public class OverlayService extends AccessibilityService {
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
-        // ===== MEDIAPROJECTION PRÜFEN =====
-        if (sMediaProjection != null) {
-            setupVirtualDisplay(sMediaProjection);
-        } else {
-            Log.w(TAG, "⚠️ MediaProjection ist null – zeige Hinweis");
-            updateStatus("⚠️ Bitte Screen-Capture aktivieren");
-        }
-        
         createOverlay();
         createVisualHelpers();
         
-        updateStatus("● Bereit");
+        updateStatus("● Bereit (Accessibility)");
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
@@ -207,110 +185,106 @@ public class OverlayService extends AccessibilityService {
         info.packageNames = null;
         setServiceInfo(info);
         
-        // MediaProjection erneut prüfen
-        if (sMediaProjection != null && !isMediaProjectionSet) {
-            setupVirtualDisplay(sMediaProjection);
-        }
+        // Accessibility-Screenshot ist jetzt verfügbar!
+        isScreenshotReady = true;
+        updateStatus("✅ Screenshot bereit");
     }
     
-    // ============ MEDIAPROJECTION ============
-    private void setupVirtualDisplay(MediaProjection projection) {
-        if (projection == null) {
-            Log.w(TAG, "MediaProjection ist null!");
-            updateStatus("❌ MediaProjection null");
-            return;
-        }
-        try {
-            if (imageReader != null) {
-                imageReader.close();
-                imageReader = null;
-            }
-            if (virtualDisplay != null) {
-                virtualDisplay.release();
-                virtualDisplay = null;
-            }
-            
-            imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 4);
-            virtualDisplay = projection.createVirtualDisplay(
-                "ScreenCapture",
-                screenWidth, screenHeight, screenDensity,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                imageReader.getSurface(),
-                null, null
-            );
-            
-            isScreenshotReady = true;
-            isMediaProjectionSet = true;
-            Log.d(TAG, "✅ VirtualDisplay erfolgreich erstellt");
-            updateStatus("✅ Screen-Capture aktiv");
-        } catch (Exception e) {
-            Log.e(TAG, "VirtualDisplay Fehler: " + e.getMessage());
-            updateStatus("❌ Screen-Capture Fehler: " + e.getMessage());
-        }
-    }
-    
-    private Bitmap takeScreenshot() {
-        if (!isScreenshotReady || imageReader == null) {
-            Log.w(TAG, "Screenshot nicht bereit");
-            return null;
-        }
-        
-        // Maximal 5 Versuche
-        for (int attempt = 0; attempt < 5; attempt++) {
-            try {
-                Image image = imageReader.acquireLatestImage();
-                if (image == null) {
-                    Thread.sleep(50);
-                    continue;
-                }
-                
-                Image.Plane[] planes = image.getPlanes();
-                ByteBuffer buffer = planes[0].getBuffer();
-                int pixelStride = planes[0].getPixelStride();
-                int rowStride = planes[0].getRowStride();
-                int rowPadding = rowStride - pixelStride * screenWidth;
-                
-                Bitmap bitmap = Bitmap.createBitmap(
-                    screenWidth + rowPadding / pixelStride,
-                    screenHeight,
-                    Bitmap.Config.ARGB_8888
-                );
-                bitmap.copyPixelsFromBuffer(buffer);
-                image.close();
-                
-                return Bitmap.createBitmap(bitmap, 0, 0, screenWidth, screenHeight);
-            } catch (Exception e) {
-                Log.e(TAG, "Screenshot Versuch " + (attempt+1) + " fehlgeschlagen: " + e.getMessage());
-            }
-        }
-        return null;
-    }
-    
-    // ============ OCR ============
-    private void performOcr() {
-        // Prüfe ob MediaProjection noch aktiv ist (Honor setzt es zurück)
-        if (!isScreenshotReady || imageReader == null || sMediaProjection == null) {
-            Toast.makeText(this, 
-                "⚠️ Screen-Capture nicht aktiv!\nBitte in der Haupt-App neu aktivieren.", 
-                Toast.LENGTH_LONG).show();
-            updateOcrResult("⚠️ Screen-Capture fehlt");
-            updateStatus("⚠️ Screen-Capture fehlt");
-            
-            // Versuche neu zu initialisieren
-            if (sMediaProjection != null) {
-                setupVirtualDisplay(sMediaProjection);
-            }
+    // ============ SCREENSHOT MIT ACCESSIBILITY ============
+    private void takeAccessibilityScreenshot() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Toast.makeText(this, "❌ Screenshot benötigt Android 11+", Toast.LENGTH_LONG).show();
+            updateStatus("❌ Android 11+ benötigt");
             return;
         }
         
         updateStatus("📸 Screenshot wird gemacht...");
         updateOcrResult("📸 Screenshot...");
         
-        Bitmap screenshot = takeScreenshot();
+        // ===== ACCESSIBILITY SCREENSHOT =====
+        takeScreenshot(new TakeScreenshotCallback() {
+            @Override
+            public void onSuccess(Bitmap bitmap) {
+                Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
+                
+                // Screenshot im internen Speicher sichern
+                saveScreenshotToInternalStorage(bitmap);
+                lastScreenshot = bitmap;
+                
+                // OCR ausführen
+                performOcrOnBitmap(bitmap);
+            }
+            
+            @Override
+            public void onFailure(int errorCode) {
+                Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
+                updateStatus("❌ Screenshot Fehler: " + errorCode);
+                updateOcrResult("❌ Screenshot Fehler");
+                Toast.makeText(OverlayService.this, 
+                    "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
+                    Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    
+    // ===== SCREENSHOT IM INTERNEN SPEICHER SICHERN =====
+    private void saveScreenshotToInternalStorage(Bitmap bitmap) {
+        try {
+            File tempDir = new File(getFilesDir(), "screenshots");
+            if (!tempDir.exists()) {
+                tempDir.mkdirs();
+            }
+            
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+            String fileName = "screenshot_" + timeStamp + ".jpg";
+            screenshotFile = new File(tempDir, fileName);
+            
+            FileOutputStream fos = new FileOutputStream(screenshotFile);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+            fos.close();
+            
+            Log.d(TAG, "✅ Screenshot gespeichert: " + screenshotFile.getAbsolutePath());
+            deleteOldScreenshots(tempDir);
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Speichern: " + e.getMessage());
+        }
+    }
+    
+    private void deleteOldScreenshots(File dir) {
+        File[] files = dir.listFiles();
+        if (files == null || files.length <= 10) return;
+        
+        int count = 0;
+        for (File file : files) {
+            if (file.isFile() && file.getName().startsWith("screenshot_")) {
+                if (count < files.length - 10) {
+                    file.delete();
+                }
+                count++;
+            }
+        }
+    }
+    
+    // ============ OCR ============
+    private void performOcr() {
+        if (!isScreenshotReady) {
+            Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Prüfe Android-Version
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Toast.makeText(this, "❌ Android 11+ für Screenshot benötigt", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        takeAccessibilityScreenshot();
+    }
+    
+    private void performOcrOnBitmap(Bitmap screenshot) {
         if (screenshot == null) {
-            updateStatus("⚠️ Screenshot fehlgeschlagen (5x)");
-            updateOcrResult("⚠️ Screenshot fehlgeschlagen");
-            Toast.makeText(this, "❌ Screenshot fehlgeschlagen!\nVersuche es nochmal.", Toast.LENGTH_LONG).show();
+            updateStatus("❌ Bitmap ist null");
+            updateOcrResult("❌ Bitmap null");
             return;
         }
         
@@ -370,14 +344,14 @@ public class OverlayService extends AccessibilityService {
             }
             
             Pattern pattern2 = Pattern.compile(
-                "(\\d+[\\.\\,]?\\d*)\\s*GB",
+                "(0[\\.,]\\d{2})\\s*(GB|Gb|gB|gb)",
                 Pattern.CASE_INSENSITIVE
             );
             Matcher matcher2 = pattern2.matcher(text);
             if (matcher2.find()) {
                 String value = matcher2.group(1).replace(",", ".");
                 double val = Double.parseDouble(value);
-                if (val > 0 && val < 10) {
+                if (val > 0 && val < 1) {
                     return value;
                 }
             }
@@ -482,13 +456,12 @@ public class OverlayService extends AccessibilityService {
         // ============ DEBUG BUTTON ============
         btnDebugStatus.setOnClickListener(v -> {
             String status = "📊 STATUS:\n";
-            status += "MediaProjection: " + (sMediaProjection != null ? "✅" : "❌") + "\n";
-            status += "VirtualDisplay: " + (virtualDisplay != null ? "✅" : "❌") + "\n";
-            status += "ImageReader: " + (imageReader != null ? "✅" : "❌") + "\n";
+            status += "Android: " + Build.VERSION.SDK_INT + "\n";
+            status += "Screenshot API: " + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? "✅" : "❌") + "\n";
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
-            status += "isMediaProjectionSet: " + (isMediaProjectionSet ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
-            status += "screenHeight: " + screenHeight;
+            status += "screenHeight: " + screenHeight + "\n";
+            status += "ScreenshotFile: " + (screenshotFile != null && screenshotFile.exists() ? "✅" : "❌");
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
         });
@@ -522,10 +495,9 @@ public class OverlayService extends AccessibilityService {
         
         btnOcrNow.setOnClickListener(v -> {
             if (!isScreenshotReady) {
-                Toast.makeText(this, "⚠️ Screen-Capture nicht aktiv!\nBitte App neu starten.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
                 return;
             }
-            updateStatus("📸 OCR wird ausgeführt...");
             performOcr();
         });
         
@@ -992,20 +964,15 @@ public class OverlayService extends AccessibilityService {
         super.onDestroy();
         savePositions();
         hideVisuals();
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
-        }
-        if (imageReader != null) {
-            imageReader.close();
-            imageReader = null;
-        }
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
         handler.removeCallbacksAndMessages(null);
         if (textRecognizer != null) {
             textRecognizer.close();
+        }
+        if (screenshotFile != null && screenshotFile.exists()) {
+            screenshotFile.delete();
         }
     }
 }
