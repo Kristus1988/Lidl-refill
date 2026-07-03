@@ -39,11 +39,6 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -181,7 +176,6 @@ public class OverlayService extends AccessibilityService {
         info.packageNames = null;
         setServiceInfo(info);
         
-        // Accessibility-Screenshot ist jetzt verfügbar!
         isScreenshotReady = true;
         updateStatus("✅ Screenshot bereit");
     }
@@ -197,27 +191,33 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Screenshot wird gemacht...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== KORREKTER AUFRUF für Android 11+ =====
-        takeScreenshot(
-            executor,
-            new TakeScreenshotCallback() {
-                @Override
-                public void onSuccess(Bitmap bitmap) {
-                    Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
-                    performOcrOnBitmap(bitmap);
+        try {
+            takeScreenshot(
+                executor,
+                new TakeScreenshotCallback() {
+                    @Override
+                    public void onSuccess(ScreenshotResult screenshotResult) {
+                        Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
+                        Bitmap bitmap = screenshotResult.getBitmap();
+                        performOcrOnBitmap(bitmap);
+                    }
+                    
+                    @Override
+                    public void onFailure(int errorCode) {
+                        Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
+                        updateStatus("❌ Screenshot Fehler: " + errorCode);
+                        updateOcrResult("❌ Screenshot Fehler");
+                        Toast.makeText(OverlayService.this, 
+                            "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
+                            Toast.LENGTH_LONG).show();
+                    }
                 }
-                
-                @Override
-                public void onFailure(int errorCode) {
-                    Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
-                    updateStatus("❌ Screenshot Fehler: " + errorCode);
-                    updateOcrResult("❌ Screenshot Fehler");
-                    Toast.makeText(OverlayService.this, 
-                        "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
-                        Toast.LENGTH_LONG).show();
-                }
-            }
-        );
+            );
+        } catch (Exception e) {
+            Log.e(TAG, "takeScreenshot Exception: " + e.getMessage());
+            updateStatus("❌ Screenshot Exception");
+            Toast.makeText(this, "❌ Screenshot Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
     
     // ============ OCR ============
