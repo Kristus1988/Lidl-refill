@@ -1,10 +1,7 @@
 package com.lidlrefill.app;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -18,11 +15,9 @@ import androidx.appcompat.app.AppCompatActivity;
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
     private static final int ACCESSIBILITY_PERMISSION_REQUEST = 2;
-    private static final int MEDIA_PROJECTION_REQUEST = 1001;
     
     private TextView tvPermissionStatus;
     private Button btnStartService, btnRestartApp, btnRefreshAccessibility;
-    private Button btnRequestScreenCapture;
     private Button btnRequestPermissions, btnCheckPermissions;
     
     @Override
@@ -34,7 +29,6 @@ public class MainActivity extends AppCompatActivity {
         btnStartService = findViewById(R.id.btnStartService);
         btnRestartApp = findViewById(R.id.btnRestartApp);
         btnRefreshAccessibility = findViewById(R.id.btnRefreshAccessibility);
-        btnRequestScreenCapture = findViewById(R.id.btnRequestScreenCapture);
         btnRequestPermissions = findViewById(R.id.btnRequestPermissions);
         btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         
@@ -49,20 +43,13 @@ public class MainActivity extends AppCompatActivity {
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         });
         
-        // ===== SCREEN-CAPTURE ANFORDERN =====
-        btnRequestScreenCapture.setOnClickListener(v -> {
-            Toast.makeText(this, "📸 Screen-Capture wird angefordert...", Toast.LENGTH_SHORT).show();
-            requestMediaProjection();
-        });
-        
         // ===== OVERLAY STARTEN =====
         btnStartService.setOnClickListener(v -> {
-            // Prüfe nur Overlay + Accessibility
-            if (!checkOverlayAndAccessibility()) {
-                Toast.makeText(this, "❌ Bitte erst Overlay + Accessibility aktivieren", Toast.LENGTH_LONG).show();
-                return;
+            if (checkAllPermissions()) {
+                startOverlayService();
+            } else {
+                Toast.makeText(this, "❌ Bitte alle Berechtigungen erteilen", Toast.LENGTH_LONG).show();
             }
-            startOverlayService();
         });
         
         // ===== APP NEU STARTEN =====
@@ -91,17 +78,10 @@ public class MainActivity extends AppCompatActivity {
         boolean accOk = am != null && am.isEnabled();
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
-        status.append("\n📸 Screen-Capture (für OCR):\n");
-        status.append(OverlayService.isMediaProjectionReady() ? "✅ Aktiv" : "⏳ Wird bei OCR angefordert");
+        status.append("\n📸 Screenshot (Accessibility):\n");
+        status.append(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? "✅ Verfügbar (Android 11+)" : "❌ Nicht verfügbar");
         
         tvPermissionStatus.setText(status.toString());
-    }
-    
-    private boolean checkOverlayAndAccessibility() {
-        boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        boolean accOk = am != null && am.isEnabled();
-        return overlayOk && accOk;
     }
     
     private void requestAllPermissions() {
@@ -127,17 +107,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    private void requestMediaProjection() {
-        MediaProjectionManager projectionManager = 
-            (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        if (projectionManager != null) {
-            Intent intent = projectionManager.createScreenCaptureIntent();
-            startActivityForResult(intent, MEDIA_PROJECTION_REQUEST);
-        } else {
-            Toast.makeText(this, "❌ MediaProjection nicht verfügbar", Toast.LENGTH_SHORT).show();
-        }
-    }
-    
     private boolean checkAllPermissions() {
         boolean allOk = true;
         StringBuilder missing = new StringBuilder();
@@ -150,6 +119,11 @@ public class MainActivity extends AppCompatActivity {
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         if (am == null || !am.isEnabled()) {
             missing.append("❌ Accessibility fehlt\n");
+            allOk = false;
+        }
+        
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            missing.append("❌ Android 11+ benötigt für Screenshots\n");
             allOk = false;
         }
         
@@ -194,22 +168,6 @@ public class MainActivity extends AppCompatActivity {
             updatePermissionStatus();
             checkAllPermissions();
             return;
-        }
-        
-        if (requestCode == MEDIA_PROJECTION_REQUEST) {
-            if (resultCode == Activity.RESULT_OK && data != null) {
-                MediaProjectionManager projectionManager = 
-                    (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                if (projectionManager != null) {
-                    MediaProjection projection = projectionManager.getMediaProjection(resultCode, data);
-                    OverlayService.setMediaProjection(projection);
-                    Toast.makeText(this, "✅ Screen-Capture aktiviert!", Toast.LENGTH_LONG).show();
-                    updatePermissionStatus();
-                }
-            } else {
-                Toast.makeText(this, "⚠️ Screen-Capture wurde abgelehnt!", Toast.LENGTH_LONG).show();
-            }
-            updatePermissionStatus();
         }
     }
     
