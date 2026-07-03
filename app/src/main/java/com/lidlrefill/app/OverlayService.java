@@ -72,6 +72,7 @@ public class OverlayService extends AccessibilityService {
     
     private int screenWidth, screenHeight;
     private boolean isScreenshotReady = false;
+    private File lastScreenshotFile = null;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -241,43 +242,46 @@ public class OverlayService extends AccessibilityService {
     
     // ============ NEUSTEN SCREENSHOT FINDEN UND ANALYSIEREN ============
     private void findAndAnalyzeLatestScreenshot() {
-        File screenshotsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-        if (screenshotsDir == null || !screenshotsDir.exists()) {
-            screenshotsDir = new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots");
-        }
+        // Verschiedene mögliche Screenshot-Ordner durchsuchen
+        File[] possibleDirs = {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Screenshots")
+        };
         
-        if (!screenshotsDir.exists()) {
-            updateStatus("❌ Screenshot-Ordner nicht gefunden");
-            Toast.makeText(this, "❌ Screenshot-Ordner nicht gefunden!", Toast.LENGTH_LONG).show();
-            return;
-        }
-        
-        File[] files = screenshotsDir.listFiles((dir, name) -> 
-            name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
-        
-        if (files == null || files.length == 0) {
-            updateStatus("❌ Keine Screenshots gefunden");
-            Toast.makeText(this, "❌ Keine Screenshots gefunden!", Toast.LENGTH_LONG).show();
-            return;
-        }
-        
-        // Neueste Datei finden
         File latestFile = null;
         long latestTime = 0;
-        for (File file : files) {
-            if (file.lastModified() > latestTime) {
-                latestTime = file.lastModified();
-                latestFile = file;
+        boolean found = false;
+        
+        for (File dir : possibleDirs) {
+            if (dir == null || !dir.exists()) continue;
+            
+            File[] files = dir.listFiles((d, name) -> 
+                name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
+            
+            if (files == null || files.length == 0) continue;
+            
+            for (File file : files) {
+                // Nur Dateien der letzten 10 Sekunden
+                if (file.lastModified() > System.currentTimeMillis() - 10000) {
+                    if (file.lastModified() > latestTime) {
+                        latestTime = file.lastModified();
+                        latestFile = file;
+                        found = true;
+                    }
+                }
             }
         }
         
-        if (latestFile == null) {
-            updateStatus("❌ Kein neuer Screenshot");
+        if (!found || latestFile == null) {
+            updateStatus("❌ Kein neuer Screenshot gefunden");
             Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!", Toast.LENGTH_LONG).show();
             return;
         }
         
-        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getName());
+        lastScreenshotFile = latestFile;
+        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getAbsolutePath());
         updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
         
         // Bitmap laden und OCR ausführen
@@ -289,6 +293,31 @@ public class OverlayService extends AccessibilityService {
         }
         
         performOcrOnBitmap(bitmap);
+    }
+    
+    // ============ SCREENSHOT LÖSCHEN ============
+    private void deleteScreenshot() {
+        if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+            boolean deleted = lastScreenshotFile.delete();
+            if (deleted) {
+                Log.d(TAG, "🗑️ Screenshot gelöscht: " + lastScreenshotFile.getName());
+                updateStatus("🗑️ Screenshot gelöscht");
+            } else {
+                Log.w(TAG, "❌ Screenshot konnte nicht gelöscht werden");
+                // Fallback: Versuche über ContentResolver zu löschen (Android 10+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        android.content.ContentResolver resolver = getContentResolver();
+                        android.net.Uri uri = android.net.Uri.fromFile(lastScreenshotFile);
+                        resolver.delete(uri, null, null);
+                        Log.d(TAG, "🗑️ Screenshot über ContentResolver gelöscht");
+                    } catch (Exception e) {
+                        Log.e(TAG, "❌ Löschen über ContentResolver fehlgeschlagen: " + e.getMessage());
+                    }
+                }
+            }
+            lastScreenshotFile = null;
+        }
     }
     
     // ============ OCR ============
@@ -320,6 +349,10 @@ public class OverlayService extends AccessibilityService {
                     Log.d(TAG, "OCR Ergebnis: " + resultText);
                     
                     String volume = extractVolume(resultText);
+                    
+                    // ===== SCREENSHOT LÖSCHEN (NACH OCR) =====
+                    deleteScreenshot();
+                    
                     if (volume != null) {
                         ocrResult = "📸 " + volume + " GB";
                         updateOcrResult(ocrResult);
@@ -337,6 +370,9 @@ public class OverlayService extends AccessibilityService {
             .addOnFailureListener(new OnFailureListener() {
                 @Override
                 public void onFailure(Exception e) {
+                    // ===== Bei Fehler auch Screenshot löschen =====
+                    deleteScreenshot();
+                    
                     updateStatus("❌ OCR Fehler");
                     updateOcrResult("❌ OCR Fehler");
                     Toast.makeText(OverlayService.this, "❌ OCR Fehler", Toast.LENGTH_LONG).show();
@@ -467,7 +503,8 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "3-Finger-Geste: ✅ aktiv";
+            status += "3-Finger-Geste: ✅ aktiv\n";
+            status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌");
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
         });
@@ -833,3 +870,132 @@ public class OverlayService extends AccessibilityService {
             dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
                 @Override
                 public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    updateStatus("✅ Refill geklickt!");
+                    Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
+                    
+                    if (!isRunning) return;
+                    
+                    currentPhase = Phase.WAIT_AFTER_REFILL;
+                    long waitTime = randomWaitAfterRefill();
+                    updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
+                    handler.postDelayed(() -> {
+                        if (isRunning) {
+                            currentPhase = Phase.SWIPE_2;
+                            updateStatus("🔄 Swipe...");
+                            performSwipeGesture();
+                        }
+                    }, waitTime);
+                }
+            }, null);
+        }, randomDelay);
+    }
+    
+    // ============ COUNTDOWN ============
+    private void startCountdown(long waitTime) {
+        isWaiting = true;
+        countdownStartTime = System.currentTimeMillis();
+        currentWaitTime = waitTime;
+        
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!isWaiting || !isRunning) {
+                    isWaiting = false;
+                    return;
+                }
+                
+                long elapsed = System.currentTimeMillis() - countdownStartTime;
+                long remaining = Math.max(0, currentWaitTime - elapsed);
+                
+                if (remaining <= 0) {
+                    updateCountdown("⏱ Warte: 00:00");
+                    isWaiting = false;
+                    if (isRunning) {
+                        cycleCount++;
+                        updateCycle();
+                        currentPhase = Phase.SWIPE_1;
+                        updateStatus("🔄 Zyklus " + cycleCount);
+                        handler.postDelayed(() -> {
+                            if (isRunning) performSwipeGesture();
+                        }, 2000);
+                    }
+                    return;
+                }
+                
+                long seconds = remaining / 1000;
+                long minutes = seconds / 60;
+                seconds = seconds % 60;
+                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
+                handler.postDelayed(this, 1000);
+            }
+        });
+    }
+    
+    // ============ WARTEZEIT ============
+    private long calculateHumanWaitTime() {
+        long minWait = WAIT_RANGES[currentModeIndex][0];
+        long maxWait = WAIT_RANGES[currentModeIndex][1];
+        long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
+        waitTime += (long)((random.nextDouble() - 0.5) * 30000);
+        return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
+    }
+    
+    private long randomWaitAfterSwipe() {
+        return MIN_WAIT_AFTER_SWIPE + (long)(random.nextDouble() * (MAX_WAIT_AFTER_SWIPE - MIN_WAIT_AFTER_SWIPE));
+    }
+    
+    private long randomWaitAfterRefill() {
+        return MIN_WAIT_AFTER_REFILL + (long)(random.nextDouble() * (MAX_WAIT_AFTER_REFILL - MIN_WAIT_AFTER_REFILL));
+    }
+    
+    // ============ AUTOMATIK ============
+    private void startAutomation() {
+        isRunning = true;
+        cycleCount = 0;
+        totalSwipes = 0;
+        btnStartAuto.setText("▶ Läuft");
+        btnStartAuto.setEnabled(false);
+        btnStopAuto.setEnabled(true);
+        updateStatus("🟢 Automatik läuft");
+        updateCycle();
+        
+        currentPhase = Phase.SWIPE_1;
+        handler.postDelayed(() -> {
+            if (isRunning) {
+                updateStatus("🔄 Swipe...");
+                performSwipeGesture();
+            }
+        }, 2000);
+    }
+    
+    private void stopAutomation() {
+        isRunning = false;
+        isWaiting = false;
+        currentPhase = Phase.IDLE;
+        btnStartAuto.setText("▶ Start");
+        btnStartAuto.setEnabled(true);
+        btnStopAuto.setEnabled(false);
+        updateStatus("● Gestoppt");
+        updateCountdown("⏱ Warte: --:--");
+        handler.removeCallbacksAndMessages(null);
+    }
+    
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        savePositions();
+        hideVisuals();
+        if (floatingView != null && windowManager != null) {
+            try { windowManager.removeView(floatingView); } catch (Exception e) {}
+        }
+        handler.removeCallbacksAndMessages(null);
+        if (textRecognizer != null) {
+            textRecognizer.close();
+        }
+        // Screenshot löschen bei Beenden der App
+        if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+            lastScreenshotFile.delete();
+        }
+    }
+}
