@@ -192,14 +192,23 @@ public class OverlayService extends AccessibilityService {
         updateOcrResult("📸 Screenshot...");
         
         try {
+            // ===== KORREKTER AUFRUF für Android 11+ =====
+            // takeScreenshot(int displayId, Executor executor, TakeScreenshotCallback callback)
             takeScreenshot(
+                Display.DEFAULT_DISPLAY,
                 executor,
                 new TakeScreenshotCallback() {
                     @Override
                     public void onSuccess(ScreenshotResult screenshotResult) {
                         Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
+                        // ScreenshotResult enthält das Bitmap
                         Bitmap bitmap = screenshotResult.getBitmap();
-                        performOcrOnBitmap(bitmap);
+                        if (bitmap != null) {
+                            performOcrOnBitmap(bitmap);
+                        } else {
+                            updateStatus("❌ Bitmap ist null");
+                            updateOcrResult("❌ Bitmap null");
+                        }
                     }
                     
                     @Override
