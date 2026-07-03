@@ -181,7 +181,7 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ 3-Finger-Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ EXAKTE 3-FINGER-SCREENSHOT GESTE (SCHNELL) ============
+    // ============ 10x SCHNELLERE 3-FINGER-SCREENSHOT GESTE ============
     private void triggerThreeFingerScreenshot() {
         updateStatus("📸 3-Finger-Geste wird ausgeführt...");
         updateOcrResult("📸 Screenshot...");
@@ -194,34 +194,32 @@ public class OverlayService extends AccessibilityService {
         // Endpositionen (leicht nach unten)
         int endY = 550;
         
-        // Leichte zufällige Abweichung für menschliches Verhalten (MAXIMAL 10px)
-        int randomOffset = (int)((random.nextDouble() - 0.5) * 10);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 10);
+        // Leichte zufällige Abweichung für menschliches Verhalten (MAXIMAL 15px)
+        int randomOffset = (int)((random.nextDouble() - 0.5) * 15);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 15);
         
         // ===== FINGER 1 =====
         int x1_start = 320 + randomOffset;
         int y1_start = 300 + randomOffsetY;
-        int x1_end = 320 + randomOffset + (int)((random.nextDouble() - 0.5) * 8);
-        int y1_end = endY + (int)((random.nextDouble() - 0.5) * 10);
+        int x1_end = 320 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y1_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
         // ===== FINGER 2 =====
         int x2_start = 560 + randomOffset;
         int y2_start = 300 + randomOffsetY;
-        int x2_end = 560 + randomOffset + (int)((random.nextDouble() - 0.5) * 8);
-        int y2_end = endY + (int)((random.nextDouble() - 0.5) * 10);
+        int x2_end = 560 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y2_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
         // ===== FINGER 3 =====
         int x3_start = 850 + randomOffset;
         int y3_start = 300 + randomOffsetY;
-        int x3_end = 850 + randomOffset + (int)((random.nextDouble() - 0.5) * 8);
-        int y3_end = endY + (int)((random.nextDouble() - 0.5) * 10);
+        int x3_end = 850 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y3_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
-        // ===== SCHNELLE DAUER (100-200ms) =====
-        long duration1 = 100 + (long)(random.nextDouble() * 50); // 100-150ms
-        long duration2 = 100 + (long)(random.nextDouble() * 50); // 100-150ms
-        long duration3 = 100 + (long)(random.nextDouble() * 50); // 100-150ms
+        // ===== 10x SCHNELLER (40-60ms statt 400-500ms) =====
+        long duration = 40 + (long)(random.nextDouble() * 20); // 40-60ms
         
-        // ===== LEICHT UNTERSCHIEDLICHER START (sehr kurz) =====
+        // ===== LEICHT UNTERSCHIEDLICHER START (menschlich) =====
         long startOffset1 = 0;
         long startOffset2 = 5 + (long)(random.nextDouble() * 10); // 5-15ms
         long startOffset3 = 10 + (long)(random.nextDouble() * 15); // 10-25ms
@@ -231,28 +229,28 @@ public class OverlayService extends AccessibilityService {
         Path path1 = new Path();
         path1.moveTo(x1_start, y1_start);
         float midX1 = (x1_start + x1_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
-        float midY1 = (y1_start + y1_end) / 2 + (float)((random.nextDouble() - 0.5) * 8);
+        float midY1 = (y1_start + y1_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path1.quadTo(midX1, midY1, x1_end, y1_end);
         
         // Finger 2
         Path path2 = new Path();
         path2.moveTo(x2_start, y2_start);
         float midX2 = (x2_start + x2_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
-        float midY2 = (y2_start + y2_end) / 2 + (float)((random.nextDouble() - 0.5) * 8);
+        float midY2 = (y2_start + y2_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path2.quadTo(midX2, midY2, x2_end, y2_end);
         
         // Finger 3
         Path path3 = new Path();
         path3.moveTo(x3_start, y3_start);
         float midX3 = (x3_start + x3_end) / 2 + (float)((random.nextDouble() - 0.5) * 15);
-        float midY3 = (y3_start + y3_end) / 2 + (float)((random.nextDouble() - 0.5) * 8);
+        float midY3 = (y3_start + y3_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
         path3.quadTo(midX3, midY3, x3_end, y3_end);
         
         // ===== GESTE AUSFÜHREN =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, startOffset1, duration1));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, startOffset2, duration2));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, startOffset3, duration3));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, startOffset1, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, startOffset2, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, startOffset3, duration));
         
         dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
             @Override
@@ -263,7 +261,7 @@ public class OverlayService extends AccessibilityService {
                 
                 handler.postDelayed(() -> {
                     findAndAnalyzeLatestScreenshot();
-                }, 1000);
+                }, 1500);
             }
             
             @Override
@@ -298,7 +296,7 @@ public class OverlayService extends AccessibilityService {
             if (files == null || files.length == 0) continue;
             
             for (File file : files) {
-                if (file.lastModified() > System.currentTimeMillis() - 8000) {
+                if (file.lastModified() > System.currentTimeMillis() - 10000) {
                     if (file.lastModified() > latestTime) {
                         latestTime = file.lastModified();
                         latestFile = file;
@@ -518,7 +516,7 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "3-Finger-Geste: ✅ aktiv (100-200ms)\n";
+            status += "3-Finger-Geste: ✅ aktiv (40-60ms)\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌");
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
