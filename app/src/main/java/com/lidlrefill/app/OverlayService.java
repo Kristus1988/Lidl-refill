@@ -11,6 +11,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -73,10 +74,12 @@ public class OverlayService extends AccessibilityService {
     private int screenWidth, screenHeight;
     private boolean isScreenshotReady = false;
     private File lastScreenshotFile = null;
+    private Bitmap lastScreenshotBitmap = null;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
+    private String lastOcrText = "";
     
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
@@ -194,7 +197,7 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Screenshot wird erstellt...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== SCREENSHOT ÜBER ACCESSIBILITY =====
+        // ===== SCREENSHOT ÜBER OVERLAY =====
         Bitmap screenshot = takeScreenshot();
         if (screenshot == null) {
             updateStatus("❌ Screenshot fehlgeschlagen");
@@ -203,50 +206,38 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        lastScreenshotBitmap = screenshot;
+        
+        // ===== SCREENSHOT SPEICHERN (für Debug) =====
+        saveScreenshotToInternalStorage(screenshot);
+        
         updateStatus("📸 Screenshot erstellt, OCR läuft...");
         updateOcrResult("📸 OCR...");
-        
-        // ===== SCREENSHOT SPEICHERN =====
-        saveScreenshotToInternalStorage(screenshot);
         
         // ===== OCR AUF SCREENSHOT =====
         performOcrOnBitmap(screenshot);
     }
     
-    // ============ SCREENSHOT ÜBER ACCESSIBILITY ============
+    // ============ SCREENSHOT ÜBER OVERLAY ============
     private Bitmap takeScreenshot() {
         try {
-            // RootView über WindowManager holen
-            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-            View rootView = null;
-            
-            // Versuche über Display zu kommen
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // Android 11+
-                try {
-                    java.lang.reflect.Method method = Display.class.getMethod("getRootView");
-                    rootView = (View) method.invoke(wm.getDefaultDisplay());
-                } catch (Exception e) {
-                    Log.e(TAG, "Reflection Fehler: " + e.getMessage());
-                }
-            }
-            
-            // Fallback: Wenn rootView null ist, verwende den FloatingView
-            if (rootView == null && floatingView != null) {
-                rootView = floatingView;
-            }
-            
-            if (rootView == null) {
-                Log.e(TAG, "RootView ist null");
+            // RootView vom FloatingView nehmen
+            if (floatingView == null) {
+                Log.e(TAG, "FloatingView ist null");
                 return null;
             }
             
-            // Screenshot erstellen
+            // Screenshot des FloatingView und seiner Kinder
             Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
-            rootView.draw(canvas);
             
-            Log.d(TAG, "✅ Screenshot erfolgreich erstellt");
+            // Zuerst den Hintergrund weiß machen
+            canvas.drawColor(Color.WHITE);
+            
+            // Dann den FloatingView zeichnen
+            floatingView.draw(canvas);
+            
+            Log.d(TAG, "✅ Screenshot erfolgreich erstellt (" + screenWidth + "x" + screenHeight + ")");
             return bitmap;
         } catch (Exception e) {
             Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
@@ -267,10 +258,10 @@ public class OverlayService extends AccessibilityService {
             lastScreenshotFile = new File(tempDir, fileName);
             
             FileOutputStream fos = new FileOutputStream(lastScreenshotFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos);
             fos.close();
             
-            Log.d(TAG, "✅ Screenshot gespeichert: " + lastScreenshotFile.getAbsolutePath());
+            Log.d(TAG, "✅ Screenshot gespeichert: " + lastScreenshotFile.getAbsolutePath() + " (" + bitmap.getWidth() + "x" + bitmap.getHeight() + ")");
             deleteOldScreenshots(tempDir);
         } catch (Exception e) {
             Log.e(TAG, "Fehler beim Speichern: " + e.getMessage());
@@ -293,7 +284,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ OCR ============
+    // ============ VERBESSERTE OCR ============
     private void performOcrOnBitmap(Bitmap screenshot) {
         if (screenshot == null) {
             updateStatus("❌ Bitmap ist null");
@@ -304,15 +295,20 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 OCR wird ausgeführt...");
         updateOcrResult("📸 OCR...");
         
-        InputImage image = InputImage.fromBitmap(screenshot, 0);
+        // Screenshot auf 2x vergrößern für bessere Erkennung
+        Bitmap scaledBitmap = Bitmap.createScaledBitmap(screenshot, screenshot.getWidth() * 2, screenshot.getHeight() * 2, true);
+        
+        InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
         textRecognizer.process(image)
             .addOnSuccessListener(new OnSuccessListener<com.google.mlkit.vision.text.Text>() {
                 @Override
                 public void onSuccess(com.google.mlkit.vision.text.Text visionText) {
                     String resultText = visionText.getText();
-                    Log.d(TAG, "OCR Ergebnis: " + resultText);
+                    lastOcrText = resultText;
+                    Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
                     
-                    String volume = extractVolume(resultText);
+                    // ===== ALLE MÖGLICHEN PATTERNS DURCHSUCHEN =====
+                    String volume = extractVolumeImproved(resultText);
                     
                     if (volume != null) {
                         ocrResult = "📸 " + volume + " GB";
@@ -324,42 +320,100 @@ public class OverlayService extends AccessibilityService {
                         updateOcrResult(ocrResult);
                         updateStatus("📸 Kein GB-Wert");
                         Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
+                        
+                        // DEBUG: Zeige ersten 200 Zeichen des OCR-Textes
+                        String preview = resultText.length() > 200 ? resultText.substring(0, 200) + "..." : resultText;
+                        Toast.makeText(OverlayService.this, "OCR Text:\n" + preview, Toast.LENGTH_LONG).show();
                     }
+                    scaledBitmap.recycle();
                     screenshot.recycle();
                 }
             })
             .addOnFailureListener(new OnFailureListener() {
                 @Override
                 public void onFailure(Exception e) {
-                    updateStatus("❌ OCR Fehler");
+                    updateStatus("❌ OCR Fehler: " + e.getMessage());
                     updateOcrResult("❌ OCR Fehler");
-                    Toast.makeText(OverlayService.this, "❌ OCR Fehler", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    scaledBitmap.recycle();
                     screenshot.recycle();
                 }
             });
     }
     
-    private String extractVolume(String text) {
-        if (text == null || text.isEmpty()) return null;
-        
-        try {
-            Pattern pattern = Pattern.compile(
-                "(\\d+[\\.\\,]?\\d*)\\s*(GB|Gb|gB|gb)",
-                Pattern.CASE_INSENSITIVE
-            );
-            Matcher matcher = pattern.matcher(text);
-            
-            if (matcher.find()) {
-                String value = matcher.group(1).replace(",", ".");
-                double val = Double.parseDouble(value);
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Extract Volume Fehler");
+    // ============ VERBESSERTE GB-EXTRACTION ============
+    private String extractVolumeImproved(String text) {
+        if (text == null || text.isEmpty()) {
+            Log.d(TAG, "OCR Text ist leer");
+            return null;
         }
+        
+        Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
+        
+        // ===== PATTERN 1: "0,74 GB" oder "0.74 GB" =====
+        Pattern pattern1 = Pattern.compile(
+            "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher1 = pattern1.matcher(text);
+        if (matcher1.find()) {
+            String value = matcher1.group(1).replace(",", ".");
+            double val = Double.parseDouble(value);
+            Log.d(TAG, "🔍 Pattern 1 gefunden: " + value + " GB");
+            if (val > 0 && val < 10) {
+                return value;
+            }
+        }
+        
+        // ===== PATTERN 2: "0,74GB" (ohne Leerzeichen) =====
+        Pattern pattern2 = Pattern.compile(
+            "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher matcher2 = pattern2.matcher(text);
+        if (matcher2.find()) {
+            String value = matcher2.group(1).replace(",", ".");
+            double val = Double.parseDouble(value);
+            Log.d(TAG, "🔍 Pattern 2 gefunden: " + value + " GB");
+            if (val > 0 && val < 10) {
+                return value;
+            }
+        }
+        
+        // ===== PATTERN 3: "0,74" (nur Zahl ohne Einheit) =====
+        Pattern pattern3 = Pattern.compile(
+            "(0[\\.,]\\d{2})"
+        );
+        Matcher matcher3 = pattern3.matcher(text);
+        if (matcher3.find()) {
+            String value = matcher3.group(1).replace(",", ".");
+            double val = Double.parseDouble(value);
+            Log.d(TAG, "🔍 Pattern 3 gefunden: " + value);
+            if (val > 0 && val < 1) {
+                return value;
+            }
+        }
+        
+        // ===== PATTERN 4: "0,74" mit "Verfügbares Gesamtvolumen" =====
+        Pattern pattern4 = Pattern.compile(
+            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
+        );
+        Matcher matcher4 = pattern4.matcher(text);
+        if (matcher4.find()) {
+            String value = matcher4.group(1).replace(",", ".");
+            double val = Double.parseDouble(value);
+            Log.d(TAG, "🔍 Pattern 4 gefunden: " + value);
+            if (val > 0 && val < 10) {
+                return value;
+            }
+        }
+        
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
+    }
+    
+    private String extractVolume(String text) {
+        return extractVolumeImproved(text);
     }
     
     // ============ POSITIONEN ============
@@ -461,8 +515,8 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "Screenshot & OCR: ✅ aktiv\n";
-            status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌");
+            status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌") + "\n";
+            status += "Letzter OCR-Text: " + (lastOcrText.length() > 50 ? lastOcrText.substring(0, 50) + "..." : lastOcrText);
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
         });
@@ -954,6 +1008,9 @@ public class OverlayService extends AccessibilityService {
         }
         if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
             lastScreenshotFile.delete();
+        }
+        if (lastScreenshotBitmap != null && !lastScreenshotBitmap.isRecycled()) {
+            lastScreenshotBitmap.recycle();
         }
     }
 }
