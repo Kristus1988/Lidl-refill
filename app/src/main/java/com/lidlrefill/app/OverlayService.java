@@ -15,7 +15,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
@@ -46,6 +45,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Random;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -70,18 +71,13 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_SWIPE_PLACED = "swipe_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
     
-    // ============ KEIN MEDIAPROJECTION MEHR! ============
-    // Stattdessen: Accessibility-Screenshot
     private int screenWidth, screenHeight;
-    
-    // ============ INTERNER SPEICHER ============
-    private File screenshotFile = null;
-    private Bitmap lastScreenshot = null;
     private boolean isScreenshotReady = false;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
+    private Executor executor = Executors.newSingleThreadExecutor();
     
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
@@ -201,68 +197,27 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Screenshot wird gemacht...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== ACCESSIBILITY SCREENSHOT =====
-        takeScreenshot(new TakeScreenshotCallback() {
-            @Override
-            public void onSuccess(Bitmap bitmap) {
-                Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
-                
-                // Screenshot im internen Speicher sichern
-                saveScreenshotToInternalStorage(bitmap);
-                lastScreenshot = bitmap;
-                
-                // OCR ausführen
-                performOcrOnBitmap(bitmap);
-            }
-            
-            @Override
-            public void onFailure(int errorCode) {
-                Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
-                updateStatus("❌ Screenshot Fehler: " + errorCode);
-                updateOcrResult("❌ Screenshot Fehler");
-                Toast.makeText(OverlayService.this, 
-                    "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
-                    Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-    
-    // ===== SCREENSHOT IM INTERNEN SPEICHER SICHERN =====
-    private void saveScreenshotToInternalStorage(Bitmap bitmap) {
-        try {
-            File tempDir = new File(getFilesDir(), "screenshots");
-            if (!tempDir.exists()) {
-                tempDir.mkdirs();
-            }
-            
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String fileName = "screenshot_" + timeStamp + ".jpg";
-            screenshotFile = new File(tempDir, fileName);
-            
-            FileOutputStream fos = new FileOutputStream(screenshotFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos);
-            fos.close();
-            
-            Log.d(TAG, "✅ Screenshot gespeichert: " + screenshotFile.getAbsolutePath());
-            deleteOldScreenshots(tempDir);
-        } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Speichern: " + e.getMessage());
-        }
-    }
-    
-    private void deleteOldScreenshots(File dir) {
-        File[] files = dir.listFiles();
-        if (files == null || files.length <= 10) return;
-        
-        int count = 0;
-        for (File file : files) {
-            if (file.isFile() && file.getName().startsWith("screenshot_")) {
-                if (count < files.length - 10) {
-                    file.delete();
+        // ===== KORREKTER AUFRUF für Android 11+ =====
+        takeScreenshot(
+            executor,
+            new TakeScreenshotCallback() {
+                @Override
+                public void onSuccess(Bitmap bitmap) {
+                    Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
+                    performOcrOnBitmap(bitmap);
                 }
-                count++;
+                
+                @Override
+                public void onFailure(int errorCode) {
+                    Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
+                    updateStatus("❌ Screenshot Fehler: " + errorCode);
+                    updateOcrResult("❌ Screenshot Fehler");
+                    Toast.makeText(OverlayService.this, 
+                        "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
+                        Toast.LENGTH_LONG).show();
+                }
             }
-        }
+        );
     }
     
     // ============ OCR ============
@@ -272,7 +227,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Prüfe Android-Version
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Toast.makeText(this, "❌ Android 11+ für Screenshot benötigt", Toast.LENGTH_LONG).show();
             return;
@@ -460,8 +414,7 @@ public class OverlayService extends AccessibilityService {
             status += "Screenshot API: " + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? "✅" : "❌") + "\n";
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
-            status += "screenHeight: " + screenHeight + "\n";
-            status += "ScreenshotFile: " + (screenshotFile != null && screenshotFile.exists() ? "✅" : "❌");
+            status += "screenHeight: " + screenHeight;
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
         });
@@ -970,9 +923,6 @@ public class OverlayService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
         if (textRecognizer != null) {
             textRecognizer.close();
-        }
-        if (screenshotFile != null && screenshotFile.exists()) {
-            screenshotFile.delete();
         }
     }
 }
