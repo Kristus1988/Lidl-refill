@@ -5,6 +5,7 @@ import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -12,6 +13,7 @@ import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
@@ -40,7 +42,6 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -71,7 +72,6 @@ public class OverlayService extends AccessibilityService {
     
     private int screenWidth, screenHeight;
     private boolean isScreenshotReady = false;
-    private File screenshotFile = null;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -153,7 +153,7 @@ public class OverlayService extends AccessibilityService {
         createOverlay();
         createVisualHelpers();
         
-        updateStatus("● Bereit (Accessibility)");
+        updateStatus("● Bereit");
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
@@ -178,97 +178,117 @@ public class OverlayService extends AccessibilityService {
         info.packageNames = null;
         setServiceInfo(info);
         
-        // ===== ACCESSIBILITY SCREENSHOT IST VERFÜGBAR =====
         isScreenshotReady = true;
         updateStatus("✅ Screenshot bereit");
-        Toast.makeText(this, "✅ Accessibility-Screenshot aktiv!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "✅ 3-Finger-Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ SCREENSHOT MIT ACCESSIBILITY ============
-    private void takeAccessibilityScreenshot() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            Toast.makeText(this, "❌ Screenshot benötigt Android 11+", Toast.LENGTH_LONG).show();
-            updateStatus("❌ Android 11+ benötigt");
+    // ============ 3-FINGER-SCREENSHOT AUSLÖSEN ============
+    private void triggerThreeFingerScreenshot() {
+        updateStatus("📸 3-Finger-Geste wird ausgeführt...");
+        updateOcrResult("📸 Screenshot...");
+        
+        // 3 Finger von oben nach unten wischen
+        int startX1 = screenWidth / 3;
+        int startX2 = screenWidth / 2;
+        int startX3 = screenWidth * 2 / 3;
+        int startY = 50;
+        int endY = screenHeight - 50;
+        long duration = 300;
+        
+        // Pfad für Finger 1
+        Path path1 = new Path();
+        path1.moveTo(startX1, startY);
+        path1.lineTo(startX1, endY);
+        
+        // Pfad für Finger 2
+        Path path2 = new Path();
+        path2.moveTo(startX2, startY);
+        path2.lineTo(startX2, endY);
+        
+        // Pfad für Finger 3
+        Path path3 = new Path();
+        path3.moveTo(startX3, startY);
+        path3.lineTo(startX3, endY);
+        
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, 0, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, 0, duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, 0, duration));
+        
+        dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
+            @Override
+            public void onCompleted(GestureDescription gestureDescription) {
+                super.onCompleted(gestureDescription);
+                Log.d(TAG, "✅ 3-Finger-Geste ausgeführt");
+                updateStatus("📸 Screenshot erstellt, warte auf Speicher...");
+                
+                // Warten, bis der Screenshot gespeichert ist
+                handler.postDelayed(() -> {
+                    findAndAnalyzeLatestScreenshot();
+                }, 1500);
+            }
+            
+            @Override
+            public void onCancelled(GestureDescription gestureDescription) {
+                super.onCancelled(gestureDescription);
+                Log.d(TAG, "❌ 3-Finger-Geste abgebrochen");
+                updateStatus("❌ Screenshot fehlgeschlagen");
+                Toast.makeText(OverlayService.this, "❌ Screenshot fehlgeschlagen!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    // ============ NEUSTEN SCREENSHOT FINDEN UND ANALYSIEREN ============
+    private void findAndAnalyzeLatestScreenshot() {
+        File screenshotsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        if (screenshotsDir == null || !screenshotsDir.exists()) {
+            screenshotsDir = new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots");
+        }
+        
+        if (!screenshotsDir.exists()) {
+            updateStatus("❌ Screenshot-Ordner nicht gefunden");
+            Toast.makeText(this, "❌ Screenshot-Ordner nicht gefunden!", Toast.LENGTH_LONG).show();
             return;
         }
         
-        updateStatus("📸 Screenshot wird gemacht...");
-        updateOcrResult("📸 Screenshot...");
+        File[] files = screenshotsDir.listFiles((dir, name) -> 
+            name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
         
-        try {
-            takeScreenshot(
-                java.util.concurrent.Executors.newSingleThreadExecutor(),
-                new android.view.accessibility.TakeScreenshotCallback() {
-                    @Override
-                    public void onSuccess(android.view.accessibility.ScreenshotResult screenshotResult) {
-                        Log.d(TAG, "✅ Accessibility-Screenshot erfolgreich");
-                        Bitmap bitmap = screenshotResult.getBitmap();
-                        if (bitmap != null) {
-                            // Screenshot im internen Speicher sichern
-                            saveScreenshotToInternalStorage(bitmap);
-                            performOcrOnBitmap(bitmap);
-                        } else {
-                            updateStatus("❌ Bitmap ist null");
-                            updateOcrResult("❌ Bitmap null");
-                            Toast.makeText(OverlayService.this, "❌ Screenshot Bitmap ist null", Toast.LENGTH_LONG).show();
-                        }
-                    }
-                    
-                    @Override
-                    public void onFailure(int errorCode) {
-                        Log.e(TAG, "❌ Screenshot fehlgeschlagen: " + errorCode);
-                        updateStatus("❌ Screenshot Fehler: " + errorCode);
-                        updateOcrResult("❌ Screenshot Fehler");
-                        Toast.makeText(OverlayService.this, 
-                            "❌ Screenshot fehlgeschlagen (Code: " + errorCode + ")", 
-                            Toast.LENGTH_LONG).show();
-                    }
-                }
-            );
-        } catch (Exception e) {
-            Log.e(TAG, "takeScreenshot Exception: " + e.getMessage());
-            updateStatus("❌ Screenshot Exception");
-            Toast.makeText(this, "❌ Screenshot Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        if (files == null || files.length == 0) {
+            updateStatus("❌ Keine Screenshots gefunden");
+            Toast.makeText(this, "❌ Keine Screenshots gefunden!", Toast.LENGTH_LONG).show();
+            return;
         }
-    }
-    
-    // ===== SCREENSHOT IM APP-INTERNEN SPEICHER SICHERN =====
-    private void saveScreenshotToInternalStorage(Bitmap bitmap) {
-        try {
-            File tempDir = new File(getFilesDir(), "screenshots");
-            if (!tempDir.exists()) {
-                tempDir.mkdirs();
-            }
-            
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String fileName = "screenshot_" + timeStamp + ".jpg";
-            screenshotFile = new File(tempDir, fileName);
-            
-            FileOutputStream fos = new FileOutputStream(screenshotFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, fos);
-            fos.close();
-            
-            Log.d(TAG, "✅ Screenshot gespeichert: " + screenshotFile.getAbsolutePath());
-            deleteOldScreenshots(tempDir);
-        } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Speichern: " + e.getMessage());
-        }
-    }
-    
-    private void deleteOldScreenshots(File dir) {
-        File[] files = dir.listFiles();
-        if (files == null || files.length <= 10) return;
         
-        int count = 0;
+        // Neueste Datei finden
+        File latestFile = null;
+        long latestTime = 0;
         for (File file : files) {
-            if (file.isFile() && file.getName().startsWith("screenshot_")) {
-                if (count < files.length - 10) {
-                    file.delete();
-                    Log.d(TAG, "🗑️ Alten Screenshot gelöscht: " + file.getName());
-                }
-                count++;
+            if (file.lastModified() > latestTime) {
+                latestTime = file.lastModified();
+                latestFile = file;
             }
         }
+        
+        if (latestFile == null) {
+            updateStatus("❌ Kein neuer Screenshot");
+            Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getName());
+        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
+        
+        // Bitmap laden und OCR ausführen
+        Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
+        if (bitmap == null) {
+            updateStatus("❌ Screenshot konnte nicht geladen werden");
+            Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        performOcrOnBitmap(bitmap);
     }
     
     // ============ OCR ============
@@ -278,12 +298,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            Toast.makeText(this, "❌ Android 11+ für Screenshot benötigt", Toast.LENGTH_LONG).show();
-            return;
-        }
-        
-        takeAccessibilityScreenshot();
+        triggerThreeFingerScreenshot();
     }
     
     private void performOcrOnBitmap(Bitmap screenshot) {
@@ -347,21 +362,8 @@ public class OverlayService extends AccessibilityService {
                     return value;
                 }
             }
-            
-            Pattern pattern2 = Pattern.compile(
-                "(0[\\.,]\\d{2})\\s*(GB|Gb|gB|gb)",
-                Pattern.CASE_INSENSITIVE
-            );
-            Matcher matcher2 = pattern2.matcher(text);
-            if (matcher2.find()) {
-                String value = matcher2.group(1).replace(",", ".");
-                double val = Double.parseDouble(value);
-                if (val > 0 && val < 1) {
-                    return value;
-                }
-            }
         } catch (Exception e) {
-            Log.e(TAG, "Extract Volume Fehler: " + e.getMessage());
+            Log.e(TAG, "Extract Volume Fehler");
         }
         return null;
     }
@@ -462,11 +464,10 @@ public class OverlayService extends AccessibilityService {
         btnDebugStatus.setOnClickListener(v -> {
             String status = "📊 STATUS:\n";
             status += "Android: " + Build.VERSION.SDK_INT + "\n";
-            status += "Screenshot API: " + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ? "✅" : "❌") + "\n";
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "ScreenshotFile: " + (screenshotFile != null && screenshotFile.exists() ? "✅" : "❌");
+            status += "3-Finger-Geste: ✅ aktiv";
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
         });
@@ -832,131 +833,3 @@ public class OverlayService extends AccessibilityService {
             dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
                 @Override
                 public void onCompleted(GestureDescription gestureDescription) {
-                    super.onCompleted(gestureDescription);
-                    updateStatus("✅ Refill geklickt!");
-                    Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
-                    
-                    if (!isRunning) return;
-                    
-                    currentPhase = Phase.WAIT_AFTER_REFILL;
-                    long waitTime = randomWaitAfterRefill();
-                    updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
-                    handler.postDelayed(() -> {
-                        if (isRunning) {
-                            currentPhase = Phase.SWIPE_2;
-                            updateStatus("🔄 Swipe...");
-                            performSwipeGesture();
-                        }
-                    }, waitTime);
-                }
-            }, null);
-        }, randomDelay);
-    }
-    
-    // ============ COUNTDOWN ============
-    private void startCountdown(long waitTime) {
-        isWaiting = true;
-        countdownStartTime = System.currentTimeMillis();
-        currentWaitTime = waitTime;
-        
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (!isWaiting || !isRunning) {
-                    isWaiting = false;
-                    return;
-                }
-                
-                long elapsed = System.currentTimeMillis() - countdownStartTime;
-                long remaining = Math.max(0, currentWaitTime - elapsed);
-                
-                if (remaining <= 0) {
-                    updateCountdown("⏱ Warte: 00:00");
-                    isWaiting = false;
-                    if (isRunning) {
-                        cycleCount++;
-                        updateCycle();
-                        currentPhase = Phase.SWIPE_1;
-                        updateStatus("🔄 Zyklus " + cycleCount);
-                        handler.postDelayed(() -> {
-                            if (isRunning) performSwipeGesture();
-                        }, 2000);
-                    }
-                    return;
-                }
-                
-                long seconds = remaining / 1000;
-                long minutes = seconds / 60;
-                seconds = seconds % 60;
-                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
-                handler.postDelayed(this, 1000);
-            }
-        });
-    }
-    
-    // ============ WARTEZEIT ============
-    private long calculateHumanWaitTime() {
-        long minWait = WAIT_RANGES[currentModeIndex][0];
-        long maxWait = WAIT_RANGES[currentModeIndex][1];
-        long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
-        waitTime += (long)((random.nextDouble() - 0.5) * 30000);
-        return Math.max(MIN_WAIT_TIME, Math.min(MAX_WAIT_TIME, waitTime));
-    }
-    
-    private long randomWaitAfterSwipe() {
-        return MIN_WAIT_AFTER_SWIPE + (long)(random.nextDouble() * (MAX_WAIT_AFTER_SWIPE - MIN_WAIT_AFTER_SWIPE));
-    }
-    
-    private long randomWaitAfterRefill() {
-        return MIN_WAIT_AFTER_REFILL + (long)(random.nextDouble() * (MAX_WAIT_AFTER_REFILL - MIN_WAIT_AFTER_REFILL));
-    }
-    
-    // ============ AUTOMATIK ============
-    private void startAutomation() {
-        isRunning = true;
-        cycleCount = 0;
-        totalSwipes = 0;
-        btnStartAuto.setText("▶ Läuft");
-        btnStartAuto.setEnabled(false);
-        btnStopAuto.setEnabled(true);
-        updateStatus("🟢 Automatik läuft");
-        updateCycle();
-        
-        currentPhase = Phase.SWIPE_1;
-        handler.postDelayed(() -> {
-            if (isRunning) {
-                updateStatus("🔄 Swipe...");
-                performSwipeGesture();
-            }
-        }, 2000);
-    }
-    
-    private void stopAutomation() {
-        isRunning = false;
-        isWaiting = false;
-        currentPhase = Phase.IDLE;
-        btnStartAuto.setText("▶ Start");
-        btnStartAuto.setEnabled(true);
-        btnStopAuto.setEnabled(false);
-        updateStatus("● Gestoppt");
-        updateCountdown("⏱ Warte: --:--");
-        handler.removeCallbacksAndMessages(null);
-    }
-    
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        savePositions();
-        hideVisuals();
-        if (floatingView != null && windowManager != null) {
-            try { windowManager.removeView(floatingView); } catch (Exception e) {}
-        }
-        handler.removeCallbacksAndMessages(null);
-        if (textRecognizer != null) {
-            textRecognizer.close();
-        }
-        if (screenshotFile != null && screenshotFile.exists()) {
-            screenshotFile.delete();
-        }
-    }
-}
