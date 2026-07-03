@@ -79,11 +79,11 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="\n⚠️ Die App funktioniert über ALLEN Apps!\nSogar über dem Sperrbildschirm."
+        android:text="\n✅ Screenshot & OCR direkt im Overlay!\nKeine MediaProjection nötig."
         android:textSize="12sp"
-        android:textColor="#D32F2F"
+        android:textColor="#2E7D32"
         android:gravity="center"
-        android:background="#FFEBEE"
+        android:background="#E8F5E9"
         android:padding="10dp"
         android:layout_marginTop="20dp"/>
 
