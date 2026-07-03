@@ -181,65 +181,78 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ 3-Finger-Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ OPTIMIERTE 3-FINGER-SCREENSHOT GESTE ============
+    // ============ EXAKTE 3-FINGER-SCREENSHOT GESTE ============
     private void triggerThreeFingerScreenshot() {
         updateStatus("📸 3-Finger-Geste wird ausgeführt...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== BEREICH: 20% - 45% der Bildschirmhöhe =====
-        int startY = (int)(screenHeight * 0.20);  // 20% von oben (deutlich unter dem Rand)
-        int endY = (int)(screenHeight * 0.45);    // 45% von oben (obere Hälfte)
+        // ===== EXAKTE KOORDINATEN =====
+        // Finger 1: x=320, y=300
+        // Finger 2: x=560, y=300
+        // Finger 3: x=850, y=300
         
-        // Leichte zufällige Abweichung für menschliches Verhalten
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 50);
-        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
+        // Endpositionen (leicht nach unten)
+        int endY = 550;
         
-        // 3 Finger mit leichtem Abstand (menschlich)
-        int fingerSpacing = 70 + (int)(random.nextDouble() * 40);
-        int startX1 = screenWidth / 2 - fingerSpacing + randomOffsetX;
-        int startX2 = screenWidth / 2 + randomOffsetX;
-        int startX3 = screenWidth / 2 + fingerSpacing + randomOffsetX;
+        // Leichte zufällige Abweichung für menschliches Verhalten (MAXIMAL 15px)
+        int randomOffset = (int)((random.nextDouble() - 0.5) * 15);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 15);
         
-        // Leicht unterschiedliche Startpositionen (menschlich)
-        int startY1 = startY + (int)((random.nextDouble() - 0.5) * 30);
-        int startY2 = startY + (int)((random.nextDouble() - 0.5) * 30);
-        int startY3 = startY + (int)((random.nextDouble() - 0.5) * 30);
+        // ===== FINGER 1 =====
+        int x1_start = 320 + randomOffset;
+        int y1_start = 300 + randomOffsetY;
+        int x1_end = 320 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y1_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
-        // Leicht unterschiedliche Endpositionen (menschlich)
-        int endY1 = endY + (int)((random.nextDouble() - 0.5) * 30);
-        int endY2 = endY + (int)((random.nextDouble() - 0.5) * 30);
-        int endY3 = endY + (int)((random.nextDouble() - 0.5) * 30);
+        // ===== FINGER 2 =====
+        int x2_start = 560 + randomOffset;
+        int y2_start = 300 + randomOffsetY;
+        int x2_end = 560 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y2_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
-        // Leichte Bogenbewegung (menschlicher)
-        long duration = 350 + (long)(random.nextDouble() * 150); // 350-500ms
+        // ===== FINGER 3 =====
+        int x3_start = 850 + randomOffset;
+        int y3_start = 300 + randomOffsetY;
+        int x3_end = 850 + randomOffset + (int)((random.nextDouble() - 0.5) * 10);
+        int y3_end = endY + (int)((random.nextDouble() - 0.5) * 15);
         
-        // ===== PFADE MIT LEICHTEM BOGEN =====
+        // ===== LEICHT UNTERSCHIEDLICHE DAUER (menschlich) =====
+        long duration1 = 400 + (long)(random.nextDouble() * 100); // 400-500ms
+        long duration2 = 400 + (long)(random.nextDouble() * 100);
+        long duration3 = 400 + (long)(random.nextDouble() * 100);
+        
+        // ===== LEICHT UNTERSCHIEDLICHER START (menschlich) =====
+        long startOffset1 = 0;
+        long startOffset2 = 10 + (long)(random.nextDouble() * 20); // 10-30ms
+        long startOffset3 = 20 + (long)(random.nextDouble() * 30); // 20-50ms
+        
+        // ===== PFADE MIT LEICHTEM BOGEN (menschlicher) =====
         // Finger 1
         Path path1 = new Path();
-        path1.moveTo(startX1, startY1);
-        float midX1 = startX1 + (float)((random.nextDouble() - 0.5) * 50);
-        float midY1 = (startY1 + endY1) / 2 + (float)((random.nextDouble() - 0.5) * 20);
-        path1.quadTo(midX1, midY1, startX1 + (int)((random.nextDouble() - 0.5) * 20), endY1);
+        path1.moveTo(x1_start, y1_start);
+        float midX1 = (x1_start + x1_end) / 2 + (float)((random.nextDouble() - 0.5) * 20);
+        float midY1 = (y1_start + y1_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
+        path1.quadTo(midX1, midY1, x1_end, y1_end);
         
         // Finger 2
         Path path2 = new Path();
-        path2.moveTo(startX2, startY2);
-        float midX2 = startX2 + (float)((random.nextDouble() - 0.5) * 50);
-        float midY2 = (startY2 + endY2) / 2 + (float)((random.nextDouble() - 0.5) * 20);
-        path2.quadTo(midX2, midY2, startX2 + (int)((random.nextDouble() - 0.5) * 20), endY2);
+        path2.moveTo(x2_start, y2_start);
+        float midX2 = (x2_start + x2_end) / 2 + (float)((random.nextDouble() - 0.5) * 20);
+        float midY2 = (y2_start + y2_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
+        path2.quadTo(midX2, midY2, x2_end, y2_end);
         
         // Finger 3
         Path path3 = new Path();
-        path3.moveTo(startX3, startY3);
-        float midX3 = startX3 + (float)((random.nextDouble() - 0.5) * 50);
-        float midY3 = (startY3 + endY3) / 2 + (float)((random.nextDouble() - 0.5) * 20);
-        path3.quadTo(midX3, midY3, startX3 + (int)((random.nextDouble() - 0.5) * 20), endY3);
+        path3.moveTo(x3_start, y3_start);
+        float midX3 = (x3_start + x3_end) / 2 + (float)((random.nextDouble() - 0.5) * 20);
+        float midY3 = (y3_start + y3_end) / 2 + (float)((random.nextDouble() - 0.5) * 10);
+        path3.quadTo(midX3, midY3, x3_end, y3_end);
         
         // ===== GESTE AUSFÜHREN =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, 0, duration));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, 20 + (int)(random.nextDouble() * 20), duration));
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, 40 + (int)(random.nextDouble() * 20), duration));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path1, startOffset1, duration1));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path2, startOffset2, duration2));
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path3, startOffset3, duration3));
         
         dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
             @Override
@@ -505,7 +518,7 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "screenWidth: " + screenWidth + "\n";
             status += "screenHeight: " + screenHeight + "\n";
-            status += "3-Finger-Geste: ✅ aktiv (20%-45%)\n";
+            status += "3-Finger-Geste: ✅ aktiv (320,560,850 @ 300px)\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌");
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
