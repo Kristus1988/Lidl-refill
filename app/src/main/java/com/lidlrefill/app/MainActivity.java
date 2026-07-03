@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
         status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
         
         status.append("\n📸 Screenshot-Modus:\n");
-        status.append("✅ Accessibility-Screenshot (Android 11+)");
+        status.append("✅ Screenshot über Overlay (keine MediaProjection)");
         
         tvPermissionStatus.setText(status.toString());
     }
@@ -121,11 +121,6 @@ public class MainActivity extends AppCompatActivity {
             allOk = false;
         }
         
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            missing.append("❌ Android 11+ wird für Screenshot benötigt\n");
-            allOk = false;
-        }
-        
         if (!allOk) {
             Toast.makeText(this, missing.toString(), Toast.LENGTH_LONG).show();
             btnStartService.setEnabled(false);
@@ -146,6 +141,7 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
         Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
+        finish();
     }
     
     @Override
