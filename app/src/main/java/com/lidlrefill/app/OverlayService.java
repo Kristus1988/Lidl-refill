@@ -17,6 +17,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
@@ -279,6 +280,12 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // Prüfen ob Overlay-Berechtigung aktiv ist
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "❌ Overlay-Berechtigung fehlt!\nBitte in Haupt-App aktivieren.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
         // Neuesten Screenshot als Hintergrund verwenden
         File latestFile = null;
         long latestTime = 0;
@@ -315,9 +322,11 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // Bitmap auf Bildschirmgröße skalieren
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, screenWidth, screenHeight, true);
         bitmap.recycle();
         
+        // ===== VIEW MIT BITMAP =====
         View bitmapView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -326,6 +335,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
+        // ===== RECHECK ZUM ZIEHEN (MIT GRÜNEM RECHECK) =====
         cropRectangleView = new View(this) {
             private Paint rectPaint = new Paint();
             private Paint borderPaint = new Paint();
@@ -335,7 +345,7 @@ public class OverlayService extends AccessibilityService {
                 rectPaint.setColor(Color.argb(80, 0, 255, 0));
                 rectPaint.setStyle(Paint.Style.FILL);
                 borderPaint.setColor(Color.GREEN);
-                borderPaint.setStrokeWidth(6);
+                borderPaint.setStrokeWidth(8);
                 borderPaint.setStyle(Paint.Style.STROKE);
                 textPaint.setColor(Color.YELLOW);
                 textPaint.setTextSize(40);
@@ -400,7 +410,7 @@ public class OverlayService extends AccessibilityService {
                             "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
@@ -418,6 +428,7 @@ public class OverlayService extends AccessibilityService {
             return false;
         });
         
+        // ===== CONTAINER =====
         cropContainer = new FrameLayout(this);
         cropContainer.addView(bitmapView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
