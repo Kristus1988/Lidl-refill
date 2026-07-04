@@ -55,7 +55,7 @@ public class OverlayService extends AccessibilityService {
     private Spinner spinnerConsumption;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
-    private Button btnClose, btnDebugStatus;
+    private Button btnClose, btnAutoRefill;
     
     private SharedPreferences prefs;
     private static final String PREF_SWIPE_START_X = "swipe_start_x";
@@ -81,6 +81,7 @@ public class OverlayService extends AccessibilityService {
     // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
+    private double lastDetectedVolume = 0.0;
     
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
@@ -98,6 +99,7 @@ public class OverlayService extends AccessibilityService {
     
     private Handler handler = new Handler(Looper.getMainLooper());
     private boolean isRunning = false;
+    private boolean isAutoRefillMode = false;
     private boolean isOverlayDragging = false;
     private float overlayDragX, overlayDragY;
     
@@ -105,9 +107,11 @@ public class OverlayService extends AccessibilityService {
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
-        "🎬 4K (6-9 Min)"
+        "🎬 4K (6-9 Min)",
+        "♻️ AUTOREFILL (0,35 GB)"
     };
     private int currentModeIndex = 0;
+    private boolean isAutoRefillSelected = false;
     
     // ============ ZEITEN ============
     private static final long MIN_WAIT_AFTER_SWIPE = 8000;
@@ -116,11 +120,15 @@ public class OverlayService extends AccessibilityService {
     private static final long MAX_WAIT_AFTER_REFILL = 10000;
     private static final long MIN_WAIT_TIME = 60000;
     private static final long MAX_WAIT_TIME = 1800000;
+    private static final long AUTOREFILL_WAIT_MIN = 300000; // 5 Minuten
+    private static final long AUTOREFILL_WAIT_MAX = 480000; // 8 Minuten
+    private static final double AUTOREFILL_THRESHOLD = 0.35;
     
     private static final long[][] WAIT_RANGES = {
         {1080000, 1320000},
         {660000, 840000},
-        {360000, 540000}
+        {360000, 540000},
+        {300000, 480000} // AUTOREFILL: 5-8 Minuten
     };
     
     private int cycleCount = 0;
@@ -129,7 +137,7 @@ public class OverlayService extends AccessibilityService {
     private long countdownStartTime = 0;
     private boolean isWaiting = false;
     
-    private enum Phase { IDLE, SWIPE_1, WAIT_AFTER_SWIPE_1, REFILL, WAIT_AFTER_REFILL, SWIPE_2, COUNTDOWN }
+    private enum Phase { IDLE, SWIPE_1, WAIT_AFTER_SWIPE_1, REFILL, WAIT_AFTER_REFILL, SWIPE_2, COUNTDOWN, AUTOREFILL_OCR, AUTOREFILL_WAIT }
     private Phase currentPhase = Phase.IDLE;
     
     private Random random = new Random();
@@ -152,6 +160,7 @@ public class OverlayService extends AccessibilityService {
         
         int savedIndex = prefs.getInt("consumption_index", 0);
         currentModeIndex = savedIndex;
+        isAutoRefillSelected = (savedIndex == 3);
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
@@ -165,7 +174,6 @@ public class OverlayService extends AccessibilityService {
             new File(Environment.getExternalStorageDirectory(), "DCIM")
         };
         
-        // Prüfen, welcher Ordner existiert
         for (File folder : screenshotFolders) {
             if (folder != null && folder.exists()) {
                 foundFolderPath = folder.getAbsolutePath();
@@ -230,15 +238,11 @@ public class OverlayService extends AccessibilityService {
         
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
-        Toast.makeText(this, "📸 Screenshot wird erstellt...", Toast.LENGTH_SHORT).show();
         
-        // ===== NATIVE SCREENSHOT =====
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // ===== WARTEN BIS SCREENSHOT IM ORDNER IST =====
         updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
-        Toast.makeText(this, "⏳ Warte auf Screenshot...", Toast.LENGTH_SHORT).show();
         
         handler.postDelayed(() -> {
             findScreenshotInAllFolders(1);
@@ -258,10 +262,8 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/20)");
         updateStatus("🔍 Suche nach Screenshot (" + attempt + "/20)...");
         
-        // ===== ALLE ORDNER DURCHSUCHEN =====
         File latestFile = null;
         long latestTime = 0;
-        String foundIn = "";
         
         for (File folder : screenshotFolders) {
             if (folder == null || !folder.exists()) continue;
@@ -272,11 +274,9 @@ public class OverlayService extends AccessibilityService {
             if (files == null || files.length == 0) continue;
             
             for (File file : files) {
-                // Nimm den neuesten Screenshot (ungeachtet der Zeit)
                 if (file.lastModified() > latestTime) {
                     latestTime = file.lastModified();
                     latestFile = file;
-                    foundIn = folder.getAbsolutePath();
                 }
             }
         }
@@ -288,14 +288,10 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== SCREENSHOT GEFUNDEN! =====
         lastScreenshotFile = latestFile;
         long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
-        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s");
-        Log.d(TAG, "📸 Pfad: " + latestFile.getAbsolutePath());
-        Log.d(TAG, "📸 Ordner: " + foundIn);
+        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
         updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
-        Toast.makeText(this, "📸 Screenshot gefunden!", Toast.LENGTH_SHORT).show();
         
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (bitmap == null) {
@@ -341,7 +337,6 @@ public class OverlayService extends AccessibilityService {
         
         updateStatus("📸 OCR wird ausgeführt...");
         updateOcrResult("📸 OCR...");
-        Toast.makeText(this, "📸 OCR läuft...", Toast.LENGTH_SHORT).show();
         
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(screenshot, screenshot.getWidth() * 2, screenshot.getHeight() * 2, true);
         
@@ -356,23 +351,36 @@ public class OverlayService extends AccessibilityService {
                     
                     String volume = extractVolumeImproved(resultText);
                     
-                    // ===== SCREENSHOT LÖSCHEN =====
                     deleteScreenshot();
                     isProcessing = false;
                     
                     if (volume != null) {
+                        lastDetectedVolume = Double.parseDouble(volume.replace(",", "."));
                         ocrResult = "📸 " + volume + " GB";
                         updateOcrResult(ocrResult);
                         updateStatus("📸 OCR: " + volume + " GB");
                         Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
+                        
+                        // ===== AUTOREFILL LOGIK =====
+                        if (isAutoRefillSelected || isAutoRefillMode) {
+                            handleAutoRefillLogic(lastDetectedVolume);
+                        }
                     } else {
+                        lastDetectedVolume = 0.0;
                         ocrResult = "📸 Kein GB-Wert";
                         updateOcrResult(ocrResult);
                         updateStatus("📸 Kein GB-Wert");
                         Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
                         
-                        String preview = resultText.length() > 200 ? resultText.substring(0, 200) + "..." : resultText;
-                        Toast.makeText(OverlayService.this, "OCR Text:\n" + preview, Toast.LENGTH_LONG).show();
+                        if (isAutoRefillSelected || isAutoRefillMode) {
+                            // Bei keinem Wert: Refill drücken
+                            Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
+                            handler.postDelayed(() -> {
+                                if (isRunning) {
+                                    clickRefillButton();
+                                }
+                            }, 1000);
+                        }
                     }
                     scaledBitmap.recycle();
                     screenshot.recycle();
@@ -390,6 +398,62 @@ public class OverlayService extends AccessibilityService {
                     screenshot.recycle();
                 }
             });
+    }
+    
+    // ============ AUTOREFILL LOGIK ============
+    private void handleAutoRefillLogic(double volume) {
+        if (!isRunning) return;
+        
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        
+        if (volume > AUTOREFILL_THRESHOLD) {
+            // ===== ÜBER 0,35 GB → 5-8 Minuten warten =====
+            long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
+            long minutes = waitTime / 60000;
+            updateStatus("♻️ Warte " + minutes + " Min (Volumen > 0,35)");
+            Toast.makeText(this, "♻️ Volumen > 0,35 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+            
+            currentPhase = Phase.AUTOREFILL_WAIT;
+            startCountdown(waitTime);
+        } else {
+            // ===== 0,35 GB ODER DARUNTER → Refill drücken =====
+            updateStatus("♻️ Volumen ≤ 0,35 → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            
+            currentPhase = Phase.REFILL;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    clickRefillButton();
+                }
+            }, 1000);
+        }
+    }
+    
+    // ============ AUTOREFILL STARTEN ============
+    private void startAutoRefill() {
+        if (isRunning) {
+            Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!swipePlaced) {
+            Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!refillPlaced) {
+            Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        isAutoRefillMode = true;
+        isAutoRefillSelected = true;
+        currentModeIndex = 3;
+        prefs.edit().putInt("consumption_index", 3).apply();
+        spinnerConsumption.setSelection(3);
+        
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
+        startAutomation();
     }
     
     // ============ VERBESSERTE GB-EXTRACTION ============
@@ -526,7 +590,7 @@ public class OverlayService extends AccessibilityService {
         btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         btnClose = controlView.findViewById(R.id.btnClose);
-        btnDebugStatus = controlView.findViewById(R.id.btnDebugStatus);
+        btnAutoRefill = controlView.findViewById(R.id.btnAutoRefill);
         
         // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
@@ -548,32 +612,24 @@ public class OverlayService extends AccessibilityService {
         
         int savedIndex = prefs.getInt("consumption_index", 0);
         spinnerConsumption.setSelection(savedIndex);
+        isAutoRefillSelected = (savedIndex == 3);
         
         spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 currentModeIndex = position;
+                isAutoRefillSelected = (position == 3);
                 prefs.edit().putInt("consumption_index", position).apply();
                 Toast.makeText(OverlayService.this, 
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
+                if (isAutoRefillSelected) {
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
+                }
             }
             
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
-        });
-        
-        // ============ DEBUG BUTTON ============
-        btnDebugStatus.setOnClickListener(v -> {
-            String status = "📊 STATUS:\n";
-            status += "Android: " + Build.VERSION.SDK_INT + "\n";
-            status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
-            status += "Gefundener Ordner: " + (foundFolderPath.isEmpty() ? "❌" : "✅ " + foundFolderPath) + "\n";
-            status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌") + "\n";
-            status += "isProcessing: " + (isProcessing ? "✅ läuft" : "❌") + "\n";
-            status += "Letzter OCR-Text: " + (lastOcrText.length() > 50 ? lastOcrText.substring(0, 50) + "..." : lastOcrText);
-            Toast.makeText(this, status, Toast.LENGTH_LONG).show();
-            Log.d(TAG, status);
         });
         
         // ============ BUTTONS ============
@@ -636,19 +692,28 @@ public class OverlayService extends AccessibilityService {
         });
         
         btnStartAuto.setOnClickListener(v -> {
-            if (isRunning) {
-                Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
-                return;
+            if (isAutoRefillSelected) {
+                startAutoRefill();
+            } else {
+                if (isRunning) {
+                    Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!swipePlaced) {
+                    Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!refillPlaced) {
+                    Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                isAutoRefillMode = false;
+                startAutomation();
             }
-            if (!swipePlaced) {
-                Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (!refillPlaced) {
-                Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            startAutomation();
+        });
+        
+        btnAutoRefill.setOnClickListener(v -> {
+            startAutoRefill();
         });
         
         btnClose.setOnClickListener(v -> {
@@ -943,16 +1008,27 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    currentPhase = Phase.WAIT_AFTER_REFILL;
-                    long waitTime = randomWaitAfterRefill();
-                    updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
-                    handler.postDelayed(() -> {
-                        if (isRunning) {
-                            currentPhase = Phase.SWIPE_2;
-                            updateStatus("🔄 Swipe...");
-                            performSwipeGesture();
-                        }
-                    }, waitTime);
+                    // AUTOREFILL: Nach Refill wieder OCR + Entscheidung
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        currentPhase = Phase.AUTOREFILL_OCR;
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                updateStatus("♻️ OCR nach Refill...");
+                                performScreenshotAndOcr();
+                            }
+                        }, randomWaitAfterRefill());
+                    } else {
+                        currentPhase = Phase.WAIT_AFTER_REFILL;
+                        long waitTime = randomWaitAfterRefill();
+                        updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                currentPhase = Phase.SWIPE_2;
+                                updateStatus("🔄 Swipe...");
+                                performSwipeGesture();
+                            }
+                        }, waitTime);
+                    }
                 }
             }, null);
         }, randomDelay);
@@ -979,6 +1055,22 @@ public class OverlayService extends AccessibilityService {
                     updateCountdown("⏱ Warte: 00:00");
                     isWaiting = false;
                     if (isRunning) {
+                        // AUTOREFILL: Nach Wartezeit erneut OCR
+                        if (isAutoRefillSelected || isAutoRefillMode) {
+                            if (currentPhase == Phase.AUTOREFILL_WAIT) {
+                                currentPhase = Phase.AUTOREFILL_OCR;
+                                cycleCount++;
+                                updateCycle();
+                                updateStatus("♻️ Nächste OCR nach Wartezeit...");
+                                handler.postDelayed(() -> {
+                                    if (isRunning) {
+                                        performScreenshotAndOcr();
+                                    }
+                                }, 2000);
+                                return;
+                            }
+                        }
+                        
                         cycleCount++;
                         updateCycle();
                         currentPhase = Phase.SWIPE_1;
@@ -1001,6 +1093,10 @@ public class OverlayService extends AccessibilityService {
     
     // ============ WARTEZEIT ============
     private long calculateHumanWaitTime() {
+        if (isAutoRefillSelected || isAutoRefillMode) {
+            // AUTOREFILL: 5-8 Minuten
+            return AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
+        }
         long minWait = WAIT_RANGES[currentModeIndex][0];
         long maxWait = WAIT_RANGES[currentModeIndex][1];
         long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
@@ -1024,21 +1120,33 @@ public class OverlayService extends AccessibilityService {
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setEnabled(false);
         btnStopAuto.setEnabled(true);
-        updateStatus("🟢 Automatik läuft");
+        updateStatus("🟢 Automatik läuft" + (isAutoRefillMode ? " ♻️" : ""));
         updateCycle();
         
-        currentPhase = Phase.SWIPE_1;
-        handler.postDelayed(() -> {
-            if (isRunning) {
-                updateStatus("🔄 Swipe...");
-                performSwipeGesture();
-            }
-        }, 2000);
+        if (isAutoRefillSelected || isAutoRefillMode) {
+            // AUTOREFILL: Starte mit OCR
+            currentPhase = Phase.AUTOREFILL_OCR;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    updateStatus("♻️ Starte mit OCR...");
+                    performScreenshotAndOcr();
+                }
+            }, 2000);
+        } else {
+            currentPhase = Phase.SWIPE_1;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    updateStatus("🔄 Swipe...");
+                    performSwipeGesture();
+                }
+            }, 2000);
+        }
     }
     
     private void stopAutomation() {
         isRunning = false;
         isWaiting = false;
+        isAutoRefillMode = false;
         currentPhase = Phase.IDLE;
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
