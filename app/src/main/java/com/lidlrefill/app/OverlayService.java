@@ -136,19 +136,25 @@ public class OverlayService extends AccessibilityService {
     private boolean isAutoRefillSelected = false;
     
     // ============ ZEITEN ============
-    private static final long MIN_WAIT_AFTER_SWIPE = 8000;
-    private static final long MAX_WAIT_AFTER_SWIPE = 10000;
-    private static final long MIN_WAIT_AFTER_REFILL = 8000;
-    private static final long MAX_WAIT_AFTER_REFILL = 10000;
-    private static final long MIN_WAIT_TIME = 60000;
-    private static final long MAX_WAIT_TIME = 1800000;
+    // Wartezeit nach Swipe: 9-11 Sekunden
+    private static final long WAIT_AFTER_SWIPE_MIN = 9000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 11000;
+    
+    // Wartezeit nach Refill: 9-11 Sekunden
+    private static final long WAIT_AFTER_REFILL_MIN = 9000;
+    private static final long WAIT_AFTER_REFILL_MAX = 11000;
+    
+    // AUTOREFILL: 5-8 Minuten (wenn > 0,45 GB)
     private static final long AUTOREFILL_WAIT_MIN = 300000;
     private static final long AUTOREFILL_WAIT_MAX = 480000;
-    private static final double AUTOREFILL_THRESHOLD = 0.35;
     
-    // AUTOREFILL: 9-12 Sekunden Wartezeit NACH Swipe
-    private static final long AUTOREFILL_WAIT_AFTER_SWIPE_MIN = 9000;
-    private static final long AUTOREFILL_WAIT_AFTER_SWIPE_MAX = 12000;
+    // AUTOREFILL: 2-3 Minuten (wenn 0,40-0,45 GB)
+    private static final long AUTOREFILL_WAIT_MEDIUM_MIN = 120000;
+    private static final long AUTOREFILL_WAIT_MEDIUM_MAX = 180000;
+    
+    private static final double AUTOREFILL_THRESHOLD = 0.35;
+    private static final double AUTOREFILL_MEDIUM_THRESHOLD_MIN = 0.40;
+    private static final double AUTOREFILL_MEDIUM_THRESHOLD_MAX = 0.45;
     
     private int cycleCount = 0;
     private int totalSwipes = 0;
@@ -156,10 +162,11 @@ public class OverlayService extends AccessibilityService {
     private long countdownStartTime = 0;
     private boolean isWaiting = false;
     
-    private enum Phase { IDLE, SWIPE_1, WAIT_AFTER_SWIPE_1, REFILL, WAIT_AFTER_REFILL, SWIPE_2, COUNTDOWN, AUTOREFILL_OCR, AUTOREFILL_WAIT }
+    private enum Phase { IDLE, SWIPE, WAIT_AFTER_SWIPE, REFILL, WAIT_AFTER_REFILL, OCR, COUNTDOWN }
     private Phase currentPhase = Phase.IDLE;
     
     private Random random = new Random();
+    private Runnable countdownCallback = null;
     
     @Override
     public void onCreate() {
@@ -238,7 +245,7 @@ public class OverlayService extends AccessibilityService {
         editor.putInt(PREF_CROP_BOTTOM, cropBottom);
         editor.apply();
         cropSet = true;
-        Log.d(TAG, "💾 Crop-Koordinaten gespeichert: left=" + cropLeft + ", top=" + cropTop + ", right=" + cropRight + ", bottom=" + cropBottom);
+        Log.d(TAG, "💾 Crop-Koordinaten gespeichert");
         Toast.makeText(this, "✅ Crop gespeichert!", Toast.LENGTH_SHORT).show();
     }
     
@@ -280,13 +287,11 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Prüfen ob Overlay-Berechtigung aktiv ist
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "❌ Overlay-Berechtigung fehlt!\nBitte in Haupt-App aktivieren.", Toast.LENGTH_LONG).show();
             return;
         }
         
-        // Neuesten Screenshot als Hintergrund verwenden
         File latestFile = null;
         long latestTime = 0;
         
@@ -322,11 +327,9 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Bitmap auf Bildschirmgröße skalieren
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, screenWidth, screenHeight, true);
         bitmap.recycle();
         
-        // ===== VIEW MIT BITMAP =====
         View bitmapView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -335,7 +338,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // ===== RECHECK ZUM ZIEHEN (MIT GRÜNEM RECHECK) =====
         cropRectangleView = new View(this) {
             private Paint rectPaint = new Paint();
             private Paint borderPaint = new Paint();
@@ -428,7 +430,6 @@ public class OverlayService extends AccessibilityService {
             return false;
         });
         
-        // ===== CONTAINER =====
         cropContainer = new FrameLayout(this);
         cropContainer.addView(bitmapView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -543,7 +544,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== TEILSCREENSHOT =====
         Bitmap croppedBitmap = createPartialScreenshot(fullBitmap);
         fullBitmap.recycle();
         
@@ -697,13 +697,37 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        if (volume > AUTOREFILL_THRESHOLD) {
+        if (volume > 0.45) {
+            // > 0,45 GB → 5-8 Minuten warten
             long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
             long minutes = waitTime / 60000;
-            updateStatus("♻️ Warte " + minutes + " Min (Volumen > 0,35)");
-            Toast.makeText(this, "♻️ Volumen > 0,35 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
-            startCountdown(waitTime);
-        } else {
+            updateStatus("♻️ Warte " + minutes + " Min (Volumen > 0,45)");
+            Toast.makeText(this, "♻️ Volumen > 0,45 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+            startCountdown(waitTime, () -> {
+                if (isRunning) {
+                    currentPhase = Phase.SWIPE;
+                    updateStatus("🔄 Nächste Swipe...");
+                    performSwipeGesture();
+                }
+            });
+            
+        } else if (volume >= AUTOREFILL_MEDIUM_THRESHOLD_MIN && volume <= AUTOREFILL_MEDIUM_THRESHOLD_MAX) {
+            // 0,40-0,45 GB → 2-3 Minuten warten
+            long waitTime = AUTOREFILL_WAIT_MEDIUM_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MEDIUM_MAX - AUTOREFILL_WAIT_MEDIUM_MIN));
+            long minutes = waitTime / 60000;
+            long seconds = (waitTime % 60000) / 1000;
+            updateStatus("♻️ Warte " + minutes + ":" + String.format("%02d", seconds) + " Min (0,40-0,45)");
+            Toast.makeText(this, "♻️ Volumen 0,40-0,45 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+            startCountdown(waitTime, () -> {
+                if (isRunning) {
+                    currentPhase = Phase.SWIPE;
+                    updateStatus("🔄 Nächste Swipe...");
+                    performSwipeGesture();
+                }
+            });
+            
+        } else if (volume <= AUTOREFILL_THRESHOLD) {
+            // ≤ 0,35 GB → Refill
             updateStatus("♻️ Volumen ≤ 0,35 → Refill");
             Toast.makeText(this, "♻️ Volumen ≤ 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             handler.postDelayed(() -> {
@@ -711,6 +735,19 @@ public class OverlayService extends AccessibilityService {
                     clickRefillButton();
                 }
             }, 1000);
+        } else {
+            // 0,35-0,40 GB → Standard (5-8 Minuten)
+            long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
+            long minutes = waitTime / 60000;
+            updateStatus("♻️ Warte " + minutes + " Min (0,35-0,40)");
+            Toast.makeText(this, "♻️ Volumen 0,35-0,40 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+            startCountdown(waitTime, () -> {
+                if (isRunning) {
+                    currentPhase = Phase.SWIPE;
+                    updateStatus("🔄 Nächste Swipe...");
+                    performSwipeGesture();
+                }
+            });
         }
     }
     
@@ -1154,40 +1191,31 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    if (currentPhase == Phase.SWIPE_2) {
-                        currentPhase = Phase.AUTOREFILL_WAIT;
-                        // AUTOREFILL: 9-12 Sekunden warten
-                        long waitTime = AUTOREFILL_WAIT_AFTER_SWIPE_MIN + 
-                            (long)(random.nextDouble() * (AUTOREFILL_WAIT_AFTER_SWIPE_MAX - AUTOREFILL_WAIT_AFTER_SWIPE_MIN));
-                        long seconds = waitTime / 1000;
-                        updateStatus("⏳ Warte " + seconds + "s (Swipe)");
-                        handler.postDelayed(() -> {
+                    // ===== AUTOREFILL: Nach Swipe → Countdown 9-11 Sekunden =====
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        currentPhase = Phase.WAIT_AFTER_SWIPE;
+                        long waitTime = WAIT_AFTER_SWIPE_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
+                        updateStatus("⏳ Warte nach Swipe");
+                        startCountdown(waitTime, () -> {
                             if (isRunning) {
-                                currentPhase = Phase.AUTOREFILL_OCR;
-                                updateStatus("♻️ OCR nach Swipe...");
+                                currentPhase = Phase.OCR;
+                                updateStatus("♻️ OCR wird ausgeführt...");
                                 performScreenshotAndOcr();
                             }
-                        }, waitTime);
-                        return;
-                    }
-                    
-                    if (currentPhase == Phase.SWIPE_1) {
-                        currentPhase = Phase.WAIT_AFTER_SWIPE_1;
-                        long waitTime = randomWaitAfterSwipe();
-                        updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
-                        handler.postDelayed(() -> {
-                            if (isRunning) {
-                                currentPhase = Phase.REFILL;
-                                updateStatus("🔴 Refill...");
-                                clickRefillButton();
-                            }
-                        }, waitTime);
+                        });
+                    } else {
+                        // Normaler Modus: keine Wartezeit
+                        currentPhase = Phase.OCR;
+                        updateStatus("📸 OCR wird ausgeführt...");
+                        performScreenshotAndOcr();
                     }
                 }
             }, null);
         }, randomDelay);
     }
     
+    // ============ CLICK REFILL BUTTON ============
     private void clickRefillButton() {
         if (!refillPlaced) {
             Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1218,36 +1246,36 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
+                    // ===== AUTOREFILL: Nach Refill → Countdown 9-11 Sekunden =====
                     if (isAutoRefillSelected || isAutoRefillMode) {
-                        // AUTOREFILL: Nach Refill → Swipe
-                        currentPhase = Phase.SWIPE_2;
-                        handler.postDelayed(() -> {
-                            if (isRunning) {
-                                updateStatus("🔄 Swipe nach Refill...");
-                                performSwipeGesture();
-                            }
-                        }, randomWaitAfterRefill());
-                    } else {
                         currentPhase = Phase.WAIT_AFTER_REFILL;
-                        long waitTime = randomWaitAfterRefill();
-                        updateStatus("⏳ Warte " + (waitTime / 1000) + "s...");
-                        handler.postDelayed(() -> {
+                        long waitTime = WAIT_AFTER_REFILL_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
+                        updateStatus("⏳ Warte nach Refill");
+                        startCountdown(waitTime, () -> {
                             if (isRunning) {
-                                currentPhase = Phase.SWIPE_2;
+                                currentPhase = Phase.SWIPE;
                                 updateStatus("🔄 Swipe...");
                                 performSwipeGesture();
                             }
-                        }, waitTime);
+                        });
+                    } else {
+                        // Normaler Modus: keine Wartezeit
+                        currentPhase = Phase.SWIPE;
+                        updateStatus("🔄 Swipe...");
+                        performSwipeGesture();
                     }
                 }
             }, null);
         }, randomDelay);
     }
     
-    private void startCountdown(long waitTime) {
+    // ============ COUNTDOWN MIT CALLBACK ============
+    private void startCountdown(long waitTime, Runnable onFinish) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
+        countdownCallback = onFinish;
         
         handler.post(new Runnable() {
             @Override
@@ -1263,28 +1291,10 @@ public class OverlayService extends AccessibilityService {
                 if (remaining <= 0) {
                     updateCountdown("⏱ Warte: 00:00");
                     isWaiting = false;
-                    if (isRunning) {
-                        if (isAutoRefillSelected || isAutoRefillMode) {
-                            // AUTOREFILL: Nach Wartezeit → Swipe
-                            cycleCount++;
-                            updateCycle();
-                            currentPhase = Phase.SWIPE_2;
-                            updateStatus("🔄 Nächster Zyklus " + cycleCount);
-                            handler.postDelayed(() -> {
-                                if (isRunning) {
-                                    performSwipeGesture();
-                                }
-                            }, 2000);
-                            return;
-                        }
-                        
-                        cycleCount++;
-                        updateCycle();
-                        currentPhase = Phase.SWIPE_1;
-                        updateStatus("🔄 Zyklus " + cycleCount);
-                        handler.postDelayed(() -> {
-                            if (isRunning) performSwipeGesture();
-                        }, 2000);
+                    if (isRunning && countdownCallback != null) {
+                        Runnable callback = countdownCallback;
+                        countdownCallback = null;
+                        callback.run();
                     }
                     return;
                 }
@@ -1298,12 +1308,17 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
+    // ============ ORIGINAL COUNTDOWN (für Kompatibilität) ============
+    private void startCountdown(long waitTime) {
+        startCountdown(waitTime, null);
+    }
+    
     private long randomWaitAfterSwipe() {
-        return MIN_WAIT_AFTER_SWIPE + (long)(random.nextDouble() * (MAX_WAIT_AFTER_SWIPE - MIN_WAIT_AFTER_SWIPE));
+        return WAIT_AFTER_SWIPE_MIN + (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
     }
     
     private long randomWaitAfterRefill() {
-        return MIN_WAIT_AFTER_REFILL + (long)(random.nextDouble() * (MAX_WAIT_AFTER_REFILL - MIN_WAIT_AFTER_REFILL));
+        return WAIT_AFTER_REFILL_MIN + (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
     }
     
     // ============ AUTOMATIK ============
@@ -1319,7 +1334,7 @@ public class OverlayService extends AccessibilityService {
         
         if (isAutoRefillSelected || isAutoRefillMode) {
             // AUTOREFILL: Starte mit Swipe
-            currentPhase = Phase.SWIPE_2;
+            currentPhase = Phase.SWIPE;
             handler.postDelayed(() -> {
                 if (isRunning) {
                     updateStatus("🔄 Starte mit Swipe...");
@@ -1327,7 +1342,8 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 2000);
         } else {
-            currentPhase = Phase.SWIPE_1;
+            // Normaler Modus: Starte mit Swipe
+            currentPhase = Phase.SWIPE;
             handler.postDelayed(() -> {
                 if (isRunning) {
                     updateStatus("🔄 Swipe...");
