@@ -74,6 +74,7 @@ public class OverlayService extends AccessibilityService {
     private boolean isScreenshotReady = false;
     private File lastScreenshotFile = null;
     private String lastOcrText = "";
+    private boolean isProcessing = false;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -187,47 +188,37 @@ public class OverlayService extends AccessibilityService {
     
     // ============ NATIVE SCREENSHOT METHODE ============
     private void performScreenshotAndOcr() {
+        if (isProcessing) {
+            Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         if (!isScreenshotReady) {
             Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
             return;
         }
         
-        // Prüfen ob Android 9+ (für native Screenshot-Methode)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Toast.makeText(this, "❌ Benötigt Android 9+ für Screenshot", Toast.LENGTH_LONG).show();
             updateStatus("❌ Android 9+ benötigt");
             return;
         }
         
+        isProcessing = true;
+        
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
         
         // ===== NATIVE SCREENSHOT VIA SYSTEM =====
-        // Dies löst den systemeigenen Screenshot-Mechanismus aus
-        // Genau wie Power + Leiser-Taste oder die 3-Finger-Geste
-        takeNativeScreenshot();
-    }
-    
-    // ===== NATIVE SCREENSHOT AUSLÖSEN =====
-    private void takeNativeScreenshot() {
-        try {
-            // Methode 1: Über den AccessibilityService (Android 9+)
-            // Wir simulieren die Tastenkombination Power + Leiser
-            performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
-            
-            Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
-            updateStatus("📸 Screenshot ausgelöst, warte...");
-            
-            // Warten, bis der Screenshot gespeichert ist
-            handler.postDelayed(() -> {
-                findAndAnalyzeLatestScreenshot();
-            }, 1500);
-            
-        } catch (Exception e) {
-            Log.e(TAG, "Native Screenshot Fehler: " + e.getMessage());
-            updateStatus("❌ Screenshot Fehler: " + e.getMessage());
-            Toast.makeText(this, "❌ Screenshot Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+        performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
+        
+        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
+        updateStatus("📸 Screenshot ausgelöst, warte...");
+        
+        // ===== LÄNGERE WARTEZEIT (3-4 Sekunden) =====
+        handler.postDelayed(() -> {
+            findAndAnalyzeLatestScreenshot();
+        }, 3500); // 3,5 Sekunden warten
     }
     
     // ============ NEUSTEN SCREENSHOT FINDEN ============
@@ -243,30 +234,41 @@ public class OverlayService extends AccessibilityService {
         long latestTime = 0;
         boolean found = false;
         
-        for (File dir : possibleDirs) {
-            if (dir == null || !dir.exists()) continue;
-            
-            File[] files = dir.listFiles((d, name) -> 
-                name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
-            
-            if (files == null || files.length == 0) continue;
-            
-            for (File file : files) {
-                // Nur Dateien der letzten 5 Sekunden
-                if (file.lastModified() > System.currentTimeMillis() - 5000) {
-                    if (file.lastModified() > latestTime) {
-                        latestTime = file.lastModified();
-                        latestFile = file;
-                        found = true;
+        // Mehrere Versuche mit kurzen Pausen
+        for (int attempt = 0; attempt < 5; attempt++) {
+            for (File dir : possibleDirs) {
+                if (dir == null || !dir.exists()) continue;
+                
+                File[] files = dir.listFiles((d, name) -> 
+                    name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
+                
+                if (files == null || files.length == 0) continue;
+                
+                for (File file : files) {
+                    // Nur Dateien der letzten 10 Sekunden
+                    if (file.lastModified() > System.currentTimeMillis() - 10000) {
+                        if (file.lastModified() > latestTime) {
+                            latestTime = file.lastModified();
+                            latestFile = file;
+                            found = true;
+                        }
                     }
                 }
             }
+            
+            if (found && latestFile != null) break;
+            
+            // Kurze Pause vor nächstem Versuch
+            try {
+                Thread.sleep(200);
+            } catch (Exception e) {}
         }
         
         if (!found || latestFile == null) {
             updateStatus("❌ Kein neuer Screenshot gefunden");
             updateOcrResult("❌ Kein Screenshot");
-            Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!\nVersuche es nochmal.", Toast.LENGTH_LONG).show();
+            isProcessing = false;
             return;
         }
         
@@ -274,14 +276,18 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getAbsolutePath());
         updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
         
+        // Bitmap laden
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (bitmap == null) {
             updateStatus("❌ Screenshot konnte nicht geladen werden");
             updateOcrResult("❌ Laden fehlgeschlagen");
             Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
+            isProcessing = false;
             return;
         }
         
+        // ===== SCREENSHOT VOR OCR LÖSCHEN (damit er nicht in der Galerie bleibt) =====
+        // ABER: Wir löschen erst NACH der OCR, weil wir ihn noch brauchen
         performOcrOnBitmap(bitmap);
     }
     
@@ -311,6 +317,7 @@ public class OverlayService extends AccessibilityService {
         if (screenshot == null) {
             updateStatus("❌ Bitmap ist null");
             updateOcrResult("❌ Bitmap null");
+            isProcessing = false;
             return;
         }
         
@@ -333,6 +340,7 @@ public class OverlayService extends AccessibilityService {
                     
                     // Screenshot löschen (egal ob erfolgreich oder nicht)
                     deleteScreenshot();
+                    isProcessing = false;
                     
                     if (volume != null) {
                         ocrResult = "📸 " + volume + " GB";
@@ -357,6 +365,7 @@ public class OverlayService extends AccessibilityService {
                 @Override
                 public void onFailure(Exception e) {
                     deleteScreenshot();
+                    isProcessing = false;
                     updateStatus("❌ OCR Fehler: " + e.getMessage());
                     updateOcrResult("❌ OCR Fehler");
                     Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -544,6 +553,7 @@ public class OverlayService extends AccessibilityService {
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
             status += "Native Screenshot: " + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? "✅" : "❌") + "\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌") + "\n";
+            status += "isProcessing: " + (isProcessing ? "✅ läuft" : "❌") + "\n";
             status += "Letzter OCR-Text: " + (lastOcrText.length() > 50 ? lastOcrText.substring(0, 50) + "..." : lastOcrText);
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
             Log.d(TAG, status);
