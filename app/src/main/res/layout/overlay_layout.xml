@@ -147,7 +147,7 @@
             android:layout_height="36dp"
             android:layout_weight="1"
             android:text="✂️ Crop"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:backgroundTint="#9C27B0"
             android:layout_marginStart="3dp"
             android:textColor="#FFFFFF"/>
