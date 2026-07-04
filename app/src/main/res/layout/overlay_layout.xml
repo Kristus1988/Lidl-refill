@@ -142,41 +142,13 @@
             android:layout_marginStart="3dp"/>
 
         <Button
-            android:id="@+id/btnAutoRefill"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="♻️"
-            android:textSize="14sp"
-            android:backgroundTint="#4CAF50"
-            android:layout_marginStart="3dp"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="4dp">
-
-        <Button
             android:id="@+id/btnCrop"
             android:layout_width="0dp"
-            android:layout_height="32dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
             android:text="✂️ Crop"
             android:textSize="11sp"
             android:backgroundTint="#9C27B0"
-            android:layout_marginEnd="3dp"
-            android:textColor="#FFFFFF"/>
-
-        <Button
-            android:id="@+id/btnDebugCrop"
-            android:layout_width="0dp"
-            android:layout_height="32dp"
-            android:layout_weight="1"
-            android:text="🔍 Crop anzeigen"
-            android:textSize="11sp"
-            android:backgroundTint="#FF5722"
             android:layout_marginStart="3dp"
             android:textColor="#FFFFFF"/>
     </LinearLayout>
