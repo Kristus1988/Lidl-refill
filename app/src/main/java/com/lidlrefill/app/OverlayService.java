@@ -97,18 +97,19 @@ public class OverlayService extends AccessibilityService {
     private boolean refillPlaced = false;
     
     // ============ CROP-KOORDINATEN ============
-    private int cropLeft = 200;
-    private int cropTop = 500;
-    private int cropRight = 800;
-    private int cropBottom = 650;
+    private int cropLeft = 0;
+    private int cropTop = 0;
+    private int cropRight = 0;
+    private int cropBottom = 0;
+    private boolean cropSet = false;
     
     // ============ CROP-MODUS ============
     private boolean isCropMode = false;
-    private View cropOverlayView = null;
+    private FrameLayout cropContainer = null;
+    private View cropRectangleView = null;
     private float cropStartX = 0, cropStartY = 0;
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
-    private View cropRectangleView = null;
     
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
@@ -216,11 +217,23 @@ public class OverlayService extends AccessibilityService {
     
     // ============ CROP-KOORDINATEN LADEN/SPEICHERN ============
     private void loadCropCoordinates() {
-        cropLeft = prefs.getInt(PREF_CROP_LEFT, screenWidth / 5);
-        cropTop = prefs.getInt(PREF_CROP_TOP, screenHeight / 5);
-        cropRight = prefs.getInt(PREF_CROP_RIGHT, screenWidth * 4 / 5);
-        cropBottom = prefs.getInt(PREF_CROP_BOTTOM, screenHeight * 3 / 10);
-        Log.d(TAG, "📐 Geladene Crop-Koordinaten: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
+        cropLeft = prefs.getInt(PREF_CROP_LEFT, -1);
+        cropTop = prefs.getInt(PREF_CROP_TOP, -1);
+        cropRight = prefs.getInt(PREF_CROP_RIGHT, -1);
+        cropBottom = prefs.getInt(PREF_CROP_BOTTOM, -1);
+        
+        if (cropLeft >= 0 && cropTop >= 0 && cropRight >= 0 && cropBottom >= 0) {
+            cropSet = true;
+            Log.d(TAG, "📐 Geladene Crop-Koordinaten: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
+        } else {
+            cropSet = false;
+            // Standardwerte setzen (zentraler Bereich)
+            cropLeft = screenWidth / 4;
+            cropTop = screenHeight / 5;
+            cropRight = screenWidth * 3 / 4;
+            cropBottom = screenHeight * 3 / 10;
+            Log.d(TAG, "📐 Standard-Crop-Koordinaten gesetzt");
+        }
     }
     
     private void saveCropCoordinates() {
@@ -230,6 +243,7 @@ public class OverlayService extends AccessibilityService {
         editor.putInt(PREF_CROP_RIGHT, cropRight);
         editor.putInt(PREF_CROP_BOTTOM, cropBottom);
         editor.apply();
+        cropSet = true;
         Log.d(TAG, "💾 Crop-Koordinaten gespeichert: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
     }
     
@@ -262,14 +276,11 @@ public class OverlayService extends AccessibilityService {
         if (isCropMode) {
             // Crop-Modus beenden
             isCropMode = false;
-            if (cropOverlayView != null) {
-                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-                cropOverlayView = null;
+            if (cropContainer != null) {
+                try { windowManager.removeView(cropContainer); } catch (Exception e) {}
+                cropContainer = null;
             }
-            if (cropRectangleView != null) {
-                try { windowManager.removeView(cropRectangleView); } catch (Exception e) {}
-                cropRectangleView = null;
-            }
+            cropRectangleView = null;
             updateStatus("● Crop-Modus beendet");
             Toast.makeText(this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
             return;
@@ -305,7 +316,7 @@ public class OverlayService extends AccessibilityService {
         
         isCropMode = true;
         updateStatus("✂️ Ziehe ein Rechteck um die Zahl");
-        Toast.makeText(this, "✂️ Ziehe ein Rechteck um den GB-Wert", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "✂️ Ziehe ein Rechteck um den GB-Wert\n(Das ist der Bereich, der beim OCR ausgelesen wird)", Toast.LENGTH_LONG).show();
         
         // ===== CROP-OVERLAY ERSTELLEN =====
         createCropOverlay(latestFile);
@@ -320,7 +331,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== BITMAP ALS HINTERGRUND =====
+        // ===== BITMAP ALS HINTERGRUND (skaliert auf Bildschirm) =====
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, screenWidth, screenHeight, true);
         bitmap.recycle();
         
@@ -337,6 +348,7 @@ public class OverlayService extends AccessibilityService {
         cropRectangleView = new View(this) {
             private Paint rectPaint = new Paint();
             private Paint borderPaint = new Paint();
+            private Paint textPaint = new Paint();
             
             {
                 rectPaint.setColor(Color.argb(60, 0, 255, 0));
@@ -344,12 +356,15 @@ public class OverlayService extends AccessibilityService {
                 borderPaint.setColor(Color.GREEN);
                 borderPaint.setStrokeWidth(4);
                 borderPaint.setStyle(Paint.Style.STROKE);
+                textPaint.setColor(Color.WHITE);
+                textPaint.setTextSize(30);
+                textPaint.setStyle(Paint.Style.FILL);
             }
             
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                if (isDrawingCrop) {
+                if (isDrawingCrop || (cropStartX != 0 && cropEndX != 0)) {
                     float left = Math.min(cropStartX, cropEndX);
                     float top = Math.min(cropStartY, cropEndY);
                     float right = Math.max(cropStartX, cropEndX);
@@ -360,12 +375,9 @@ public class OverlayService extends AccessibilityService {
                     canvas.drawRect(left, top, right, bottom, borderPaint);
                     
                     // Koordinaten anzeigen
-                    Paint textPaint = new Paint();
-                    textPaint.setColor(Color.WHITE);
-                    textPaint.setTextSize(30);
-                    textPaint.setStyle(Paint.Style.FILL);
                     String coords = (int)left + "," + (int)top + " - " + (int)right + "," + (int)bottom;
                     canvas.drawText(coords, left + 10, top + 40, textPaint);
+                    canvas.drawText("Größe: " + (int)(right-left) + "x" + (int)(bottom-top), left + 10, top + 80, textPaint);
                 }
             }
         };
@@ -407,28 +419,39 @@ public class OverlayService extends AccessibilityService {
                         saveCropCoordinates();
                         
                         Toast.makeText(OverlayService.this, 
-                            "✅ Crop gespeichert: " + left + "," + top + " - " + right + "," + bottom, 
+                            "✅ Crop gespeichert!\nBereich: " + left + "," + top + " - " + right + "," + bottom + "\nGröße: " + (right-left) + "x" + (bottom-top), 
                             Toast.LENGTH_LONG).show();
                         updateStatus("✅ Crop gespeichert: " + (right-left) + "x" + (bottom-top));
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen (min. 50x50 Pixel).", Toast.LENGTH_LONG).show();
+                        return true;
                     }
                     
-                    // Crop-Modus beenden
-                    isCropMode = false;
-                    if (cropOverlayView != null) {
-                        try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-                        cropOverlayView = null;
-                    }
-                    if (cropRectangleView != null) {
-                        try { windowManager.removeView(cropRectangleView); } catch (Exception e) {}
+                    // Crop-Modus beenden (nach kurzer Verzögerung damit Toast sichtbar bleibt)
+                    handler.postDelayed(() -> {
+                        isCropMode = false;
+                        if (cropContainer != null) {
+                            try { windowManager.removeView(cropContainer); } catch (Exception e) {}
+                            cropContainer = null;
+                        }
                         cropRectangleView = null;
-                    }
-                    updateStatus("● Crop-Modus beendet");
+                        updateStatus("● Crop-Modus beendet");
+                        Toast.makeText(OverlayService.this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
+                    }, 500);
                     return true;
             }
             return false;
         });
+        
+        // ===== CONTAINER FÜR BEIDE VIEWS =====
+        cropContainer = new FrameLayout(this);
+        cropContainer.addView(bitmapView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        cropContainer.addView(cropRectangleView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        cropContainer.setElevation(1000);
         
         // ===== OVERLAY HINZUFÜGEN =====
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
@@ -446,18 +469,7 @@ public class OverlayService extends AccessibilityService {
         params.x = 0;
         params.y = 0;
         
-        // Container für beide Views
-        FrameLayout container = new FrameLayout(this);
-        container.addView(bitmapView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        container.addView(cropRectangleView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        
-        cropOverlayView = container;
-        cropOverlayView.setElevation(1000);
-        windowManager.addView(cropOverlayView, params);
+        windowManager.addView(cropContainer, params);
     }
     
     // ============ NATIVE SCREENSHOT ============
@@ -554,7 +566,7 @@ public class OverlayService extends AccessibilityService {
         if (croppedBitmap == null) {
             updateStatus("❌ Teilscreenshot fehlgeschlagen");
             updateOcrResult("❌ Cropping fehlgeschlagen");
-            Toast.makeText(this, "❌ Teilscreenshot fehlgeschlagen!", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "❌ Teilscreenshot fehlgeschlagen!\nBitte Crop-Bereich neu einstellen.", Toast.LENGTH_LONG).show();
             isProcessing = false;
             return;
         }
@@ -565,10 +577,24 @@ public class OverlayService extends AccessibilityService {
     // ============ TEILSCREENSHOT ============
     private Bitmap createPartialScreenshot(Bitmap fullScreenshot) {
         try {
-            int left = Math.max(0, cropLeft);
-            int top = Math.max(0, cropTop);
-            int right = Math.min(fullScreenshot.getWidth(), cropRight);
-            int bottom = Math.min(fullScreenshot.getHeight(), cropBottom);
+            // Prüfen ob Crop-Koordinaten gesetzt sind
+            if (!cropSet || cropLeft < 0 || cropTop < 0 || cropRight < 0 || cropBottom < 0) {
+                // Standard-Bereich verwenden
+                int defaultLeft = screenWidth / 4;
+                int defaultTop = screenHeight / 5;
+                int defaultRight = screenWidth * 3 / 4;
+                int defaultBottom = screenHeight * 3 / 10;
+                cropLeft = defaultLeft;
+                cropTop = defaultTop;
+                cropRight = defaultRight;
+                cropBottom = defaultBottom;
+                cropSet = true;
+            }
+            
+            int left = Math.max(0, Math.min(cropLeft, fullScreenshot.getWidth() - 10));
+            int top = Math.max(0, Math.min(cropTop, fullScreenshot.getHeight() - 10));
+            int right = Math.min(fullScreenshot.getWidth(), Math.max(cropRight, left + 50));
+            int bottom = Math.min(fullScreenshot.getHeight(), Math.max(cropBottom, top + 50));
             
             if (right - left < 50 || bottom - top < 50) {
                 Log.e(TAG, "❌ Teilscreenshot zu klein");
@@ -1386,13 +1412,9 @@ public class OverlayService extends AccessibilityService {
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
-        if (cropOverlayView != null) {
-            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-            cropOverlayView = null;
-        }
-        if (cropRectangleView != null) {
-            try { windowManager.removeView(cropRectangleView); } catch (Exception e) {}
-            cropRectangleView = null;
+        if (cropContainer != null) {
+            try { windowManager.removeView(cropContainer); } catch (Exception e) {}
+            cropContainer = null;
         }
         handler.removeCallbacksAndMessages(null);
         if (textRecognizer != null) {
