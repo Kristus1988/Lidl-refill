@@ -12,7 +12,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.graphics.Rect;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -56,7 +55,7 @@ public class OverlayService extends AccessibilityService {
     private Spinner spinnerConsumption;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
-    private Button btnClose, btnAutoRefill, btnCrop;
+    private Button btnClose, btnAutoRefill, btnCrop, btnDebugCrop;
     
     private SharedPreferences prefs;
     private static final String PREF_SWIPE_START_X = "swipe_start_x";
@@ -247,6 +246,24 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "💾 Crop-Koordinaten gespeichert: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
     }
     
+    // ============ CROP-BEREICH ANZEIGEN (DEBUG) ============
+    private void showCropArea() {
+        if (!cropSet || cropLeft < 0 || cropTop < 0 || cropRight < 0 || cropBottom < 0) {
+            Toast.makeText(this, "❌ Kein Crop-Bereich gesetzt!\nBitte zuerst Crop einstellen.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        String msg = "✂️ AKTUELLER CROP-BEREICH:\n" +
+                     "Links: " + cropLeft + "\n" +
+                     "Oben: " + cropTop + "\n" +
+                     "Rechts: " + cropRight + "\n" +
+                     "Unten: " + cropBottom + "\n" +
+                     "Größe: " + (cropRight - cropLeft) + "x" + (cropBottom - cropTop) + " Pixel";
+        
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        Log.d(TAG, msg);
+    }
+    
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {}
     
@@ -316,9 +333,8 @@ public class OverlayService extends AccessibilityService {
         
         isCropMode = true;
         updateStatus("✂️ Ziehe ein Rechteck um die Zahl");
-        Toast.makeText(this, "✂️ Ziehe ein Rechteck um den GB-Wert\n(Das ist der Bereich, der beim OCR ausgelesen wird)", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "✂️ Ziehe ein Rechteck um den GB-Wert", Toast.LENGTH_LONG).show();
         
-        // ===== CROP-OVERLAY ERSTELLEN =====
         createCropOverlay(latestFile);
     }
     
@@ -331,11 +347,9 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== BITMAP ALS HINTERGRUND (skaliert auf Bildschirm) =====
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(bitmap, screenWidth, screenHeight, true);
         bitmap.recycle();
         
-        // ===== VIEW MIT BITMAP =====
         View bitmapView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -344,7 +358,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // ===== RECHECK ZUM ZIEHEN =====
         cropRectangleView = new View(this) {
             private Paint rectPaint = new Paint();
             private Paint borderPaint = new Paint();
@@ -370,11 +383,9 @@ public class OverlayService extends AccessibilityService {
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
-                    // Rechteck zeichnen
                     canvas.drawRect(left, top, right, bottom, rectPaint);
                     canvas.drawRect(left, top, right, bottom, borderPaint);
                     
-                    // Koordinaten anzeigen
                     String coords = (int)left + "," + (int)top + " - " + (int)right + "," + (int)bottom;
                     canvas.drawText(coords, left + 10, top + 40, textPaint);
                     canvas.drawText("Größe: " + (int)(right-left) + "x" + (int)(bottom-top), left + 10, top + 80, textPaint);
@@ -405,7 +416,6 @@ public class OverlayService extends AccessibilityService {
                     isDrawingCrop = false;
                     cropRectangleView.invalidate();
                     
-                    // ===== CROP-KOORDINATEN SPEICHERN =====
                     int left = (int)Math.min(cropStartX, cropEndX);
                     int top = (int)Math.min(cropStartY, cropEndY);
                     int right = (int)Math.max(cropStartX, cropEndX);
@@ -419,15 +429,14 @@ public class OverlayService extends AccessibilityService {
                         saveCropCoordinates();
                         
                         Toast.makeText(OverlayService.this, 
-                            "✅ Crop gespeichert!\nBereich: " + left + "," + top + " - " + right + "," + bottom + "\nGröße: " + (right-left) + "x" + (bottom-top), 
+                            "✅ Crop gespeichert!\nBereich: " + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                         updateStatus("✅ Crop gespeichert: " + (right-left) + "x" + (bottom-top));
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen (min. 50x50 Pixel).", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
-                    // Crop-Modus beenden (nach kurzer Verzögerung damit Toast sichtbar bleibt)
                     handler.postDelayed(() -> {
                         isCropMode = false;
                         if (cropContainer != null) {
@@ -443,7 +452,6 @@ public class OverlayService extends AccessibilityService {
             return false;
         });
         
-        // ===== CONTAINER FÜR BEIDE VIEWS =====
         cropContainer = new FrameLayout(this);
         cropContainer.addView(bitmapView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -453,7 +461,6 @@ public class OverlayService extends AccessibilityService {
                 ViewGroup.LayoutParams.MATCH_PARENT));
         cropContainer.setElevation(1000);
         
-        // ===== OVERLAY HINZUFÜGEN =====
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -577,9 +584,7 @@ public class OverlayService extends AccessibilityService {
     // ============ TEILSCREENSHOT ============
     private Bitmap createPartialScreenshot(Bitmap fullScreenshot) {
         try {
-            // Prüfen ob Crop-Koordinaten gesetzt sind
             if (!cropSet || cropLeft < 0 || cropTop < 0 || cropRight < 0 || cropBottom < 0) {
-                // Standard-Bereich verwenden
                 int defaultLeft = screenWidth / 4;
                 int defaultTop = screenHeight / 5;
                 int defaultRight = screenWidth * 3 / 4;
@@ -589,6 +594,7 @@ public class OverlayService extends AccessibilityService {
                 cropRight = defaultRight;
                 cropBottom = defaultBottom;
                 cropSet = true;
+                Log.d(TAG, "📐 Standard-Crop verwendet");
             }
             
             int left = Math.max(0, Math.min(cropLeft, fullScreenshot.getWidth() - 10));
@@ -596,12 +602,14 @@ public class OverlayService extends AccessibilityService {
             int right = Math.min(fullScreenshot.getWidth(), Math.max(cropRight, left + 50));
             int bottom = Math.min(fullScreenshot.getHeight(), Math.max(cropBottom, top + 50));
             
+            Log.d(TAG, "📐 Crop: left=" + left + ", top=" + top + ", right=" + right + ", bottom=" + bottom);
+            Log.d(TAG, "📐 Screenshot: " + fullScreenshot.getWidth() + "x" + fullScreenshot.getHeight());
+            
             if (right - left < 50 || bottom - top < 50) {
-                Log.e(TAG, "❌ Teilscreenshot zu klein");
+                Log.e(TAG, "❌ Teilscreenshot zu klein!");
                 return null;
             }
             
-            Log.d(TAG, "✂️ Teilscreenshot: " + left + "," + top + " - " + right + "," + bottom);
             return Bitmap.createBitmap(fullScreenshot, left, top, right - left, bottom - top);
         } catch (Exception e) {
             Log.e(TAG, "❌ Teilscreenshot Fehler: " + e.getMessage());
@@ -841,11 +849,11 @@ public class OverlayService extends AccessibilityService {
         btnClose = controlView.findViewById(R.id.btnClose);
         btnAutoRefill = controlView.findViewById(R.id.btnAutoRefill);
         btnCrop = controlView.findViewById(R.id.btnCrop);
+        btnDebugCrop = controlView.findViewById(R.id.btnDebugCrop);
         
-        // ============ CROP BUTTON ============
-        btnCrop.setOnClickListener(v -> {
-            startCropMode();
-        });
+        // ============ CROP BUTTONS ============
+        btnCrop.setOnClickListener(v -> startCropMode());
+        btnDebugCrop.setOnClickListener(v -> showCropArea());
         
         // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
@@ -967,9 +975,7 @@ public class OverlayService extends AccessibilityService {
             }
         });
         
-        btnAutoRefill.setOnClickListener(v -> {
-            startAutoRefill();
-        });
+        btnAutoRefill.setOnClickListener(v -> startAutoRefill());
         
         btnClose.setOnClickListener(v -> {
             stopAutomation();
