@@ -33,6 +33,16 @@
         android:layout_marginBottom="20dp"
         android:lineSpacingExtra="4dp"/>
 
+    <!-- ===== SPEICHER-BERECHTIGUNG ===== -->
+    <Button
+        android:id="@+id/btnRequestStorage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📁 Speicherzugriff erteilen (Screenshots)"
+        android:backgroundTint="#FF6F00"
+        android:layout_marginBottom="10dp"
+        android:textColor="#FFFFFF"/>
+
     <Button
         android:id="@+id/btnRequestPermissions"
         android:layout_width="match_parent"
@@ -79,7 +89,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="\n✅ Screenshot &amp; OCR direkt im Overlay!\nKeine MediaProjection nötig."
+        android:text="\n✅ Benötigt 3 Berechtigungen:\n1. Speicherzugriff\n2. Overlay\n3. Accessibility"
         android:textSize="12sp"
         android:textColor="#2E7D32"
         android:gravity="center"
