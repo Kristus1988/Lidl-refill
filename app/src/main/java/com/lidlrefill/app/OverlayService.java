@@ -361,7 +361,6 @@ public class OverlayService extends AccessibilityService {
                         updateStatus("📸 OCR: " + volume + " GB");
                         Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
                         
-                        // ===== AUTOREFILL LOGIK =====
                         if (isAutoRefillSelected || isAutoRefillMode) {
                             handleAutoRefillLogic(lastDetectedVolume);
                         }
@@ -373,7 +372,6 @@ public class OverlayService extends AccessibilityService {
                         Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
                         
                         if (isAutoRefillSelected || isAutoRefillMode) {
-                            // Bei keinem Wert: Refill drücken
                             Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
                             handler.postDelayed(() -> {
                                 if (isRunning) {
@@ -400,6 +398,71 @@ public class OverlayService extends AccessibilityService {
             });
     }
     
+    // ============ VERBESSERTE GB-EXTRACTION ============
+    private String extractVolumeImproved(String text) {
+        if (text == null || text.isEmpty()) {
+            Log.d(TAG, "OCR Text ist leer");
+            return null;
+        }
+        
+        Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
+        
+        // ===== ALLE MÖGLICHEN PATTERNS =====
+        String[] patterns = {
+            // Pattern 1: "0,73 GB" oder "0.73 GB"
+            "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            // Pattern 2: "0,73GB" (ohne Leerzeichen)
+            "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
+            // Pattern 3: "0,73" (nur Zahl ohne Einheit)
+            "(0[\\.,]\\d{2})",
+            // Pattern 4: "Verfügbares Gesamtvolumen" + Zahl
+            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            // Pattern 5: "Volumen" + Zahl + "GB"
+            "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            // Pattern 6: "Gesamtvolumen" + Zahl
+            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            // Pattern 7: Zahl mit Komma/Punkt + "GB"
+            "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
+            // Pattern 8: "1GB" oder "2GB" (ganze Zahl ohne Komma)
+            "(\\d+)\\s*(GB|Gb|gB|gb)"
+        };
+        
+        for (String patternStr : patterns) {
+            Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                String value = matcher.group(1).replace(",", ".");
+                try {
+                    double val = Double.parseDouble(value);
+                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus " + patternStr + ")");
+                    if (val > 0 && val < 10) {
+                        return value;
+                    }
+                } catch (Exception e) {}
+            }
+        }
+        
+        // ===== SPEZIALFALL: "0,73" in der Nähe von "GB" =====
+        Pattern specialPattern = Pattern.compile(
+            "(\\d+[\\.,]\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher specialMatcher = specialPattern.matcher(text);
+        if (specialMatcher.find()) {
+            String value = specialMatcher.group(1).replace(",", ".");
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
+                if (val > 0 && val < 10) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
+        return null;
+    }
+    
     // ============ AUTOREFILL LOGIK ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
@@ -407,7 +470,6 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
         if (volume > AUTOREFILL_THRESHOLD) {
-            // ===== ÜBER 0,35 GB → 5-8 Minuten warten =====
             long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
             long minutes = waitTime / 60000;
             updateStatus("♻️ Warte " + minutes + " Min (Volumen > 0,35)");
@@ -416,7 +478,6 @@ public class OverlayService extends AccessibilityService {
             currentPhase = Phase.AUTOREFILL_WAIT;
             startCountdown(waitTime);
         } else {
-            // ===== 0,35 GB ODER DARUNTER → Refill drücken =====
             updateStatus("♻️ Volumen ≤ 0,35 → Refill");
             Toast.makeText(this, "♻️ Volumen ≤ 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             
@@ -454,85 +515,6 @@ public class OverlayService extends AccessibilityService {
         
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
-    }
-    
-    // ============ VERBESSERTE GB-EXTRACTION ============
-    private String extractVolumeImproved(String text) {
-        if (text == null || text.isEmpty()) {
-            Log.d(TAG, "OCR Text ist leer");
-            return null;
-        }
-        
-        Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
-        
-        // ===== PATTERN 1: "0,59 GB" oder "0.59 GB" =====
-        Pattern pattern1 = Pattern.compile(
-            "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher matcher1 = pattern1.matcher(text);
-        if (matcher1.find()) {
-            String value = matcher1.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Pattern 1 gefunden: " + value + " GB");
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        // ===== PATTERN 2: "0,59GB" (ohne Leerzeichen) =====
-        Pattern pattern2 = Pattern.compile(
-            "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher matcher2 = pattern2.matcher(text);
-        if (matcher2.find()) {
-            String value = matcher2.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Pattern 2 gefunden: " + value + " GB");
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        // ===== PATTERN 3: "0,59" (nur Zahl ohne Einheit) =====
-        Pattern pattern3 = Pattern.compile(
-            "(0[\\.,]\\d{2})"
-        );
-        Matcher matcher3 = pattern3.matcher(text);
-        if (matcher3.find()) {
-            String value = matcher3.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Pattern 3 gefunden: " + value);
-                if (val > 0 && val < 1) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        // ===== PATTERN 4: "Verfügbares Gesamtvolumen" =====
-        Pattern pattern4 = Pattern.compile(
-            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
-        );
-        Matcher matcher4 = pattern4.matcher(text);
-        if (matcher4.find()) {
-            String value = matcher4.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Pattern 4 gefunden: " + value);
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        Log.d(TAG, "❌ Kein GB-Wert gefunden");
-        return null;
     }
     
     // ============ POSITIONEN ============
@@ -1008,7 +990,6 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    // AUTOREFILL: Nach Refill wieder OCR + Entscheidung
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         currentPhase = Phase.AUTOREFILL_OCR;
                         handler.postDelayed(() -> {
@@ -1055,7 +1036,6 @@ public class OverlayService extends AccessibilityService {
                     updateCountdown("⏱ Warte: 00:00");
                     isWaiting = false;
                     if (isRunning) {
-                        // AUTOREFILL: Nach Wartezeit erneut OCR
                         if (isAutoRefillSelected || isAutoRefillMode) {
                             if (currentPhase == Phase.AUTOREFILL_WAIT) {
                                 currentPhase = Phase.AUTOREFILL_OCR;
@@ -1094,7 +1074,6 @@ public class OverlayService extends AccessibilityService {
     // ============ WARTEZEIT ============
     private long calculateHumanWaitTime() {
         if (isAutoRefillSelected || isAutoRefillMode) {
-            // AUTOREFILL: 5-8 Minuten
             return AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
         }
         long minWait = WAIT_RANGES[currentModeIndex][0];
@@ -1124,7 +1103,6 @@ public class OverlayService extends AccessibilityService {
         updateCycle();
         
         if (isAutoRefillSelected || isAutoRefillMode) {
-            // AUTOREFILL: Starte mit OCR
             currentPhase = Phase.AUTOREFILL_OCR;
             handler.postDelayed(() -> {
                 if (isRunning) {
