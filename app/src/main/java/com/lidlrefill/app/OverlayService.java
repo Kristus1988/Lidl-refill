@@ -103,7 +103,7 @@ public class OverlayService extends AccessibilityService {
     private int cropBottom = 0;
     private boolean cropSet = false;
     
-    // ============ CROP-MODUS (Live-Overlay) ============
+    // ============ CROP-MODUS ============
     private boolean isCropMode = false;
     private View cropOverlayView = null;
     private float cropStartX = 0, cropStartY = 0;
@@ -139,14 +139,10 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MAX = 11000;
     private static final long WAIT_AFTER_REFILL_MIN = 9000;
     private static final long WAIT_AFTER_REFILL_MAX = 11000;
-    private static final long AUTOREFILL_WAIT_MIN = 300000;
-    private static final long AUTOREFILL_WAIT_MAX = 480000;
-    private static final long AUTOREFILL_WAIT_MEDIUM_MIN = 120000;
-    private static final long AUTOREFILL_WAIT_MEDIUM_MAX = 180000;
+    private static final long AUTOREFILL_WAIT_MIN = 300000;  // 5 Minuten
+    private static final long AUTOREFILL_WAIT_MAX = 480000;  // 8 Minuten
     
     private static final double AUTOREFILL_THRESHOLD = 0.35;
-    private static final double AUTOREFILL_MEDIUM_THRESHOLD_MIN = 0.40;
-    private static final double AUTOREFILL_MEDIUM_THRESHOLD_MAX = 0.45;
     
     private int cycleCount = 0;
     private int totalSwipes = 0;
@@ -265,7 +261,7 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS (Live-Overlay) ============
+    // ============ CROP-MODUS ============
     private void startCropMode() {
         if (isCropMode) {
             isCropMode = false;
@@ -284,17 +280,15 @@ public class OverlayService extends AccessibilityService {
         }
         
         isCropMode = true;
-        updateStatus("✂️ Ziehe Bereich für OCR (ohne Rechteck)");
+        updateStatus("✂️ Ziehe Bereich für OCR");
         Toast.makeText(this, "✂️ Ziehe den Bereich, der beim OCR ausgelesen werden soll", Toast.LENGTH_LONG).show();
         createCropOverlay();
     }
     
     private void createCropOverlay() {
-        // ===== DURCHSICHTIGER HINTERGRUND =====
         FrameLayout container = new FrameLayout(this);
-        container.setBackgroundColor(Color.argb(60, 0, 0, 0));
+        container.setBackgroundColor(Color.TRANSPARENT);
         
-        // ===== VIEW ZUM ZIEHEN =====
         cropOverlayView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -317,7 +311,7 @@ public class OverlayService extends AccessibilityService {
                     canvas.drawText(size, left + 10, top + 100, textPaint);
                     
                     Paint borderPaint = new Paint();
-                    borderPaint.setColor(Color.argb(80, 255, 255, 255));
+                    borderPaint.setColor(Color.argb(100, 255, 255, 255));
                     borderPaint.setStrokeWidth(2);
                     borderPaint.setStyle(Paint.Style.STROKE);
                     canvas.drawRect(left, top, right, bottom, borderPaint);
@@ -622,7 +616,7 @@ public class OverlayService extends AccessibilityService {
             });
     }
     
-    // ============ GB-EXTRACTION (KORRIGIERT) ============
+    // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -631,23 +625,14 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
-        // ===== ALLE MÖGLICHEN PATTERNS =====
         String[] patterns = {
-            // Pattern 1: "1,00 GB" oder "1.00 GB" (mit Leerzeichen)
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            // Pattern 2: "1,00GB" (ohne Leerzeichen)
             "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
-            // Pattern 3: "1,00" (nur Zahl ohne Einheit) – für 0,xx und 1,xx
             "([0-9]+[\\.,][0-9]{2})",
-            // Pattern 4: "1" (ganze Zahl ohne Komma) – für 1GB, 2GB etc.
             "(\\d+)\\s*(GB|Gb|gB|gb)",
-            // Pattern 5: Zahl mit Komma/Punkt + "GB" (großzügig)
             "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
-            // Pattern 6: "Verfügbares Gesamtvolumen" + Zahl
             "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
-            // Pattern 7: "Volumen" + Zahl + "GB"
             "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            // Pattern 8: "Gesamtvolumen" + Zahl
             "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
         };
         
@@ -658,43 +643,32 @@ public class OverlayService extends AccessibilityService {
                 String value = matcher.group(1).replace(",", ".");
                 try {
                     double val = Double.parseDouble(value);
-                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
+                    Log.d(TAG, "🔍 Pattern gefunden: " + value);
                     if (val > 0 && val < 10) {
                         return value;
                     }
-                } catch (Exception e) {
-                    Log.e(TAG, "Parse Fehler: " + e.getMessage());
-                }
+                } catch (Exception e) {}
             }
         }
         
-        // ===== SPEZIALFALL: Zahl mit Komma/Punkt + "GB" =====
-        Pattern specialPattern = Pattern.compile(
-            "(\\d+[\\.,]\\d+)\\s*GB",
-            Pattern.CASE_INSENSITIVE
-        );
+        Pattern specialPattern = Pattern.compile("(\\d+[\\.,]\\d+)\\s*GB", Pattern.CASE_INSENSITIVE);
         Matcher specialMatcher = specialPattern.matcher(text);
         if (specialMatcher.find()) {
             String value = specialMatcher.group(1).replace(",", ".");
             try {
                 double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
                 if (val > 0 && val < 10) {
                     return value;
                 }
             } catch (Exception e) {}
         }
         
-        // ===== SPEZIALFALL: "1,00" ohne "GB" =====
-        Pattern standalonePattern = Pattern.compile(
-            "([0-9]+[\\.,][0-9]{2})"
-        );
+        Pattern standalonePattern = Pattern.compile("([0-9]+[\\.,][0-9]{2})");
         Matcher standaloneMatcher = standalonePattern.matcher(text);
         if (standaloneMatcher.find()) {
             String value = standaloneMatcher.group(1).replace(",", ".");
             try {
                 double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Standalone Zahl gefunden: " + value);
                 if (val > 0 && val < 10) {
                     return value;
                 }
@@ -705,17 +679,19 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ AUTOREFILL LOGIK ============
+    // ============ AUTOREFILL LOGIK (NEUE REGELN) ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        if (volume > 0.45) {
+        // ===== NEUE REGELN =====
+        if (volume >= 0.35) {
+            // >= 0,35 GB → 5-8 Minuten warten
             long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
             long minutes = waitTime / 60000;
-            updateStatus("♻️ Warte " + minutes + " Min (Volumen > 0,45)");
-            Toast.makeText(this, "♻️ Volumen > 0,45 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+            updateStatus("♻️ Warte " + minutes + " Min (Volumen ≥ 0,35)");
+            Toast.makeText(this, "♻️ Volumen ≥ 0,35 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.WAIT_AFTER_OCR;
             startCountdown(waitTime, () -> {
                 if (isRunning) {
@@ -724,40 +700,16 @@ public class OverlayService extends AccessibilityService {
                 }
             });
             
-        } else if (volume >= AUTOREFILL_MEDIUM_THRESHOLD_MIN && volume <= AUTOREFILL_MEDIUM_THRESHOLD_MAX) {
-            long waitTime = AUTOREFILL_WAIT_MEDIUM_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MEDIUM_MAX - AUTOREFILL_WAIT_MEDIUM_MIN));
-            long minutes = waitTime / 60000;
-            updateStatus("♻️ Warte " + minutes + " Min (0,40-0,45)");
-            Toast.makeText(this, "♻️ Volumen 0,40-0,45 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
-            currentPhase = Phase.WAIT_AFTER_OCR;
-            startCountdown(waitTime, () -> {
-                if (isRunning) {
-                    currentPhase = Phase.SWIPE;
-                    performSwipeGesture();
-                }
-            });
-            
-        } else if (volume <= AUTOREFILL_THRESHOLD) {
-            updateStatus("♻️ Volumen ≤ 0,35 → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+        } else {
+            // < 0,35 GB → Refill
+            updateStatus("♻️ Volumen < 0,35 → Refill");
+            Toast.makeText(this, "♻️ Volumen < 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
                     clickRefillButton();
                 }
             }, 1000);
-        } else {
-            long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
-            long minutes = waitTime / 60000;
-            updateStatus("♻️ Warte " + minutes + " Min (0,35-0,40)");
-            Toast.makeText(this, "♻️ Volumen 0,35-0,40 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
-            currentPhase = Phase.WAIT_AFTER_OCR;
-            startCountdown(waitTime, () -> {
-                if (isRunning) {
-                    currentPhase = Phase.SWIPE;
-                    performSwipeGesture();
-                }
-            });
         }
     }
     
