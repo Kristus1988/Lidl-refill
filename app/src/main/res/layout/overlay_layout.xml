@@ -139,17 +139,16 @@
             android:textSize="12sp"
             android:backgroundTint="#F44336"
             android:enabled="false"
-            android:layout_marginStart="3dp"
-            android:layout_marginEnd="3dp"/>
+            android:layout_marginStart="3dp"/>
 
         <Button
-            android:id="@+id/btnDebugStatus"
+            android:id="@+id/btnAutoRefill"
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
-            android:text="🔍"
-            android:textSize="14sp"
-            android:backgroundTint="#9C27B0"
+            android:text="♻️ AutoRefill"
+            android:textSize="10sp"
+            android:backgroundTint="#4CAF50"
             android:layout_marginStart="3dp"/>
     </LinearLayout>
 
