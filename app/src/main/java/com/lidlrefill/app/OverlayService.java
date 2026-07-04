@@ -292,9 +292,9 @@ public class OverlayService extends AccessibilityService {
     private void createCropOverlay() {
         // ===== DURCHSICHTIGER HINTERGRUND =====
         FrameLayout container = new FrameLayout(this);
-        container.setBackgroundColor(Color.argb(60, 0, 0, 0)); // Halbtransparent
+        container.setBackgroundColor(Color.argb(60, 0, 0, 0));
         
-        // ===== VIEW ZUM ZIEHEN (ohne Rechteck) =====
+        // ===== VIEW ZUM ZIEHEN =====
         cropOverlayView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -305,7 +305,6 @@ public class OverlayService extends AccessibilityService {
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
-                    // Nur die Koordinaten anzeigen, kein Rechteck
                     Paint textPaint = new Paint();
                     textPaint.setColor(Color.WHITE);
                     textPaint.setTextSize(30);
@@ -317,7 +316,6 @@ public class OverlayService extends AccessibilityService {
                     canvas.drawText(coords, left + 10, top + 50, textPaint);
                     canvas.drawText(size, left + 10, top + 100, textPaint);
                     
-                    // ===== LEICHTE MARKIERUNG DES BEREICHS (sehr dezent) =====
                     Paint borderPaint = new Paint();
                     borderPaint.setColor(Color.argb(80, 255, 255, 255));
                     borderPaint.setStrokeWidth(2);
@@ -430,7 +428,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Crop-Modus beenden, falls aktiv
         if (isCropMode) {
             isCropMode = false;
             if (cropOverlayView != null) {
@@ -625,16 +622,33 @@ public class OverlayService extends AccessibilityService {
             });
     }
     
-    // ============ GB-EXTRACTION ============
+    // ============ GB-EXTRACTION (KORRIGIERT) ============
     private String extractVolumeImproved(String text) {
-        if (text == null || text.isEmpty()) return null;
+        if (text == null || text.isEmpty()) {
+            Log.d(TAG, "OCR Text ist leer");
+            return null;
+        }
         
+        Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
+        
+        // ===== ALLE MÖGLICHEN PATTERNS =====
         String[] patterns = {
+            // Pattern 1: "1,00 GB" oder "1.00 GB" (mit Leerzeichen)
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            // Pattern 2: "1,00GB" (ohne Leerzeichen)
             "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
-            "(0[\\.,]\\d{2})",
+            // Pattern 3: "1,00" (nur Zahl ohne Einheit) – für 0,xx und 1,xx
+            "([0-9]+[\\.,][0-9]{2})",
+            // Pattern 4: "1" (ganze Zahl ohne Komma) – für 1GB, 2GB etc.
+            "(\\d+)\\s*(GB|Gb|gB|gb)",
+            // Pattern 5: Zahl mit Komma/Punkt + "GB" (großzügig)
             "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
-            "(\\d+)\\s*(GB|Gb|gB|gb)"
+            // Pattern 6: "Verfügbares Gesamtvolumen" + Zahl
+            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            // Pattern 7: "Volumen" + Zahl + "GB"
+            "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            // Pattern 8: "Gesamtvolumen" + Zahl
+            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
         };
         
         for (String patternStr : patterns) {
@@ -644,21 +658,50 @@ public class OverlayService extends AccessibilityService {
                 String value = matcher.group(1).replace(",", ".");
                 try {
                     double val = Double.parseDouble(value);
-                    if (val > 0 && val < 10) return value;
-                } catch (Exception e) {}
+                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
+                    if (val > 0 && val < 10) {
+                        return value;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Parse Fehler: " + e.getMessage());
+                }
             }
         }
         
-        Pattern specialPattern = Pattern.compile("(\\d+[\\.,]\\d+)\\s*GB", Pattern.CASE_INSENSITIVE);
+        // ===== SPEZIALFALL: Zahl mit Komma/Punkt + "GB" =====
+        Pattern specialPattern = Pattern.compile(
+            "(\\d+[\\.,]\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
         Matcher specialMatcher = specialPattern.matcher(text);
         if (specialMatcher.find()) {
             String value = specialMatcher.group(1).replace(",", ".");
             try {
                 double val = Double.parseDouble(value);
-                if (val > 0 && val < 10) return value;
+                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
+                if (val > 0 && val < 10) {
+                    return value;
+                }
             } catch (Exception e) {}
         }
         
+        // ===== SPEZIALFALL: "1,00" ohne "GB" =====
+        Pattern standalonePattern = Pattern.compile(
+            "([0-9]+[\\.,][0-9]{2})"
+        );
+        Matcher standaloneMatcher = standalonePattern.matcher(text);
+        if (standaloneMatcher.find()) {
+            String value = standaloneMatcher.group(1).replace(",", ".");
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Standalone Zahl gefunden: " + value);
+                if (val > 0 && val < 10) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
