@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="320dp"
+    android:layout_width="280dp"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="#CC000000"
-    android:padding="12dp"
+    android:padding="10dp"
     android:elevation="999dp">
 
+    <!-- ===== STATUSZEILE ===== -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="● Bereit"
         android:textColor="#4CAF50"
-        android:textSize="13sp"
-        android:textStyle="bold"/>
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:singleLine="true"/>
 
     <TextView
         android:id="@+id/tvCountdown"
@@ -22,7 +24,8 @@
         android:layout_height="wrap_content"
         android:text="⏱ Warte: --:--"
         android:textColor="#FFC107"
-        android:textSize="12sp"/>
+        android:textSize="11sp"
+        android:singleLine="true"/>
 
     <TextView
         android:id="@+id/tvCycle"
@@ -30,7 +33,8 @@
         android:layout_height="wrap_content"
         android:text="🔄 0 Zyklen | ⬇ 0"
         android:textColor="#81D4FA"
-        android:textSize="11sp"/>
+        android:textSize="10sp"
+        android:singleLine="true"/>
 
     <TextView
         android:id="@+id/tvOcrResult"
@@ -38,128 +42,146 @@
         android:layout_height="wrap_content"
         android:text="📸 OCR: --"
         android:textColor="#FFB74D"
-        android:textSize="11sp"/>
+        android:textSize="10sp"
+        android:singleLine="true"
+        android:layout_marginBottom="4dp"/>
 
+    <!-- ===== SPINNER ===== -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:layout_marginTop="6dp"
+        android:layout_height="36dp"
+        android:layout_marginBottom="4dp"
         android:background="#333333"
         android:popupBackground="#333333"
-        android:textColor="#FFFFFF"/>
+        android:textColor="#FFFFFF"
+        android:padding="4dp"/>
 
+    <!-- ===== POSITIONIERUNGS-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="6dp">
+        android:layout_marginBottom="4dp">
 
         <Button
             android:id="@+id/btnSwipePlace"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="32dp"
             android:layout_weight="1"
-            android:text="S"
-            android:textSize="14sp"
+            android:text="⬇ Swipe"
+            android:textSize="11sp"
             android:backgroundTint="#FFC107"
-            android:layout_marginEnd="3dp"/>
+            android:layout_marginEnd="2dp"
+            android:padding="2dp"/>
 
         <Button
             android:id="@+id/btnRefillPlace"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="32dp"
             android:layout_weight="1"
-            android:text="R"
-            android:textSize="14sp"
+            android:text="🔴 Refill"
+            android:textSize="11sp"
             android:backgroundTint="#F44336"
-            android:layout_marginStart="3dp"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="4dp">
-
-        <Button
-            android:id="@+id/btnOcrNow"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="OCR"
-            android:textSize="12sp"
-            android:backgroundTint="#FF6F00"
-            android:layout_marginEnd="3dp"/>
-
-        <Button
-            android:id="@+id/btnSwipeTest"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="S Test"
-            android:textSize="12sp"
-            android:backgroundTint="#4CAF50"
-            android:layout_marginStart="3dp"
-            android:layout_marginEnd="3dp"/>
-
-        <Button
-            android:id="@+id/btnRefillTest"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="R Test"
-            android:textSize="12sp"
-            android:backgroundTint="#FF5722"
-            android:layout_marginStart="3dp"/>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="4dp">
-
-        <Button
-            android:id="@+id/btnStartAuto"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="▶ Start"
-            android:textSize="12sp"
-            android:backgroundTint="#2196F3"
-            android:layout_marginEnd="3dp"/>
-
-        <Button
-            android:id="@+id/btnStopAuto"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:text="⏹ Stop"
-            android:textSize="12sp"
-            android:backgroundTint="#F44336"
-            android:enabled="false"
-            android:layout_marginStart="3dp"/>
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:padding="2dp"/>
 
         <Button
             android:id="@+id/btnCrop"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="32dp"
             android:layout_weight="1"
             android:text="✂️ Crop"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:backgroundTint="#9C27B0"
-            android:layout_marginStart="3dp"
-            android:textColor="#FFFFFF"/>
+            android:layout_marginStart="2dp"
+            android:textColor="#FFFFFF"
+            android:padding="2dp"/>
     </LinearLayout>
 
+    <!-- ===== TEST-BUTTONS ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnSwipeTest"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="S Test"
+            android:textSize="11sp"
+            android:backgroundTint="#4CAF50"
+            android:layout_marginEnd="2dp"
+            android:padding="2dp"/>
+
+        <Button
+            android:id="@+id/btnRefillTest"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="R Test"
+            android:textSize="11sp"
+            android:backgroundTint="#FF5722"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:padding="2dp"/>
+
+        <Button
+            android:id="@+id/btnOcrNow"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="📸 OCR"
+            android:textSize="11sp"
+            android:backgroundTint="#FF6F00"
+            android:layout_marginStart="2dp"
+            android:textColor="#FFFFFF"
+            android:padding="2dp"/>
+    </LinearLayout>
+
+    <!-- ===== AUTOMATIK-BUTTONS ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <Button
+            android:id="@+id/btnStartAuto"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="▶ Start"
+            android:textSize="11sp"
+            android:backgroundTint="#2196F3"
+            android:layout_marginEnd="2dp"
+            android:padding="2dp"/>
+
+        <Button
+            android:id="@+id/btnStopAuto"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:text="⏹ Stop"
+            android:textSize="11sp"
+            android:backgroundTint="#F44336"
+            android:enabled="false"
+            android:layout_marginStart="2dp"
+            android:padding="2dp"/>
+    </LinearLayout>
+
+    <!-- ===== SCHLIEßEN-BUTTON ===== -->
     <Button
         android:id="@+id/btnClose"
         android:layout_width="match_parent"
-        android:layout_height="32dp"
+        android:layout_height="30dp"
         android:text="✕ Schließen"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:backgroundTint="#666666"
-        android:layout_marginTop="4dp"/>
+        android:padding="2dp"/>
 
 </LinearLayout>
