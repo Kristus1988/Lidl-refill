@@ -5,13 +5,13 @@ import android.accessibilityservice.GestureDescription;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.graphics.Rect;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -42,7 +42,6 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -74,12 +73,11 @@ public class OverlayService extends AccessibilityService {
     private int screenWidth, screenHeight;
     private boolean isScreenshotReady = false;
     private File lastScreenshotFile = null;
-    private Bitmap lastScreenshotBitmap = null;
+    private String lastOcrText = "";
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
-    private String lastOcrText = "";
     
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
@@ -184,107 +182,131 @@ public class OverlayService extends AccessibilityService {
         
         isScreenshotReady = true;
         updateStatus("✅ Screenshot bereit");
-        Toast.makeText(this, "✅ Screenshot & OCR aktiv!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ SCREENSHOT & OCR IN EINEM ============
+    // ============ NATIVE SCREENSHOT METHODE ============
     private void performScreenshotAndOcr() {
         if (!isScreenshotReady) {
             Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
             return;
         }
         
-        updateStatus("📸 Screenshot wird erstellt...");
-        updateOcrResult("📸 Screenshot...");
-        
-        // ===== SCREENSHOT ÜBER OVERLAY =====
-        Bitmap screenshot = takeScreenshot();
-        if (screenshot == null) {
-            updateStatus("❌ Screenshot fehlgeschlagen");
-            updateOcrResult("❌ Screenshot fehlgeschlagen");
-            Toast.makeText(this, "❌ Screenshot fehlgeschlagen!", Toast.LENGTH_LONG).show();
+        // Prüfen ob Android 9+ (für native Screenshot-Methode)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            Toast.makeText(this, "❌ Benötigt Android 9+ für Screenshot", Toast.LENGTH_LONG).show();
+            updateStatus("❌ Android 9+ benötigt");
             return;
         }
         
-        lastScreenshotBitmap = screenshot;
+        updateStatus("📸 Native Screenshot wird ausgelöst...");
+        updateOcrResult("📸 Screenshot...");
         
-        // ===== SCREENSHOT SPEICHERN (für Debug) =====
-        saveScreenshotToInternalStorage(screenshot);
-        
-        updateStatus("📸 Screenshot erstellt, OCR läuft...");
-        updateOcrResult("📸 OCR...");
-        
-        // ===== OCR AUF SCREENSHOT =====
-        performOcrOnBitmap(screenshot);
+        // ===== NATIVE SCREENSHOT VIA SYSTEM =====
+        // Dies löst den systemeigenen Screenshot-Mechanismus aus
+        // Genau wie Power + Leiser-Taste oder die 3-Finger-Geste
+        takeNativeScreenshot();
     }
     
-    // ============ SCREENSHOT ÜBER OVERLAY ============
-    private Bitmap takeScreenshot() {
+    // ===== NATIVE SCREENSHOT AUSLÖSEN =====
+    private void takeNativeScreenshot() {
         try {
-            // RootView vom FloatingView nehmen
-            if (floatingView == null) {
-                Log.e(TAG, "FloatingView ist null");
-                return null;
-            }
+            // Methode 1: Über den AccessibilityService (Android 9+)
+            // Wir simulieren die Tastenkombination Power + Leiser
+            performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
             
-            // Screenshot des FloatingView und seiner Kinder
-            Bitmap bitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bitmap);
+            Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
+            updateStatus("📸 Screenshot ausgelöst, warte...");
             
-            // Zuerst den Hintergrund weiß machen
-            canvas.drawColor(Color.WHITE);
+            // Warten, bis der Screenshot gespeichert ist
+            handler.postDelayed(() -> {
+                findAndAnalyzeLatestScreenshot();
+            }, 1500);
             
-            // Dann den FloatingView zeichnen
-            floatingView.draw(canvas);
-            
-            Log.d(TAG, "✅ Screenshot erfolgreich erstellt (" + screenWidth + "x" + screenHeight + ")");
-            return bitmap;
         } catch (Exception e) {
-            Log.e(TAG, "Screenshot Fehler: " + e.getMessage());
-            return null;
+            Log.e(TAG, "Native Screenshot Fehler: " + e.getMessage());
+            updateStatus("❌ Screenshot Fehler: " + e.getMessage());
+            Toast.makeText(this, "❌ Screenshot Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
     
-    // ============ SCREENSHOT IM APP-INTERNEN SPEICHER SICHERN ============
-    private void saveScreenshotToInternalStorage(Bitmap bitmap) {
-        try {
-            File tempDir = new File(getFilesDir(), "screenshots");
-            if (!tempDir.exists()) {
-                tempDir.mkdirs();
-            }
-            
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String fileName = "screenshot_" + timeStamp + ".jpg";
-            lastScreenshotFile = new File(tempDir, fileName);
-            
-            FileOutputStream fos = new FileOutputStream(lastScreenshotFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos);
-            fos.close();
-            
-            Log.d(TAG, "✅ Screenshot gespeichert: " + lastScreenshotFile.getAbsolutePath() + " (" + bitmap.getWidth() + "x" + bitmap.getHeight() + ")");
-            deleteOldScreenshots(tempDir);
-        } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Speichern: " + e.getMessage());
-        }
-    }
-    
-    private void deleteOldScreenshots(File dir) {
-        File[] files = dir.listFiles();
-        if (files == null || files.length <= 10) return;
+    // ============ NEUSTEN SCREENSHOT FINDEN ============
+    private void findAndAnalyzeLatestScreenshot() {
+        File[] possibleDirs = {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Screenshots")
+        };
         
-        int count = 0;
-        for (File file : files) {
-            if (file.isFile() && file.getName().startsWith("screenshot_") && file.getName().endsWith(".jpg")) {
-                if (count < files.length - 10) {
-                    file.delete();
-                    Log.d(TAG, "🗑️ Alten Screenshot gelöscht: " + file.getName());
+        File latestFile = null;
+        long latestTime = 0;
+        boolean found = false;
+        
+        for (File dir : possibleDirs) {
+            if (dir == null || !dir.exists()) continue;
+            
+            File[] files = dir.listFiles((d, name) -> 
+                name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
+            
+            if (files == null || files.length == 0) continue;
+            
+            for (File file : files) {
+                // Nur Dateien der letzten 5 Sekunden
+                if (file.lastModified() > System.currentTimeMillis() - 5000) {
+                    if (file.lastModified() > latestTime) {
+                        latestTime = file.lastModified();
+                        latestFile = file;
+                        found = true;
+                    }
                 }
-                count++;
             }
+        }
+        
+        if (!found || latestFile == null) {
+            updateStatus("❌ Kein neuer Screenshot gefunden");
+            updateOcrResult("❌ Kein Screenshot");
+            Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        lastScreenshotFile = latestFile;
+        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getAbsolutePath());
+        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
+        
+        Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
+        if (bitmap == null) {
+            updateStatus("❌ Screenshot konnte nicht geladen werden");
+            updateOcrResult("❌ Laden fehlgeschlagen");
+            Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        performOcrOnBitmap(bitmap);
+    }
+    
+    // ============ SCREENSHOT LÖSCHEN ============
+    private void deleteScreenshot() {
+        if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+            boolean deleted = lastScreenshotFile.delete();
+            if (deleted) {
+                Log.d(TAG, "🗑️ Screenshot gelöscht: " + lastScreenshotFile.getName());
+                updateStatus("🗑️ Screenshot gelöscht");
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    android.content.ContentResolver resolver = getContentResolver();
+                    android.net.Uri uri = android.net.Uri.fromFile(lastScreenshotFile);
+                    resolver.delete(uri, null, null);
+                    Log.d(TAG, "🗑️ Screenshot über ContentResolver gelöscht");
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Löschen fehlgeschlagen: " + e.getMessage());
+                }
+            }
+            lastScreenshotFile = null;
         }
     }
     
-    // ============ VERBESSERTE OCR ============
+    // ============ OCR ============
     private void performOcrOnBitmap(Bitmap screenshot) {
         if (screenshot == null) {
             updateStatus("❌ Bitmap ist null");
@@ -307,8 +329,10 @@ public class OverlayService extends AccessibilityService {
                     lastOcrText = resultText;
                     Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
                     
-                    // ===== ALLE MÖGLICHEN PATTERNS DURCHSUCHEN =====
                     String volume = extractVolumeImproved(resultText);
+                    
+                    // Screenshot löschen (egal ob erfolgreich oder nicht)
+                    deleteScreenshot();
                     
                     if (volume != null) {
                         ocrResult = "📸 " + volume + " GB";
@@ -332,6 +356,7 @@ public class OverlayService extends AccessibilityService {
             .addOnFailureListener(new OnFailureListener() {
                 @Override
                 public void onFailure(Exception e) {
+                    deleteScreenshot();
                     updateStatus("❌ OCR Fehler: " + e.getMessage());
                     updateOcrResult("❌ OCR Fehler");
                     Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -358,11 +383,13 @@ public class OverlayService extends AccessibilityService {
         Matcher matcher1 = pattern1.matcher(text);
         if (matcher1.find()) {
             String value = matcher1.group(1).replace(",", ".");
-            double val = Double.parseDouble(value);
-            Log.d(TAG, "🔍 Pattern 1 gefunden: " + value + " GB");
-            if (val > 0 && val < 10) {
-                return value;
-            }
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Pattern 1 gefunden: " + value + " GB");
+                if (val > 0 && val < 10) {
+                    return value;
+                }
+            } catch (Exception e) {}
         }
         
         // ===== PATTERN 2: "0,74GB" (ohne Leerzeichen) =====
@@ -373,11 +400,13 @@ public class OverlayService extends AccessibilityService {
         Matcher matcher2 = pattern2.matcher(text);
         if (matcher2.find()) {
             String value = matcher2.group(1).replace(",", ".");
-            double val = Double.parseDouble(value);
-            Log.d(TAG, "🔍 Pattern 2 gefunden: " + value + " GB");
-            if (val > 0 && val < 10) {
-                return value;
-            }
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Pattern 2 gefunden: " + value + " GB");
+                if (val > 0 && val < 10) {
+                    return value;
+                }
+            } catch (Exception e) {}
         }
         
         // ===== PATTERN 3: "0,74" (nur Zahl ohne Einheit) =====
@@ -387,33 +416,33 @@ public class OverlayService extends AccessibilityService {
         Matcher matcher3 = pattern3.matcher(text);
         if (matcher3.find()) {
             String value = matcher3.group(1).replace(",", ".");
-            double val = Double.parseDouble(value);
-            Log.d(TAG, "🔍 Pattern 3 gefunden: " + value);
-            if (val > 0 && val < 1) {
-                return value;
-            }
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Pattern 3 gefunden: " + value);
+                if (val > 0 && val < 1) {
+                    return value;
+                }
+            } catch (Exception e) {}
         }
         
-        // ===== PATTERN 4: "0,74" mit "Verfügbares Gesamtvolumen" =====
+        // ===== PATTERN 4: "Verfügbares Gesamtvolumen" =====
         Pattern pattern4 = Pattern.compile(
             "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
         );
         Matcher matcher4 = pattern4.matcher(text);
         if (matcher4.find()) {
             String value = matcher4.group(1).replace(",", ".");
-            double val = Double.parseDouble(value);
-            Log.d(TAG, "🔍 Pattern 4 gefunden: " + value);
-            if (val > 0 && val < 10) {
-                return value;
-            }
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Pattern 4 gefunden: " + value);
+                if (val > 0 && val < 10) {
+                    return value;
+                }
+            } catch (Exception e) {}
         }
         
         Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
-    }
-    
-    private String extractVolume(String text) {
-        return extractVolumeImproved(text);
     }
     
     // ============ POSITIONEN ============
@@ -513,8 +542,7 @@ public class OverlayService extends AccessibilityService {
             String status = "📊 STATUS:\n";
             status += "Android: " + Build.VERSION.SDK_INT + "\n";
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
-            status += "screenWidth: " + screenWidth + "\n";
-            status += "screenHeight: " + screenHeight + "\n";
+            status += "Native Screenshot: " + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? "✅" : "❌") + "\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌") + "\n";
             status += "Letzter OCR-Text: " + (lastOcrText.length() > 50 ? lastOcrText.substring(0, 50) + "..." : lastOcrText);
             Toast.makeText(this, status, Toast.LENGTH_LONG).show();
@@ -1008,9 +1036,6 @@ public class OverlayService extends AccessibilityService {
         }
         if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
             lastScreenshotFile.delete();
-        }
-        if (lastScreenshotBitmap != null && !lastScreenshotBitmap.isRecycled()) {
-            lastScreenshotBitmap.recycle();
         }
     }
 }
