@@ -72,7 +72,6 @@ public class OverlayService extends AccessibilityService {
     private File lastScreenshotFile = null;
     private String lastOcrText = "";
     private boolean isProcessing = false;
-    private long screenshotTime = 0;
     
     // ============ SCREENSHOT-ORDNER ============
     private File screenshotFolder = null;
@@ -157,11 +156,9 @@ public class OverlayService extends AccessibilityService {
         // ===== SCREENSHOT-ORDNER: /storage/emulated/0/Pictures/Screenshots =====
         screenshotFolder = new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots");
         if (!screenshotFolder.exists()) {
-            // Fallback: DCIM/Screenshots
             screenshotFolder = new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots");
         }
         if (!screenshotFolder.exists()) {
-            // Fallback: Pictures
             screenshotFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
         }
         Log.d(TAG, "📁 Screenshot-Ordner: " + screenshotFolder.getAbsolutePath());
@@ -224,7 +221,6 @@ public class OverlayService extends AccessibilityService {
         }
         
         isProcessing = true;
-        screenshotTime = System.currentTimeMillis();
         
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
@@ -232,19 +228,20 @@ public class OverlayService extends AccessibilityService {
         
         // ===== NATIVE SCREENSHOT =====
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
-        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst um " + screenshotTime);
+        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // ===== WARTEN (10-15 Sekunden) =====
-        updateStatus("⏳ Warte auf Screenshot (10-15 Sekunden)...");
+        // ===== WARTEN BIS SCREENSHOT IM ORDNER IST =====
+        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
         Toast.makeText(this, "⏳ Warte auf Screenshot...", Toast.LENGTH_SHORT).show();
         
+        // Nach 5 Sekunden mit der Suche beginnen
         handler.postDelayed(() -> {
-            findScreenshotInFolder(1);
+            findLatestScreenshot(1);
         }, 5000);
     }
     
-    // ============ SCREENSHOT IM ORDNER SUCHEN ============
-    private void findScreenshotInFolder(int attempt) {
+    // ============ NEUESTEN SCREENSHOT IM ORDNER FINDEN ============
+    private void findLatestScreenshot(int attempt) {
         if (attempt > 15) {
             updateStatus("❌ Screenshot nicht gefunden (20s)");
             updateOcrResult("❌ Zeitüberschreitung");
@@ -256,6 +253,7 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/15)");
         updateStatus("🔍 Suche nach Screenshot (" + attempt + "/15)...");
         
+        // ===== NEUSTE DATEI IM ORDNER FINDEN =====
         File latestFile = null;
         long latestTime = 0;
         
@@ -263,13 +261,11 @@ public class OverlayService extends AccessibilityService {
             File[] files = screenshotFolder.listFiles((dir, name) -> 
                 name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
             
-            if (files != null) {
+            if (files != null && files.length > 0) {
                 for (File file : files) {
-                    if (file.lastModified() > screenshotTime) {
-                        if (file.lastModified() > latestTime) {
-                            latestTime = file.lastModified();
-                            latestFile = file;
-                        }
+                    if (file.lastModified() > latestTime) {
+                        latestTime = file.lastModified();
+                        latestFile = file;
                     }
                 }
             }
@@ -277,17 +273,17 @@ public class OverlayService extends AccessibilityService {
         
         if (latestFile == null) {
             handler.postDelayed(() -> {
-                findScreenshotInFolder(attempt + 1);
+                findLatestScreenshot(attempt + 1);
             }, 1000);
             return;
         }
         
         // ===== SCREENSHOT GEFUNDEN! =====
         lastScreenshotFile = latestFile;
-        long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
-        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
-        Toast.makeText(this, "📸 Screenshot gefunden nach " + waitTime + "s", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "📸 Screenshot gefunden: " + latestFile.getAbsolutePath());
+        Log.d(TAG, "📸 Datei-Zeit: " + latestFile.lastModified() + ", Aktuelle Zeit: " + System.currentTimeMillis());
+        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
+        Toast.makeText(this, "📸 Screenshot gefunden!", Toast.LENGTH_SHORT).show();
         
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (bitmap == null) {
@@ -373,7 +369,6 @@ public class OverlayService extends AccessibilityService {
             .addOnFailureListener(new OnFailureListener() {
                 @Override
                 public void onFailure(Exception e) {
-                    // ===== BEI FEHLER AUCH LÖSCHEN =====
                     deleteScreenshot();
                     isProcessing = false;
                     updateStatus("❌ OCR Fehler: " + e.getMessage());
