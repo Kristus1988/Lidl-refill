@@ -42,9 +42,6 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,6 +72,7 @@ public class OverlayService extends AccessibilityService {
     private File lastScreenshotFile = null;
     private String lastOcrText = "";
     private boolean isProcessing = false;
+    private long screenshotTime = 0;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -186,7 +184,7 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ NATIVE SCREENSHOT METHODE ============
+    // ============ NATIVE SCREENSHOT MIT LANGER WARTEZEIT ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -205,24 +203,37 @@ public class OverlayService extends AccessibilityService {
         }
         
         isProcessing = true;
+        screenshotTime = System.currentTimeMillis();
         
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
         
-        // ===== NATIVE SCREENSHOT VIA SYSTEM =====
+        // ===== NATIVE SCREENSHOT =====
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
+        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst um " + screenshotTime);
         
-        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
-        updateStatus("📸 Screenshot ausgelöst, warte...");
+        updateStatus("⏳ Warte auf Screenshot (5-8 Sekunden)...");
         
-        // ===== LÄNGERE WARTEZEIT (3-4 Sekunden) =====
+        // ===== ERSTER VERSUCH NACH 5 SEKUNDEN =====
         handler.postDelayed(() -> {
-            findAndAnalyzeLatestScreenshot();
-        }, 3500); // 3,5 Sekunden warten
+            findAndAnalyzeLatestScreenshot(1);
+        }, 5000);
     }
     
-    // ============ NEUSTEN SCREENSHOT FINDEN ============
-    private void findAndAnalyzeLatestScreenshot() {
+    // ============ SCREENSHOT FINDEN MIT WIEDERHOLUNG ============
+    private void findAndAnalyzeLatestScreenshot(int attempt) {
+        // Maximale Versuche: 6 (5s, 6s, 7s, 8s, 9s, 10s)
+        if (attempt > 6) {
+            updateStatus("❌ Screenshot nicht gefunden (10s)");
+            updateOcrResult("❌ Zeitüberschreitung");
+            Toast.makeText(this, "❌ Screenshot nicht gefunden nach 10 Sekunden!", Toast.LENGTH_LONG).show();
+            isProcessing = false;
+            return;
+        }
+        
+        Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/6)");
+        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/6)...");
+        
         File[] possibleDirs = {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
             new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
@@ -234,47 +245,41 @@ public class OverlayService extends AccessibilityService {
         long latestTime = 0;
         boolean found = false;
         
-        // Mehrere Versuche mit kurzen Pausen
-        for (int attempt = 0; attempt < 5; attempt++) {
-            for (File dir : possibleDirs) {
-                if (dir == null || !dir.exists()) continue;
-                
-                File[] files = dir.listFiles((d, name) -> 
-                    name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
-                
-                if (files == null || files.length == 0) continue;
-                
-                for (File file : files) {
-                    // Nur Dateien der letzten 10 Sekunden
-                    if (file.lastModified() > System.currentTimeMillis() - 10000) {
-                        if (file.lastModified() > latestTime) {
-                            latestTime = file.lastModified();
-                            latestFile = file;
-                            found = true;
-                        }
+        for (File dir : possibleDirs) {
+            if (dir == null || !dir.exists()) continue;
+            
+            File[] files = dir.listFiles((d, name) -> 
+                name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
+            
+            if (files == null || files.length == 0) continue;
+            
+            for (File file : files) {
+                // Screenshot muss nach dem Auslösen erstellt worden sein
+                if (file.lastModified() > screenshotTime) {
+                    if (file.lastModified() > latestTime) {
+                        latestTime = file.lastModified();
+                        latestFile = file;
+                        found = true;
                     }
                 }
             }
-            
-            if (found && latestFile != null) break;
-            
-            // Kurze Pause vor nächstem Versuch
-            try {
-                Thread.sleep(200);
-            } catch (Exception e) {}
         }
         
         if (!found || latestFile == null) {
-            updateStatus("❌ Kein neuer Screenshot gefunden");
-            updateOcrResult("❌ Kein Screenshot");
-            Toast.makeText(this, "❌ Kein neuer Screenshot gefunden!\nVersuche es nochmal.", Toast.LENGTH_LONG).show();
-            isProcessing = false;
+            // Nicht gefunden → nächster Versuch in 1 Sekunde
+            long nextDelay = 1000; // 1 Sekunde warten
+            updateStatus("⏳ Screenshot noch nicht da, warte 1s... (" + attempt + "/6)");
+            handler.postDelayed(() -> {
+                findAndAnalyzeLatestScreenshot(attempt + 1);
+            }, nextDelay);
             return;
         }
         
+        // ===== SCREENSHOT GEFUNDEN! =====
         lastScreenshotFile = latestFile;
-        Log.d(TAG, "📸 Neuester Screenshot: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
+        long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
+        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
+        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getName());
         
         // Bitmap laden
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
@@ -286,8 +291,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== SCREENSHOT VOR OCR LÖSCHEN (damit er nicht in der Galerie bleibt) =====
-        // ABER: Wir löschen erst NACH der OCR, weil wir ihn noch brauchen
+        // ===== OCR AUSFÜHREN =====
         performOcrOnBitmap(bitmap);
     }
     
@@ -338,7 +342,7 @@ public class OverlayService extends AccessibilityService {
                     
                     String volume = extractVolumeImproved(resultText);
                     
-                    // Screenshot löschen (egal ob erfolgreich oder nicht)
+                    // Screenshot löschen
                     deleteScreenshot();
                     isProcessing = false;
                     
