@@ -43,6 +43,9 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,6 +53,7 @@ import java.util.regex.Pattern;
 public class OverlayService extends AccessibilityService {
     private static final String TAG = "LidlRefill";
     
+    // UI
     private WindowManager windowManager;
     private FrameLayout floatingView;
     private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
@@ -58,6 +62,7 @@ public class OverlayService extends AccessibilityService {
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
     private Button btnClose, btnCrop;
     
+    // Preferences
     private SharedPreferences prefs;
     private static final String PREF_SWIPE_START_X = "swipe_start_x";
     private static final String PREF_SWIPE_START_Y = "swipe_start_y";
@@ -67,72 +72,70 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_REFILL_Y = "refill_y";
     private static final String PREF_SWIPE_PLACED = "swipe_placed";
     private static final String PREF_REFILL_PLACED = "refill_placed";
-    
-    // ============ CROP-KOORDINATEN ============
     private static final String PREF_CROP_LEFT = "crop_left";
     private static final String PREF_CROP_TOP = "crop_top";
     private static final String PREF_CROP_RIGHT = "crop_right";
     private static final String PREF_CROP_BOTTOM = "crop_bottom";
     
+    // Screen
     private int screenWidth, screenHeight;
+    
+    // State
     private boolean isScreenshotReady = false;
+    private boolean isProcessing = false;
+    private boolean isRunning = false;
+    private boolean isAutoRefillMode = false;
+    private boolean isAutoRefillSelected = false;
+    private boolean isWaiting = false;
+    private boolean isCropMode = false;
+    private boolean cropSet = false;
+    private int cycleCount = 0;
+    private int totalSwipes = 0;
     private File lastScreenshotFile = null;
     private String lastOcrText = "";
-    private boolean isProcessing = false;
     private long screenshotTime = 0;
-    
-    // ============ SCREENSHOT-ORDNER ============
-    private File[] screenshotFolders = null;
-    private String foundFolderPath = "";
-    
-    // ============ OCR ============
-    private TextRecognizer textRecognizer;
-    private String ocrResult = "📸 OCR: --";
     private double lastDetectedVolume = 0.0;
+    private long countdownStartTime = 0;
+    private long currentWaitTime = 0;
     
-    private Point swipeStart = new Point(0, 0);
-    private Point swipeEnd = new Point(0, 0);
-    private boolean swipePlaced = false;
-    private Point refillButton = new Point(500, 500);
-    private boolean refillPlaced = false;
-    
-    // ============ CROP ============
-    private int cropLeft = 0;
-    private int cropTop = 0;
-    private int cropRight = 0;
-    private int cropBottom = 0;
-    private boolean cropSet = false;
-    
-    // ============ CROP-MODUS ============
-    private boolean isCropMode = false;
+    // Crop
+    private int cropLeft = 0, cropTop = 0, cropRight = 0, cropBottom = 0;
     private View cropOverlayView = null;
     private float cropStartX = 0, cropStartY = 0;
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
     
+    // Positions
+    private Point swipeStart = new Point(0, 0);
+    private Point swipeEnd = new Point(0, 0);
+    private Point refillButton = new Point(500, 500);
+    private boolean swipePlaced = false;
+    private boolean refillPlaced = false;
+    
+    // Visual helpers
+    private View swipeVisual, refillVisual;
+    private View activeVisual = null;
+    private float lastX, lastY, dragOffsetX, dragOffsetY;
+    
+    // Overlay dragging
+    private boolean isOverlayDragging = false;
+    private float overlayDragX = 0, overlayDragY = 0;
+    
+    // Handler & Random
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private Random random = new Random();
+    
+    // OCR
+    private TextRecognizer textRecognizer;
+    private String ocrResult = "📸 OCR: --";
+    
+    // Screenshot folders
+    private File[] screenshotFolders = null;
+    private String foundFolderPath = "";
+    
+    // Modes
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
-    
-    private float lastX, lastY;
-    private float dragOffsetX, dragOffsetY;
-    private View activeVisual = null;
-    private View swipeVisual, refillVisual;
-    
-    private Handler handler = new Handler(Looper.getMainLooper());
-    private boolean isRunning = false;
-    private boolean isAutoRefillMode = false;
-    private boolean isOverlayDragging = false;
-    private float overlayDragX, overlayDragY;
-    
-    // ============ VERBRAUCHS-OPTIONEN ============
-    private static final String[] CONSUMPTION_LABELS = {
-        "📱 Surfen (18-22 Min)",
-        "📺 FullHD (11-14 Min)",
-        "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL (0,35 GB)"
-    };
-    private int currentModeIndex = 0;
-    private boolean isAutoRefillSelected = false;
     
     // ============ ZEITEN ============
     private static final long WAIT_AFTER_SWIPE_MIN = 9000;
@@ -141,19 +144,20 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MAX = 11000;
     private static final long AUTOREFILL_WAIT_MIN = 300000;  // 5 Minuten
     private static final long AUTOREFILL_WAIT_MAX = 480000;  // 8 Minuten
-    
     private static final double AUTOREFILL_THRESHOLD = 0.35;
     
-    private int cycleCount = 0;
-    private int totalSwipes = 0;
-    private long currentWaitTime = 900000;
-    private long countdownStartTime = 0;
-    private boolean isWaiting = false;
+    // ============ CONSUMPTION OPTIONS ============
+    private static final String[] CONSUMPTION_LABELS = {
+        "📱 Surfen (18-22 Min)",
+        "📺 FullHD (11-14 Min)",
+        "🎬 4K (6-9 Min)",
+        "♻️ AUTOREFILL (0,35 GB)"
+    };
+    private int currentModeIndex = 0;
     
+    // ============ PHASES ============
     private enum Phase { IDLE, SWIPE, WAIT_AFTER_SWIPE, OCR, WAIT_AFTER_OCR, REFILL, WAIT_AFTER_REFILL }
     private Phase currentPhase = Phase.IDLE;
-    
-    private Random random = new Random();
     private Runnable countdownCallback = null;
     
     @Override
@@ -179,19 +183,20 @@ public class OverlayService extends AccessibilityService {
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
+        // ===== SCREENSHOT-ORDNER (für alle Geräte) =====
         screenshotFolders = new File[]{
-            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
-            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
-            new File(Environment.getExternalStorageDirectory(), "Download"),
-            new File(Environment.getExternalStorageDirectory(), "Pictures"),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-            new File(Environment.getExternalStorageDirectory(), "DCIM")
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),  // Xiaomi, Honor
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),       // Samsung, Google
+            new File(Environment.getExternalStorageDirectory(), "Download"),               // Fallback
+            new File(Environment.getExternalStorageDirectory(), "Pictures"),               // Fallback
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), // Standard
+            new File(Environment.getExternalStorageDirectory(), "DCIM")                    // Fallback
         };
         
         for (File folder : screenshotFolders) {
             if (folder != null && folder.exists()) {
                 foundFolderPath = folder.getAbsolutePath();
-                Log.d(TAG, "📁 Gefundener Ordner: " + foundFolderPath);
+                Log.d(TAG, "📁 Screenshot-Ordner gefunden: " + foundFolderPath);
                 break;
             }
         }
@@ -214,26 +219,24 @@ public class OverlayService extends AccessibilityService {
         
         if (cropLeft >= 0 && cropTop >= 0 && cropRight >= 0 && cropBottom >= 0) {
             cropSet = true;
-            Log.d(TAG, "📐 Geladene Crop-Koordinaten: left=" + cropLeft + ", top=" + cropTop + ", right=" + cropRight + ", bottom=" + cropBottom);
         } else {
             cropSet = false;
             cropLeft = screenWidth / 4;
             cropTop = screenHeight / 4;
             cropRight = screenWidth * 3 / 4;
             cropBottom = screenHeight * 2 / 3;
-            Log.d(TAG, "📐 Standard-Crop-Koordinaten gesetzt");
         }
     }
     
     private void saveCropCoordinates() {
-        SharedPreferences.Editor editor = prefs.edit();
-        editor.putInt(PREF_CROP_LEFT, cropLeft);
-        editor.putInt(PREF_CROP_TOP, cropTop);
-        editor.putInt(PREF_CROP_RIGHT, cropRight);
-        editor.putInt(PREF_CROP_BOTTOM, cropBottom);
-        editor.apply();
+        prefs.edit()
+            .putInt(PREF_CROP_LEFT, cropLeft)
+            .putInt(PREF_CROP_TOP, cropTop)
+            .putInt(PREF_CROP_RIGHT, cropRight)
+            .putInt(PREF_CROP_BOTTOM, cropBottom)
+            .apply();
         cropSet = true;
-        Log.d(TAG, "💾 Crop-Koordinaten gespeichert: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
+        Log.d(TAG, "💾 Crop gespeichert: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
         Toast.makeText(this, "✅ Crop gespeichert!", Toast.LENGTH_SHORT).show();
     }
     
@@ -281,7 +284,7 @@ public class OverlayService extends AccessibilityService {
         
         isCropMode = true;
         updateStatus("✂️ Ziehe Bereich für OCR");
-        Toast.makeText(this, "✂️ Ziehe den Bereich, der beim OCR ausgelesen werden soll", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "✂️ Ziehe den Bereich für den Teilscreenshot", Toast.LENGTH_LONG).show();
         createCropOverlay();
     }
     
@@ -357,7 +360,7 @@ public class OverlayService extends AccessibilityService {
                             "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
@@ -397,7 +400,7 @@ public class OverlayService extends AccessibilityService {
             windowManager.addView(container, params);
             cropOverlayView = container;
         } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Hinzufügen des Crop-Overlays: " + e.getMessage());
+            Log.e(TAG, "Fehler beim Crop-Overlay: " + e.getMessage());
             Toast.makeText(this, "❌ Crop-Overlay konnte nicht erstellt werden!", Toast.LENGTH_LONG).show();
             isCropMode = false;
             cropOverlayView = null;
@@ -422,6 +425,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // Crop-Modus beenden, falls aktiv
         if (isCropMode) {
             isCropMode = false;
             if (cropOverlayView != null) {
@@ -558,70 +562,61 @@ public class OverlayService extends AccessibilityService {
         
         InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
         textRecognizer.process(image)
-            .addOnSuccessListener(new OnSuccessListener<com.google.mlkit.vision.text.Text>() {
-                @Override
-                public void onSuccess(com.google.mlkit.vision.text.Text visionText) {
-                    String resultText = visionText.getText();
-                    lastOcrText = resultText;
-                    Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
-                    
-                    String volume = extractVolumeImproved(resultText);
-                    isProcessing = false;
-                    
-                    if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
-                        lastScreenshotFile.delete();
-                        lastScreenshotFile = null;
-                    }
-                    
-                    if (volume != null) {
-                        lastDetectedVolume = Double.parseDouble(volume.replace(",", "."));
-                        ocrResult = "📸 " + volume + " GB";
-                        updateOcrResult(ocrResult);
-                        updateStatus("📸 OCR: " + volume + " GB");
-                        Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
-                        
-                        if (isAutoRefillSelected || isAutoRefillMode) {
-                            handleAutoRefillLogic(lastDetectedVolume);
-                        }
-                    } else {
-                        lastDetectedVolume = 0.0;
-                        ocrResult = "📸 Kein GB-Wert";
-                        updateOcrResult(ocrResult);
-                        updateStatus("📸 Kein GB-Wert");
-                        Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
-                        
-                        if (isAutoRefillSelected || isAutoRefillMode) {
-                            Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
-                            handler.postDelayed(() -> {
-                                if (isRunning) {
-                                    clickRefillButton();
-                                }
-                            }, 1000);
-                        }
-                    }
-                    scaledBitmap.recycle();
-                    screenshot.recycle();
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                lastOcrText = resultText;
+                Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
+                
+                String volume = extractVolumeImproved(resultText);
+                isProcessing = false;
+                
+                if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+                    lastScreenshotFile.delete();
+                    lastScreenshotFile = null;
                 }
+                
+                if (volume != null) {
+                    lastDetectedVolume = Double.parseDouble(volume.replace(",", "."));
+                    ocrResult = "📸 " + volume + " GB";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 OCR: " + volume + " GB");
+                    Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        handleAutoRefillLogic(lastDetectedVolume);
+                    }
+                } else {
+                    lastDetectedVolume = 0.0;
+                    ocrResult = "📸 Kein GB-Wert";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 Kein GB-Wert");
+                    Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                clickRefillButton();
+                            }
+                        }, 1000);
+                    }
+                }
+                scaledBitmap.recycle();
+                screenshot.recycle();
             })
-            .addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(Exception e) {
-                    isProcessing = false;
-                    updateStatus("❌ OCR Fehler: " + e.getMessage());
-                    updateOcrResult("❌ OCR Fehler");
-                    Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    scaledBitmap.recycle();
-                    screenshot.recycle();
-                }
+            .addOnFailureListener(e -> {
+                isProcessing = false;
+                updateStatus("❌ OCR Fehler: " + e.getMessage());
+                updateOcrResult("❌ OCR Fehler");
+                Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                scaledBitmap.recycle();
+                screenshot.recycle();
             });
     }
     
     // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
-        if (text == null || text.isEmpty()) {
-            Log.d(TAG, "OCR Text ist leer");
-            return null;
-        }
+        if (text == null || text.isEmpty()) return null;
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
@@ -643,49 +638,20 @@ public class OverlayService extends AccessibilityService {
                 String value = matcher.group(1).replace(",", ".");
                 try {
                     double val = Double.parseDouble(value);
-                    Log.d(TAG, "🔍 Pattern gefunden: " + value);
-                    if (val > 0 && val < 10) {
-                        return value;
-                    }
+                    if (val > 0 && val < 10) return value;
                 } catch (Exception e) {}
             }
         }
         
-        Pattern specialPattern = Pattern.compile("(\\d+[\\.,]\\d+)\\s*GB", Pattern.CASE_INSENSITIVE);
-        Matcher specialMatcher = specialPattern.matcher(text);
-        if (specialMatcher.find()) {
-            String value = specialMatcher.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        Pattern standalonePattern = Pattern.compile("([0-9]+[\\.,][0-9]{2})");
-        Matcher standaloneMatcher = standalonePattern.matcher(text);
-        if (standaloneMatcher.find()) {
-            String value = standaloneMatcher.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                if (val > 0 && val < 10) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
-    // ============ AUTOREFILL LOGIK (NEUE REGELN) ============
+    // ============ AUTOREFILL LOGIK ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        // ===== NEUE REGELN =====
         if (volume >= 0.35) {
             // >= 0,35 GB → 5-8 Minuten warten
             long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
@@ -713,7 +679,6 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ START AUTOREFILL ============
     private void startAutoRefill() {
         if (isRunning) {
             Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
@@ -754,16 +719,16 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void savePositions() {
-        SharedPreferences.Editor editor = prefs.edit();
-        editor.putInt(PREF_SWIPE_START_X, swipeStart.x);
-        editor.putInt(PREF_SWIPE_START_Y, swipeStart.y);
-        editor.putInt(PREF_SWIPE_END_X, swipeEnd.x);
-        editor.putInt(PREF_SWIPE_END_Y, swipeEnd.y);
-        editor.putBoolean(PREF_SWIPE_PLACED, swipePlaced);
-        editor.putInt(PREF_REFILL_X, refillButton.x);
-        editor.putInt(PREF_REFILL_Y, refillButton.y);
-        editor.putBoolean(PREF_REFILL_PLACED, refillPlaced);
-        editor.apply();
+        prefs.edit()
+            .putInt(PREF_SWIPE_START_X, swipeStart.x)
+            .putInt(PREF_SWIPE_START_Y, swipeStart.y)
+            .putInt(PREF_SWIPE_END_X, swipeEnd.x)
+            .putInt(PREF_SWIPE_END_Y, swipeEnd.y)
+            .putBoolean(PREF_SWIPE_PLACED, swipePlaced)
+            .putInt(PREF_REFILL_X, refillButton.x)
+            .putInt(PREF_REFILL_Y, refillButton.y)
+            .putBoolean(PREF_REFILL_PLACED, refillPlaced)
+            .apply();
     }
     
     // ============ OVERLAY ============
@@ -799,8 +764,9 @@ public class OverlayService extends AccessibilityService {
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
+        // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-            this, 
+            this,
             android.R.layout.simple_spinner_dropdown_item,
             CONSUMPTION_LABELS
         ) {
@@ -927,6 +893,7 @@ public class OverlayService extends AccessibilityService {
             stopSelf();
         });
         
+        // Overlay verschiebbar
         mainContainer.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -1062,7 +1029,8 @@ public class OverlayService extends AccessibilityService {
         visual.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    lastX = event.getRawX(); lastY = event.getRawY();
+                    lastX = event.getRawX();
+                    lastY = event.getRawY();
                     dragOffsetX = event.getRawX() - params.x;
                     dragOffsetY = event.getRawY() - params.y;
                     return true;
@@ -1174,7 +1142,6 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ============ CLICK REFILL BUTTON ============
     private void clickRefillButton() {
         if (!refillPlaced) {
             Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1226,7 +1193,7 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ============ COUNTDOWN MIT CALLBACK ============
+    // ============ COUNTDOWN ============
     private void startCountdown(long waitTime, Runnable onFinish) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
@@ -1268,7 +1235,7 @@ public class OverlayService extends AccessibilityService {
         startCountdown(waitTime, null);
     }
     
-    // ============ START AUTOMATION ============
+    // ============ AUTOMATIK ============
     private void startAutomation() {
         isRunning = true;
         cycleCount = 0;
