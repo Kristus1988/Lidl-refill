@@ -146,11 +146,22 @@
             android:layout_width="0dp"
             android:layout_height="36dp"
             android:layout_weight="1"
-            android:text="♻️ AutoRefill"
-            android:textSize="10sp"
+            android:text="♻️"
+            android:textSize="14sp"
             android:backgroundTint="#4CAF50"
             android:layout_marginStart="3dp"/>
     </LinearLayout>
+
+    <!-- ===== NEU: CROP BUTTON ===== -->
+    <Button
+        android:id="@+id/btnCrop"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:text="✂️ Rechteck ziehen (Crop)"
+        android:textSize="11sp"
+        android:backgroundTint="#9C27B0"
+        android:layout_marginTop="4dp"
+        android:textColor="#FFFFFF"/>
 
     <Button
         android:id="@+id/btnClose"
@@ -159,6 +170,6 @@
         android:text="✕ Schließen"
         android:textSize="12sp"
         android:backgroundTint="#666666"
-        android:layout_marginTop="6dp"/>
+        android:layout_marginTop="4dp"/>
 
 </LinearLayout>
