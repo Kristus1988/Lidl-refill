@@ -72,9 +72,11 @@ public class OverlayService extends AccessibilityService {
     private File lastScreenshotFile = null;
     private String lastOcrText = "";
     private boolean isProcessing = false;
+    private long screenshotTime = 0;
     
     // ============ SCREENSHOT-ORDNER ============
-    private File screenshotFolder = null;
+    private File[] screenshotFolders = null;
+    private String foundFolderPath = "";
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -153,15 +155,24 @@ public class OverlayService extends AccessibilityService {
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
-        // ===== SCREENSHOT-ORDNER: /storage/emulated/0/Pictures/Screenshots =====
-        screenshotFolder = new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots");
-        if (!screenshotFolder.exists()) {
-            screenshotFolder = new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots");
+        // ===== ALLE MÖGLICHEN SCREENSHOT-ORDNER =====
+        screenshotFolders = new File[]{
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Download"),
+            new File(Environment.getExternalStorageDirectory(), "Pictures"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            new File(Environment.getExternalStorageDirectory(), "DCIM")
+        };
+        
+        // Prüfen, welcher Ordner existiert
+        for (File folder : screenshotFolders) {
+            if (folder != null && folder.exists()) {
+                foundFolderPath = folder.getAbsolutePath();
+                Log.d(TAG, "📁 Gefundener Ordner: " + foundFolderPath);
+                break;
+            }
         }
-        if (!screenshotFolder.exists()) {
-            screenshotFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-        }
-        Log.d(TAG, "📁 Screenshot-Ordner: " + screenshotFolder.getAbsolutePath());
         
         createOverlay();
         createVisualHelpers();
@@ -214,13 +225,8 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        if (screenshotFolder == null || !screenshotFolder.exists()) {
-            Toast.makeText(this, "❌ Screenshot-Ordner nicht gefunden!", Toast.LENGTH_LONG).show();
-            updateStatus("❌ Ordner nicht gefunden");
-            return;
-        }
-        
         isProcessing = true;
+        screenshotTime = System.currentTimeMillis();
         
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
@@ -234,55 +240,61 @@ public class OverlayService extends AccessibilityService {
         updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
         Toast.makeText(this, "⏳ Warte auf Screenshot...", Toast.LENGTH_SHORT).show();
         
-        // Nach 5 Sekunden mit der Suche beginnen
         handler.postDelayed(() -> {
-            findLatestScreenshot(1);
+            findScreenshotInAllFolders(1);
         }, 5000);
     }
     
-    // ============ NEUESTEN SCREENSHOT IM ORDNER FINDEN ============
-    private void findLatestScreenshot(int attempt) {
-        if (attempt > 15) {
-            updateStatus("❌ Screenshot nicht gefunden (20s)");
+    // ============ SCREENSHOT IN ALLEN ORDNERN SUCHEN ============
+    private void findScreenshotInAllFolders(int attempt) {
+        if (attempt > 20) {
+            updateStatus("❌ Screenshot nicht gefunden (25s)");
             updateOcrResult("❌ Zeitüberschreitung");
-            Toast.makeText(this, "❌ Screenshot nicht gefunden nach 20 Sekunden!", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "❌ Screenshot nicht gefunden nach 25 Sekunden!", Toast.LENGTH_LONG).show();
             isProcessing = false;
             return;
         }
         
-        Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/15)");
-        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/15)...");
+        Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/20)");
+        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/20)...");
         
-        // ===== NEUSTE DATEI IM ORDNER FINDEN =====
+        // ===== ALLE ORDNER DURCHSUCHEN =====
         File latestFile = null;
         long latestTime = 0;
+        String foundIn = "";
         
-        if (screenshotFolder != null && screenshotFolder.exists()) {
-            File[] files = screenshotFolder.listFiles((dir, name) -> 
+        for (File folder : screenshotFolders) {
+            if (folder == null || !folder.exists()) continue;
+            
+            File[] files = folder.listFiles((dir, name) -> 
                 name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
             
-            if (files != null && files.length > 0) {
-                for (File file : files) {
-                    if (file.lastModified() > latestTime) {
-                        latestTime = file.lastModified();
-                        latestFile = file;
-                    }
+            if (files == null || files.length == 0) continue;
+            
+            for (File file : files) {
+                // Nimm den neuesten Screenshot (ungeachtet der Zeit)
+                if (file.lastModified() > latestTime) {
+                    latestTime = file.lastModified();
+                    latestFile = file;
+                    foundIn = folder.getAbsolutePath();
                 }
             }
         }
         
         if (latestFile == null) {
             handler.postDelayed(() -> {
-                findLatestScreenshot(attempt + 1);
+                findScreenshotInAllFolders(attempt + 1);
             }, 1000);
             return;
         }
         
         // ===== SCREENSHOT GEFUNDEN! =====
         lastScreenshotFile = latestFile;
-        Log.d(TAG, "📸 Screenshot gefunden: " + latestFile.getAbsolutePath());
-        Log.d(TAG, "📸 Datei-Zeit: " + latestFile.lastModified() + ", Aktuelle Zeit: " + System.currentTimeMillis());
-        updateStatus("📸 Screenshot gefunden: " + latestFile.getName());
+        long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
+        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s");
+        Log.d(TAG, "📸 Pfad: " + latestFile.getAbsolutePath());
+        Log.d(TAG, "📸 Ordner: " + foundIn);
+        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
         Toast.makeText(this, "📸 Screenshot gefunden!", Toast.LENGTH_SHORT).show();
         
         Bitmap bitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
@@ -389,7 +401,7 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
-        // ===== PATTERN 1: "0,74 GB" oder "0.74 GB" =====
+        // ===== PATTERN 1: "0,59 GB" oder "0.59 GB" =====
         Pattern pattern1 = Pattern.compile(
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
             Pattern.CASE_INSENSITIVE
@@ -406,7 +418,7 @@ public class OverlayService extends AccessibilityService {
             } catch (Exception e) {}
         }
         
-        // ===== PATTERN 2: "0,74GB" (ohne Leerzeichen) =====
+        // ===== PATTERN 2: "0,59GB" (ohne Leerzeichen) =====
         Pattern pattern2 = Pattern.compile(
             "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
             Pattern.CASE_INSENSITIVE
@@ -423,7 +435,7 @@ public class OverlayService extends AccessibilityService {
             } catch (Exception e) {}
         }
         
-        // ===== PATTERN 3: "0,74" (nur Zahl ohne Einheit) =====
+        // ===== PATTERN 3: "0,59" (nur Zahl ohne Einheit) =====
         Pattern pattern3 = Pattern.compile(
             "(0[\\.,]\\d{2})"
         );
@@ -556,8 +568,7 @@ public class OverlayService extends AccessibilityService {
             String status = "📊 STATUS:\n";
             status += "Android: " + Build.VERSION.SDK_INT + "\n";
             status += "isScreenshotReady: " + (isScreenshotReady ? "✅" : "❌") + "\n";
-            status += "Screenshot-Ordner: " + (screenshotFolder != null && screenshotFolder.exists() ? "✅" : "❌") + "\n";
-            status += "Ordner Pfad: " + (screenshotFolder != null ? screenshotFolder.getAbsolutePath() : "null") + "\n";
+            status += "Gefundener Ordner: " + (foundFolderPath.isEmpty() ? "❌" : "✅ " + foundFolderPath) + "\n";
             status += "Letzter Screenshot: " + (lastScreenshotFile != null && lastScreenshotFile.exists() ? "✅" : "❌") + "\n";
             status += "isProcessing: " + (isProcessing ? "✅ läuft" : "❌") + "\n";
             status += "Letzter OCR-Text: " + (lastOcrText.length() > 50 ? lastOcrText.substring(0, 50) + "..." : lastOcrText);
