@@ -15,7 +15,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
     private static final int OVERLAY_PERMISSION_REQUEST = 1;
@@ -41,47 +40,35 @@ public class MainActivity extends AppCompatActivity {
         btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         btnRequestStorage = findViewById(R.id.btnRequestStorage);
         
-        // ===== SPEICHER-BERECHTIGUNG =====
-        btnRequestStorage.setOnClickListener(v -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                // Android 11+: MANAGE_EXTERNAL_STORAGE
-                if (!Environment.isExternalStorageManager()) {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                    intent.setData(Uri.parse("package:" + getPackageName()));
-                    startActivityForResult(intent, MANAGE_STORAGE_REQUEST);
-                } else {
-                    Toast.makeText(this, "✅ Speicherzugriff bereits gewährt!", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                // Android 10 und älter: READ_EXTERNAL_STORAGE
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                        STORAGE_PERMISSION_REQUEST);
-                } else {
-                    Toast.makeText(this, "✅ Speicherzugriff bereits gewährt!", Toast.LENGTH_SHORT).show();
+        // ===== 1. OVERLAY =====
+        btnRequestPermissions.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!Settings.canDrawOverlays(this)) {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
+                    return;
                 }
             }
+            // Nach Overlay → Speicher
+            requestStoragePermission();
         });
         
-        // ===== OVERLAY & ACCESSIBILITY =====
-        btnRequestPermissions.setOnClickListener(v -> requestAllPermissions());
-        btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
+        // ===== 2. SPEICHER =====
+        btnRequestStorage.setOnClickListener(v -> {
+            requestStoragePermission();
+        });
         
-        // ===== ACCESSIBILITY REFRESH =====
+        // ===== 3. ACCESSIBILITY =====
         btnRefreshAccessibility.setOnClickListener(v -> {
             Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
             startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
         });
         
-        // ===== OVERLAY STARTEN =====
+        btnCheckPermissions.setOnClickListener(v -> checkAllPermissions());
+        
         btnStartService.setOnClickListener(v -> {
-            if (!hasStoragePermission()) {
-                Toast.makeText(this, "❌ Bitte zuerst Speicherzugriff erteilen!", Toast.LENGTH_LONG).show();
-                return;
-            }
             if (checkAllPermissions()) {
                 startOverlayService();
             } else {
@@ -89,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // ===== APP NEU STARTEN =====
         btnRestartApp.setOnClickListener(v -> {
             Toast.makeText(this, "🔄 App wird neu gestartet...", Toast.LENGTH_SHORT).show();
             Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -102,6 +88,41 @@ public class MainActivity extends AppCompatActivity {
         });
         
         updatePermissionStatus();
+    }
+    
+    private void requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, MANAGE_STORAGE_REQUEST);
+            } else {
+                Toast.makeText(this, "✅ Speicherzugriff bereits gewährt!", Toast.LENGTH_SHORT).show();
+                // Nach Speicher → Accessibility
+                requestAccessibilityPermission();
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                    STORAGE_PERMISSION_REQUEST);
+            } else {
+                Toast.makeText(this, "✅ Speicherzugriff bereits gewährt!", Toast.LENGTH_SHORT).show();
+                requestAccessibilityPermission();
+            }
+        }
+    }
+    
+    private void requestAccessibilityPermission() {
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
+        } else {
+            updatePermissionStatus();
+            checkAllPermissions();
+        }
     }
     
     private boolean hasStoragePermission() {
@@ -117,45 +138,17 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder status = new StringBuilder();
         status.append("📋 Berechtigungen:\n");
         
-        // Overlay
         boolean overlayOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
-        status.append(overlayOk ? "✅" : "❌").append(" Overlay (Fenster einblenden)\n");
+        status.append(overlayOk ? "✅" : "❌").append(" 1. Overlay (Fenster einblenden)\n");
         
-        // Accessibility
+        boolean storageOk = hasStoragePermission();
+        status.append(storageOk ? "✅" : "❌").append(" 2. Speicherzugriff (Screenshots)\n");
+        
         AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
         boolean accOk = am != null && am.isEnabled();
-        status.append(accOk ? "✅" : "❌").append(" Accessibility (Sonderfunktionen)\n");
-        
-        // Speicher
-        boolean storageOk = hasStoragePermission();
-        status.append(storageOk ? "✅" : "❌").append(" Speicherzugriff (Screenshots)\n");
+        status.append(accOk ? "✅" : "❌").append(" 3. Accessibility (Sonderfunktionen)\n");
         
         tvPermissionStatus.setText(status.toString());
-    }
-    
-    private void requestAllPermissions() {
-        // 1. Overlay
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName()));
-                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST);
-                return;
-            }
-        }
-        // 2. Accessibility
-        requestAccessibilityPermission();
-    }
-    
-    private void requestAccessibilityPermission() {
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
-            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            startActivityForResult(intent, ACCESSIBILITY_PERMISSION_REQUEST);
-        } else {
-            updatePermissionStatus();
-            checkAllPermissions();
-        }
     }
     
     private boolean checkAllPermissions() {
@@ -167,14 +160,14 @@ public class MainActivity extends AppCompatActivity {
             allOk = false;
         }
         
-        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null || !am.isEnabled()) {
-            missing.append("❌ Accessibility fehlt\n");
+        if (!hasStoragePermission()) {
+            missing.append("❌ Speicherzugriff fehlt\n");
             allOk = false;
         }
         
-        if (!hasStoragePermission()) {
-            missing.append("❌ Speicherzugriff fehlt\n");
+        AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (am == null || !am.isEnabled()) {
+            missing.append("❌ Accessibility fehlt\n");
             allOk = false;
         }
         
@@ -198,38 +191,23 @@ public class MainActivity extends AppCompatActivity {
             startService(intent);
         }
         Toast.makeText(this, "🚀 Overlay gestartet!", Toast.LENGTH_LONG).show();
-        // finish() nicht aufrufen – App bleibt offen!
     }
     
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        
-        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
-            updatePermissionStatus();
-            checkAllPermissions();
-            return;
-        }
-        
-        if (requestCode == ACCESSIBILITY_PERMISSION_REQUEST) {
-            updatePermissionStatus();
-            checkAllPermissions();
-            return;
-        }
-        
-        if (requestCode == MANAGE_STORAGE_REQUEST) {
-            updatePermissionStatus();
-            checkAllPermissions();
-            return;
-        }
+        updatePermissionStatus();
+        checkAllPermissions();
     }
     
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == STORAGE_PERMISSION_REQUEST) {
-            updatePermissionStatus();
-            checkAllPermissions();
+        updatePermissionStatus();
+        checkAllPermissions();
+        if (requestCode == STORAGE_PERMISSION_REQUEST && grantResults.length > 0 
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            requestAccessibilityPermission();
         }
     }
     
