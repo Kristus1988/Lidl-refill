@@ -44,6 +44,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Random;
@@ -53,7 +54,7 @@ import java.util.regex.Pattern;
 public class OverlayService extends AccessibilityService {
     private static final String TAG = "LidlRefill";
     
-    // UI
+    // ============ UI ============
     private WindowManager windowManager;
     private FrameLayout floatingView;
     private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
@@ -62,7 +63,7 @@ public class OverlayService extends AccessibilityService {
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
     private Button btnClose, btnCrop;
     
-    // Preferences
+    // ============ PREFERENCES ============
     private SharedPreferences prefs;
     private static final String PREF_SWIPE_START_X = "swipe_start_x";
     private static final String PREF_SWIPE_START_Y = "swipe_start_y";
@@ -77,10 +78,16 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_CROP_RIGHT = "crop_right";
     private static final String PREF_CROP_BOTTOM = "crop_bottom";
     
-    // Screen
+    // ============ VERBRAUCHS-HISTORIE ============
+    private ArrayList<Double> volumeHistory = new ArrayList<>();
+    private ArrayList<Long> timeHistory = new ArrayList<>();
+    private static final int MAX_HISTORY = 10;
+    private double averageConsumptionRate = 0.03; // Standard-Fallback
+    
+    // ============ SCREEN ============
     private int screenWidth, screenHeight;
     
-    // State
+    // ============ STATE ============
     private boolean isScreenshotReady = false;
     private boolean isProcessing = false;
     private boolean isRunning = false;
@@ -97,43 +104,45 @@ public class OverlayService extends AccessibilityService {
     private double lastDetectedVolume = 0.0;
     private long countdownStartTime = 0;
     private long currentWaitTime = 0;
+    private long lastOcrTime = 0;
+    private double lastOcrVolume = 0.0;
     
-    // Crop
+    // ============ CROP ============
     private int cropLeft = 0, cropTop = 0, cropRight = 0, cropBottom = 0;
     private View cropOverlayView = null;
     private float cropStartX = 0, cropStartY = 0;
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
     
-    // Positions
+    // ============ POSITIONEN ============
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
     private Point refillButton = new Point(500, 500);
     private boolean swipePlaced = false;
     private boolean refillPlaced = false;
     
-    // Visual helpers
+    // ============ VISUAL HELPERS ============
     private View swipeVisual, refillVisual;
     private View activeVisual = null;
     private float lastX, lastY, dragOffsetX, dragOffsetY;
     
-    // Overlay dragging
+    // ============ OVERLAY DRAGGING ============
     private boolean isOverlayDragging = false;
     private float overlayDragX = 0, overlayDragY = 0;
     
-    // Handler & Random
+    // ============ HANDLER & RANDOM ============
     private Handler handler = new Handler(Looper.getMainLooper());
     private Random random = new Random();
     
-    // OCR
+    // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
     
-    // Screenshot folders
+    // ============ SCREENSHOT FOLDERS ============
     private File[] screenshotFolders = null;
     private String foundFolderPath = "";
     
-    // Modes
+    // ============ MODES ============
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
@@ -142,16 +151,14 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MAX = 11000;
     private static final long WAIT_AFTER_REFILL_MIN = 9000;
     private static final long WAIT_AFTER_REFILL_MAX = 11000;
-    private static final long AUTOREFILL_WAIT_MIN = 300000;  // 5 Minuten
-    private static final long AUTOREFILL_WAIT_MAX = 480000;  // 8 Minuten
-    private static final double AUTOREFILL_THRESHOLD = 0.35;
+    private static final double AUTOREFILL_THRESHOLD = 0.30;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL (0,35 GB)"
+        "♻️ AUTOREFILL (0,30 GB)"
     };
     private int currentModeIndex = 0;
     
@@ -183,14 +190,13 @@ public class OverlayService extends AccessibilityService {
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
-        // ===== SCREENSHOT-ORDNER (für alle Geräte) =====
         screenshotFolders = new File[]{
-            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),  // Xiaomi, Honor
-            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),       // Samsung, Google
-            new File(Environment.getExternalStorageDirectory(), "Download"),               // Fallback
-            new File(Environment.getExternalStorageDirectory(), "Pictures"),               // Fallback
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), // Standard
-            new File(Environment.getExternalStorageDirectory(), "DCIM")                    // Fallback
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Download"),
+            new File(Environment.getExternalStorageDirectory(), "Pictures"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            new File(Environment.getExternalStorageDirectory(), "DCIM")
         };
         
         for (File folder : screenshotFolders) {
@@ -236,7 +242,6 @@ public class OverlayService extends AccessibilityService {
             .putInt(PREF_CROP_BOTTOM, cropBottom)
             .apply();
         cropSet = true;
-        Log.d(TAG, "💾 Crop gespeichert: " + cropLeft + "," + cropTop + " - " + cropRight + "," + cropBottom);
         Toast.makeText(this, "✅ Crop gespeichert!", Toast.LENGTH_SHORT).show();
     }
     
@@ -360,7 +365,7 @@ public class OverlayService extends AccessibilityService {
                             "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
@@ -425,7 +430,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Crop-Modus beenden, falls aktiv
         if (isCropMode) {
             isCropMode = false;
             if (cropOverlayView != null) {
@@ -576,14 +580,19 @@ public class OverlayService extends AccessibilityService {
                 }
                 
                 if (volume != null) {
-                    lastDetectedVolume = Double.parseDouble(volume.replace(",", "."));
+                    double currentVolume = Double.parseDouble(volume.replace(",", "."));
+                    lastDetectedVolume = currentVolume;
+                    
+                    // ===== VERBRAUCHS-HISTORIE AKTUALISIEREN =====
+                    updateConsumptionHistory(currentVolume);
+                    
                     ocrResult = "📸 " + volume + " GB";
                     updateOcrResult(ocrResult);
                     updateStatus("📸 OCR: " + volume + " GB");
                     Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
-                        handleAutoRefillLogic(lastDetectedVolume);
+                        handleAutoRefillLogic(currentVolume);
                     }
                 } else {
                     lastDetectedVolume = 0.0;
@@ -612,6 +621,52 @@ public class OverlayService extends AccessibilityService {
                 scaledBitmap.recycle();
                 screenshot.recycle();
             });
+    }
+    
+    // ============ VERBRAUCHS-HISTORIE ============
+    private void updateConsumptionHistory(double currentVolume) {
+        long currentTime = System.currentTimeMillis();
+        
+        // Werte speichern
+        volumeHistory.add(currentVolume);
+        timeHistory.add(currentTime);
+        
+        // Maximal 10 Werte behalten
+        if (volumeHistory.size() > MAX_HISTORY) {
+            volumeHistory.remove(0);
+            timeHistory.remove(0);
+        }
+        
+        // Durchschnittlichen Verbrauch berechnen (wenn genug Daten vorhanden)
+        if (volumeHistory.size() >= 2) {
+            calculateAverageConsumption();
+        }
+        
+        Log.d(TAG, "📊 Verbrauchshistorie: " + volumeHistory.size() + " Werte");
+        Log.d(TAG, "📊 Durchschnittlicher Verbrauch: " + averageConsumptionRate + " GB/Min");
+    }
+    
+    private void calculateAverageConsumption() {
+        if (volumeHistory.size() < 2 || timeHistory.size() < 2) return;
+        
+        double totalConsumption = 0;
+        long totalTimeMinutes = 0;
+        
+        for (int i = 1; i < volumeHistory.size(); i++) {
+            double diff = volumeHistory.get(i - 1) - volumeHistory.get(i);
+            if (diff > 0) {
+                totalConsumption += diff;
+                long timeDiff = timeHistory.get(i) - timeHistory.get(i - 1);
+                totalTimeMinutes += timeDiff / 60000; // in Minuten
+            }
+        }
+        
+        if (totalTimeMinutes > 0 && totalConsumption > 0) {
+            averageConsumptionRate = totalConsumption / totalTimeMinutes;
+            // Begrenzung auf realistische Werte (0,005 - 0,15 GB/Min)
+            averageConsumptionRate = Math.max(0.005, Math.min(0.15, averageConsumptionRate));
+            Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+        }
     }
     
     // ============ GB-EXTRACTION ============
@@ -646,18 +701,52 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ AUTOREFILL LOGIK ============
+    // ============ ADAPTIVE AUTOREFILL LOGIK ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        if (volume >= 0.35) {
-            // >= 0,35 GB → 5-8 Minuten warten
-            long waitTime = AUTOREFILL_WAIT_MIN + (long)(random.nextDouble() * (AUTOREFILL_WAIT_MAX - AUTOREFILL_WAIT_MIN));
-            long minutes = waitTime / 60000;
-            updateStatus("♻️ Warte " + minutes + " Min (Volumen ≥ 0,35)");
-            Toast.makeText(this, "♻️ Volumen ≥ 0,35 GB → Warte " + minutes + " Min", Toast.LENGTH_SHORT).show();
+        if (volume >= AUTOREFILL_THRESHOLD) {
+            // ===== ADAPTIVE WARTEZEIT BERECHNEN =====
+            double diff = volume - AUTOREFILL_THRESHOLD;
+            
+            // ===== DYNAMISCHE VERBRAUCHSRATE =====
+            // Verwende den tatsächlich gemessenen Durchschnitt
+            // Falls nicht genug Daten, Fallback auf Standardwerte
+            double consumptionRate = averageConsumptionRate;
+            
+            // Sicherheits-Fallback: Falls die Rate unrealistisch ist
+            if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
+                // Standardwerte je nach Modus
+                switch (currentModeIndex) {
+                    case 0: consumptionRate = 0.025; break;
+                    case 1: consumptionRate = 0.04; break;
+                    case 2: consumptionRate = 0.06; break;
+                    case 3: 
+                    default: consumptionRate = 0.03; break;
+                }
+                Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
+            }
+            
+            // Berechne Minuten bis zum Ziel
+            double minutesDouble = diff / consumptionRate;
+            
+            // Zufällige Schwankung ±20% (menschlich)
+            double randomFactor = 0.80 + (random.nextDouble() * 0.40);
+            minutesDouble = minutesDouble * randomFactor;
+            
+            // Begrenzung auf 3-15 Minuten
+            long minutes = Math.round(Math.max(3, Math.min(15, minutesDouble)));
+            long waitTime = minutes * 60000;
+            waitTime += (long)(random.nextDouble() * 60000); // + 0-59 Sekunden
+            
+            updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
+                String.format("%.3f", consumptionRate) + " GB/Min)");
+            Toast.makeText(this, 
+                "♻️ Bis 0,30 GB: " + minutes + " Min (aktuell " + volume + " GB)", 
+                Toast.LENGTH_SHORT).show();
+            
             currentPhase = Phase.WAIT_AFTER_OCR;
             startCountdown(waitTime, () -> {
                 if (isRunning) {
@@ -667,9 +756,9 @@ public class OverlayService extends AccessibilityService {
             });
             
         } else {
-            // < 0,35 GB → Refill
-            updateStatus("♻️ Volumen < 0,35 → Refill");
-            Toast.makeText(this, "♻️ Volumen < 0,35 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            // < 0,30 GB → Refill
+            updateStatus("♻️ Volumen < 0,30 → Refill");
+            Toast.makeText(this, "♻️ Volumen < 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -700,6 +789,11 @@ public class OverlayService extends AccessibilityService {
         currentModeIndex = 3;
         prefs.edit().putInt("consumption_index", 3).apply();
         spinnerConsumption.setSelection(3);
+        
+        // Verbrauchshistorie zurücksetzen für neuen Durchlauf
+        volumeHistory.clear();
+        timeHistory.clear();
+        averageConsumptionRate = 0.03;
         
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
@@ -764,7 +858,6 @@ public class OverlayService extends AccessibilityService {
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
-        // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this,
             android.R.layout.simple_spinner_dropdown_item,
@@ -803,7 +896,6 @@ public class OverlayService extends AccessibilityService {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         
-        // ============ BUTTONS ============
         btnSwipePlace.setOnClickListener(v -> {
             if (currentMode == Mode.SWIPE_PLACE) {
                 currentMode = Mode.NONE;
@@ -893,7 +985,6 @@ public class OverlayService extends AccessibilityService {
             stopSelf();
         });
         
-        // Overlay verschiebbar
         mainContainer.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
