@@ -2,15 +2,12 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     
-    <!-- Weiße Umrandung -->
     <stroke
         android:width="2dp"
         android:color="#FFFFFF" />
     
-    <!-- Hintergrund (dunkel) -->
     <solid android:color="#333333" />
     
-    <!-- Abgerundete Ecken -->
     <corners android:radius="4dp" />
     
 </shape>
