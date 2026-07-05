@@ -179,7 +179,8 @@ public class OverlayService extends AccessibilityService {
         loadCropCoordinates();
         loadPositions();
         
-        int savedIndex = prefs.getInt("consumption_index", 0);
+        // ===== AUTOREFILL STANDARDMÄSSIG AUSWÄHLEN =====
+        int savedIndex = prefs.getInt("consumption_index", 3); // Standard: 3 = AUTOREFILL
         currentModeIndex = savedIndex;
         isAutoRefillSelected = (savedIndex == 3);
         
@@ -864,9 +865,9 @@ public class OverlayService extends AccessibilityService {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
         
-        int savedIndex = prefs.getInt("consumption_index", 0);
-        spinnerConsumption.setSelection(savedIndex);
-        isAutoRefillSelected = (savedIndex == 3);
+        // ===== AUTOREFILL STANDARDMÄSSIG AUSWÄHLEN =====
+        spinnerConsumption.setSelection(3);
+        isAutoRefillSelected = true;
         
         spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
