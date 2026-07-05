@@ -46,7 +46,7 @@
         android:singleLine="true"
         android:layout_marginBottom="4dp"/>
 
-    <!-- ===== SPINNER (weiß umrandet + weiße Schrift) ===== -->
+    <!-- ===== SPINNER ===== -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
@@ -64,7 +64,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="4dp">
 
-        <!-- Swipe Positionierung - GELB -->
+        <!-- Swipe Positionierung - GELB, WEISSE SCHRIFT -->
         <Button
             android:id="@+id/btnSwipePlace"
             android:layout_width="0dp"
@@ -73,7 +73,7 @@
             android:text="⬇ Swipe"
             android:textSize="11sp"
             android:backgroundTint="#FFC107"
-            android:textColor="#000000"
+            android:textColor="#FFFFFF"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
@@ -112,7 +112,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="4dp">
 
-        <!-- Swipe Test - GELB -->
+        <!-- Swipe Test - GELB, WEISSE SCHRIFT -->
         <Button
             android:id="@+id/btnSwipeTest"
             android:layout_width="0dp"
@@ -121,7 +121,7 @@
             android:text="S Test"
             android:textSize="11sp"
             android:backgroundTint="#FFC107"
-            android:textColor="#000000"
+            android:textColor="#FFFFFF"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
