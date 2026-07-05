@@ -660,7 +660,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION (ALLE ZAHLENFORMATE) ============
+    // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -669,40 +669,15 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
-        // ===== ALLE MÖGLICHEN PATTERNS =====
         String[] patterns = {
-            // Pattern 1: "999.99 GB" oder "999,99 GB" (mit Leerzeichen und Einheit)
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            
-            // Pattern 2: "999.99GB" (ohne Leerzeichen, mit Einheit)
             "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
-            
-            // Pattern 3: "999.99" (nur Zahl ohne Einheit)
-            "(\\d+[\\.,]\\d+)",
-            
-            // Pattern 4: "999" (ganze Zahl ohne Einheit)
-            "(\\d+)",
-            
-            // Pattern 5: "Verfügbares Gesamtvolumen" + Zahl
-            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
-            
-            // Pattern 6: "Volumen" + Zahl + "GB"
-            "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            
-            // Pattern 7: "Gesamtvolumen" + Zahl
-            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
-            
-            // Pattern 8: Zahl mit Komma/Punkt + "GB" (großzügig)
+            "([0-9]+[\\.,][0-9]{2})",
+            "(\\d+)\\s*(GB|Gb|gB|gb)",
             "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
-            
-            // Pattern 9: "0,99" oder "0.99" (mit führender Null)
-            "(0[\\.,]\\d{2})",
-            
-            // Pattern 10: "99,99" oder "99.99" (zweistellig mit Nachkommastellen)
-            "(\\d{2}[\\.,]\\d{2})",
-            
-            // Pattern 11: "999,99" oder "999.99" (dreistellig mit Nachkommastellen)
-            "(\\d{3}[\\.,]\\d{2})"
+            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
         };
         
         for (String patternStr : patterns) {
@@ -712,51 +687,11 @@ public class OverlayService extends AccessibilityService {
                 String value = matcher.group(1).replace(",", ".");
                 try {
                     double val = Double.parseDouble(value);
-                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
-                    if (val > 0 && val < 1000) {
-                        return value;
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Parse Fehler: " + e.getMessage());
-                }
+                    if (val > 0 && val < 10) return value;
+                } catch (Exception e) {}
             }
         }
         
-        // ===== SPEZIALFALL: Zahlen mit Punkt/Komma + "GB" (Fallback) =====
-        Pattern specialPattern = Pattern.compile(
-            "(\\d+[\\.,]\\d+)\\s*GB",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher specialMatcher = specialPattern.matcher(text);
-        if (specialMatcher.find()) {
-            String value = specialMatcher.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
-                if (val > 0 && val < 1000) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        // ===== SPEZIALFALL: Ganze Zahl mit "GB" =====
-        Pattern wholePattern = Pattern.compile(
-            "(\\d+)\\s*GB",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher wholeMatcher = wholePattern.matcher(text);
-        if (wholeMatcher.find()) {
-            String value = wholeMatcher.group(1);
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Ganze Zahl gefunden: " + value + " GB");
-                if (val > 0 && val < 1000) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
@@ -846,12 +781,12 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN ============
+    // ============ POSITIONEN (LÄNGERE SWIPE-GESTE) ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
-        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 100);
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 80);    // ← LÄNGER: 80 statt 100
         swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
-        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 100);
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 80); // ← LÄNGER: -80 statt -100
         swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
         
         refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
