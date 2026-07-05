@@ -821,14 +821,14 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN (LÄNGERE SWIPE-GESTE) ============
+    // ============ POSITIONEN (MAXIMALE SWIPE-LÄNGE FÜR CHROME) ============
     private void loadPositions() {
-        // ===== LÄNGERE SWIPE-GESTE FÜR CHROME-REFRESH =====
-        // Startet bei 50px (ganz oben) und endet bei 50% der Bildschirmhöhe
+        // ===== MAXIMALE SWIPE-GESTE FÜR CHROME-REFRESH =====
+        // Startet bei 20px (ganz oben) und endet bei 90% der Bildschirmhöhe
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
-        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 50);
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 20);
         swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
-        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight / 2);
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, (int)(screenHeight * 0.9));
         
         swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
         
