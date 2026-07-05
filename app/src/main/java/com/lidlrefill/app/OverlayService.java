@@ -142,19 +142,12 @@ public class OverlayService extends AccessibilityService {
     private Mode currentMode = Mode.NONE;
     
     // ============ MENSCHLICHE ZEITEN ============
-    // Nach Swipe: 8-14 Sekunden (menschlicher)
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
-    
-    // Nach Refill: 8-14 Sekunden (menschlicher)
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    
-    // Screenshot warten: 4-18 Sekunden (natürlicher)
     private static final long SCREENSHOT_WAIT_MIN = 4000;
     private static final long SCREENSHOT_WAIT_MAX = 18000;
-    
-    // Kurze Pause vor Refill: 1-3 Sekunden (menschlicher)
     private static final long PRE_REFILL_WAIT_MIN = 1000;
     private static final long PRE_REFILL_WAIT_MAX = 3000;
     
@@ -456,7 +449,6 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // ===== MENSCHLICHERE WARTEZEIT AUF SCREENSHOT (4-18 Sekunden) =====
         long waitTime = SCREENSHOT_WAIT_MIN + (long)(random.nextDouble() * (SCREENSHOT_WAIT_MAX - SCREENSHOT_WAIT_MIN));
         updateStatus("⏳ Warte auf Screenshot...");
         startCountdown(waitTime, () -> {
@@ -612,7 +604,6 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
-                        // ===== MENSCHLICHE KURZE PAUSE VOR REFILL (1-3 Sekunden) =====
                         long preRefillWait = PRE_REFILL_WAIT_MIN + (long)(random.nextDouble() * (PRE_REFILL_WAIT_MAX - PRE_REFILL_WAIT_MIN));
                         handler.postDelayed(() -> {
                             if (isRunning) {
@@ -752,7 +743,7 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ ADAPTIVE AUTOREFILL LOGIK (MENSCHLICHER) ============
+    // ============ ADAPTIVE AUTOREFILL LOGIK ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
@@ -774,25 +765,15 @@ public class OverlayService extends AccessibilityService {
                 Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
             }
             
-            // ===== MENSCHLICHE BERECHNUNG MIT ZUFALLSSCHWANKUNG =====
             double minutesDouble = diff / consumptionRate;
-            
-            // Zufällige Schwankung ±25% (menschlicher)
             double randomFactor = 0.75 + (random.nextDouble() * 0.50);
             minutesDouble = minutesDouble * randomFactor;
             
-            // Begrenzung auf 3-18 Minuten (menschlicher)
             long minutes = Math.round(Math.max(3, Math.min(18, minutesDouble)));
             long waitTime = minutes * 60000;
-            
-            // Zusätzliche zufällige Sekunden (0-59)
             waitTime += (long)(random.nextDouble() * 60000);
-            
-            // Zusätzliche zufällige Minuten (0-2) für mehr Natürlichkeit
             waitTime += (long)(random.nextDouble() * 120000);
-            
-            // Auf maximal 20 Minuten begrenzen
-            waitTime = Math.min(waitTime, 1200000); // 20 Minuten Maximum
+            waitTime = Math.min(waitTime, 1200000);
             
             long minutesDisplay = waitTime / 60000;
             updateStatus("♻️ Adaptiv: " + minutesDisplay + " Min (Rate: " + 
@@ -810,12 +791,10 @@ public class OverlayService extends AccessibilityService {
             });
             
         } else {
-            // < 0,30 GB → Refill (mit menschlicher Pause)
             updateStatus("♻️ Volumen < 0,30 → Refill");
             Toast.makeText(this, "♻️ Volumen < 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             
-            // ===== MENSCHLICHE KURZE PAUSE VOR REFILL (1-3 Sekunden) =====
             long preRefillWait = PRE_REFILL_WAIT_MIN + (long)(random.nextDouble() * (PRE_REFILL_WAIT_MAX - PRE_REFILL_WAIT_MIN));
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -855,7 +834,7 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN (MAXIMALE SWIPE-LÄNGE) ============
+    // ============ POSITIONEN ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 20);
@@ -915,7 +894,6 @@ public class OverlayService extends AccessibilityService {
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
-        // ============ SPINNER MIT WEISSER SCHRIFT ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this,
             android.R.layout.simple_spinner_dropdown_item,
@@ -1238,7 +1216,7 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ============ GESTEN ============
+    // ============ SWIPE-GESTE MIT EINEM FINGER ============
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1266,6 +1244,7 @@ public class OverlayService extends AccessibilityService {
             endY
         );
         
+        // ===== EIN FINGER (NICHT DREI) =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
         
