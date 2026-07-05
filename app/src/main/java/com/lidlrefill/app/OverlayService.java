@@ -142,16 +142,14 @@ public class OverlayService extends AccessibilityService {
     private Mode currentMode = Mode.NONE;
     
     // ============ MENSCHLICHE ZEITEN ============
-    private static final long WAIT_AFTER_SWIPE_MIN = 7000;
-    private static final long WAIT_AFTER_SWIPE_MAX = 15000;
-    private static final long WAIT_AFTER_REFILL_MIN = 7000;
-    private static final long WAIT_AFTER_REFILL_MAX = 15000;
-    private static final long SCREENSHOT_WAIT_MIN = 3000;
-    private static final long SCREENSHOT_WAIT_MAX = 20000;
-    private static final long PRE_REFILL_WAIT_MIN = 1000;
-    private static final long PRE_REFILL_WAIT_MAX = 4000;
-    private static final long SWIPE_DURATION_MIN = 300;
-    private static final long SWIPE_DURATION_MAX = 900;
+    private static final long WAIT_AFTER_SWIPE_MIN = 8000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 16000; // Größere Spanne
+    private static final long WAIT_AFTER_REFILL_MIN = 8000;
+    private static final long WAIT_AFTER_REFILL_MAX = 16000; // Größere Spanne
+    private static final long SCREENSHOT_WAIT_MIN = 4000;
+    private static final long SCREENSHOT_WAIT_MAX = 20000; // Größere Spanne
+    private static final long PRE_REFILL_WAIT_MIN = 1500;
+    private static final long PRE_REFILL_WAIT_MAX = 4000; // Größere Spanne
     
     private static final double AUTOREFILL_THRESHOLD = 0.30;
     
@@ -295,21 +293,11 @@ public class OverlayService extends AccessibilityService {
         createCropOverlay();
     }
     
-    // ============ CREATE CROP OVERLAY (NUR RAHMEN) ============
     private void createCropOverlay() {
         FrameLayout container = new FrameLayout(this);
         container.setBackgroundColor(Color.TRANSPARENT);
         
         cropOverlayView = new View(this) {
-            private Paint borderPaint = new Paint();
-            
-            {
-                // ===== NUR GRÜNER RAHMEN =====
-                borderPaint.setColor(Color.GREEN);
-                borderPaint.setStrokeWidth(8);
-                borderPaint.setStyle(Paint.Style.STROKE);
-            }
-            
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
@@ -319,7 +307,21 @@ public class OverlayService extends AccessibilityService {
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
-                    // ===== NUR RAHMEN ZEICHNEN =====
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(30);
+                    textPaint.setStyle(Paint.Style.FILL);
+                    textPaint.setShadowLayer(5, 0, 0, Color.BLACK);
+                    
+                    String coords = (int)left + "," + (int)top + " - " + (int)right + "," + (int)bottom;
+                    String size = "Größe: " + (int)(right-left) + "x" + (int)(bottom-top);
+                    canvas.drawText(coords, left + 10, top + 50, textPaint);
+                    canvas.drawText(size, left + 10, top + 100, textPaint);
+                    
+                    Paint borderPaint = new Paint();
+                    borderPaint.setColor(Color.argb(100, 255, 255, 255));
+                    borderPaint.setStrokeWidth(2);
+                    borderPaint.setStyle(Paint.Style.STROKE);
                     canvas.drawRect(left, top, right, bottom, borderPaint);
                 }
             }
@@ -363,7 +365,7 @@ public class OverlayService extends AccessibilityService {
                             "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
@@ -585,7 +587,25 @@ public class OverlayService extends AccessibilityService {
                     
                     updateConsumptionHistory(currentVolume);
                     
-                    ocrResult = "📸 " + volume + " GB";
+                    // ===== MENSCHLICHERE ANZEIGE =====
+                    String volumeDisplay = volume + " GB";
+                    if (currentVolume >= AUTOREFILL_THRESHOLD) {
+                        double diff = currentVolume - AUTOREFILL_THRESHOLD;
+                        double rate = averageConsumptionRate;
+                        if (rate <= 0.001 || rate > 0.2) {
+                            switch (currentModeIndex) {
+                                case 0: rate = 0.025; break;
+                                case 1: rate = 0.04; break;
+                                case 2: rate = 0.06; break;
+                                default: rate = 0.03; break;
+                            }
+                        }
+                        double minutes = diff / rate;
+                        long minDisplay = Math.round(Math.max(3, Math.min(20, minutes)));
+                        ocrResult = "📸 " + volumeDisplay + " → ~" + minDisplay + " Min";
+                    } else {
+                        ocrResult = "📸 " + volumeDisplay + " → Refill";
+                    }
                     updateOcrResult(ocrResult);
                     updateStatus("📸 OCR: " + volume + " GB");
                     Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
@@ -764,20 +784,27 @@ public class OverlayService extends AccessibilityService {
             }
             
             double minutesDouble = diff / consumptionRate;
-            double randomFactor = 0.65 + (random.nextDouble() * 0.70);
+            double randomFactor = 0.75 + (random.nextDouble() * 0.50);
             minutesDouble = minutesDouble * randomFactor;
             
-            long minutes = Math.round(Math.max(2, Math.min(20, minutesDouble)));
+            long minutes = Math.round(Math.max(3, Math.min(18, minutesDouble)));
             long waitTime = minutes * 60000;
-            waitTime += (long)(random.nextDouble() * 89000);
-            waitTime += (long)(random.nextDouble() * 180000);
-            waitTime = Math.min(waitTime, 1320000);
+            waitTime += (long)(random.nextDouble() * 60000);
+            waitTime += (long)(random.nextDouble() * 120000);
+            waitTime = Math.min(waitTime, 1200000);
             
+            // ===== MENSCHLICHERE ANZEIGE =====
             long minutesDisplay = waitTime / 60000;
-            updateStatus("♻️ Adaptiv: " + minutesDisplay + " Min (Rate: " + 
+            long extraSeconds = (waitTime % 60000) / 1000;
+            String timeDisplay = minutesDisplay + " Min";
+            if (extraSeconds > 0) {
+                timeDisplay += " " + extraSeconds + "s";
+            }
+            
+            updateStatus("♻️ Adaptiv: " + timeDisplay + " (Rate: " + 
                 String.format("%.3f", consumptionRate) + " GB/Min)");
             Toast.makeText(this, 
-                "♻️ Bis 0,30 GB: " + minutesDisplay + " Min (aktuell " + volume + " GB)", 
+                "♻️ Warte " + timeDisplay + " (aktuell " + volume + " GB)", 
                 Toast.LENGTH_SHORT).show();
             
             currentPhase = Phase.WAIT_AFTER_OCR;
@@ -1214,7 +1241,7 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ============ SWIPE-GESTE ============
+    // ============ MENSCHLICHE SWIPE-GESTE ============
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1223,25 +1250,25 @@ public class OverlayService extends AccessibilityService {
         
         totalSwipes++;
         
-        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 60);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 60);
-        long randomDuration = SWIPE_DURATION_MIN + (long)(random.nextDouble() * (SWIPE_DURATION_MAX - SWIPE_DURATION_MIN));
-        long randomDelay = (long)(random.nextDouble() * 500);
+        // ===== GRÖSSERE ZUFALLSSPANNEN FÜR MENSCHLICHES VERHALTEN =====
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 60); // ±30px
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 60); // ±30px
+        long randomDuration = 300 + (long)(random.nextDouble() * 600); // 300-900ms
+        long randomDelay = (long)(random.nextDouble() * 800); // 0-800ms
         
         int startX = swipeStart.x + randomOffsetX;
         int startY = swipeStart.y + randomOffsetY;
-        int endX = swipeEnd.x + randomOffsetX;
+        int endX = swipeEnd.x + randomOffsetX + (int)((random.nextDouble() - 0.5) * 80);
         int endY = swipeEnd.y + randomOffsetY;
         
+        // ===== ZUFÄLLIGER BOGEN (menschlicher) =====
         Path path = new Path();
         path.moveTo(startX, startY);
-        path.quadTo(
-            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 120),
-            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 70),
-            endX,
-            endY
-        );
+        float controlX = (startX + endX) / 2 + (float)((random.nextDouble() - 0.5) * 150);
+        float controlY = (startY + endY) / 2 + (float)((random.nextDouble() - 0.5) * 80);
+        path.quadTo(controlX, controlY, endX, endY);
         
+        // ===== EIN FINGER =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
         
@@ -1276,20 +1303,23 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
+    // ============ MENSCHLICHER REFILL-KLICK ============
     private void clickRefillButton() {
         if (!refillPlaced) {
             Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
             return;
         }
         
-        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
-        long clickDuration = 50 + (long)(random.nextDouble() * 150);
-        long randomDelay = 100 + (long)(random.nextDouble() * 400);
+        // ===== ZUFÄLLIGE ABWEICHUNGEN (menschlicher) =====
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 50);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 50);
+        long clickDuration = 80 + (long)(random.nextDouble() * 200); // 80-280ms (länger = natürlicher)
+        long randomDelay = 100 + (long)(random.nextDouble() * 500);
         
         int clickX = refillButton.x + randomOffsetX;
         int clickY = refillButton.y + randomOffsetY;
         
+        // ===== LEICHTES VERWEILEN VOR DEM KLICK (menschlich) =====
         Path clickPath = new Path();
         clickPath.moveTo(clickX, clickY);
         
