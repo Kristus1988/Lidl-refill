@@ -43,10 +43,7 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -82,7 +79,7 @@ public class OverlayService extends AccessibilityService {
     private ArrayList<Double> volumeHistory = new ArrayList<>();
     private ArrayList<Long> timeHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10;
-    private double averageConsumptionRate = 0.03; // Standard-Fallback
+    private double averageConsumptionRate = 0.03;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -104,8 +101,6 @@ public class OverlayService extends AccessibilityService {
     private double lastDetectedVolume = 0.0;
     private long countdownStartTime = 0;
     private long currentWaitTime = 0;
-    private long lastOcrTime = 0;
-    private double lastOcrVolume = 0.0;
     
     // ============ CROP ============
     private int cropLeft = 0, cropTop = 0, cropRight = 0, cropBottom = 0;
@@ -583,7 +578,6 @@ public class OverlayService extends AccessibilityService {
                     double currentVolume = Double.parseDouble(volume.replace(",", "."));
                     lastDetectedVolume = currentVolume;
                     
-                    // ===== VERBRAUCHS-HISTORIE AKTUALISIEREN =====
                     updateConsumptionHistory(currentVolume);
                     
                     ocrResult = "📸 " + volume + " GB";
@@ -627,17 +621,14 @@ public class OverlayService extends AccessibilityService {
     private void updateConsumptionHistory(double currentVolume) {
         long currentTime = System.currentTimeMillis();
         
-        // Werte speichern
         volumeHistory.add(currentVolume);
         timeHistory.add(currentTime);
         
-        // Maximal 10 Werte behalten
         if (volumeHistory.size() > MAX_HISTORY) {
             volumeHistory.remove(0);
             timeHistory.remove(0);
         }
         
-        // Durchschnittlichen Verbrauch berechnen (wenn genug Daten vorhanden)
         if (volumeHistory.size() >= 2) {
             calculateAverageConsumption();
         }
@@ -657,13 +648,12 @@ public class OverlayService extends AccessibilityService {
             if (diff > 0) {
                 totalConsumption += diff;
                 long timeDiff = timeHistory.get(i) - timeHistory.get(i - 1);
-                totalTimeMinutes += timeDiff / 60000; // in Minuten
+                totalTimeMinutes += timeDiff / 60000;
             }
         }
         
         if (totalTimeMinutes > 0 && totalConsumption > 0) {
             averageConsumptionRate = totalConsumption / totalTimeMinutes;
-            // Begrenzung auf realistische Werte (0,005 - 0,15 GB/Min)
             averageConsumptionRate = Math.max(0.005, Math.min(0.15, averageConsumptionRate));
             Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         }
@@ -708,17 +698,11 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
         if (volume >= AUTOREFILL_THRESHOLD) {
-            // ===== ADAPTIVE WARTEZEIT BERECHNEN =====
             double diff = volume - AUTOREFILL_THRESHOLD;
             
-            // ===== DYNAMISCHE VERBRAUCHSRATE =====
-            // Verwende den tatsächlich gemessenen Durchschnitt
-            // Falls nicht genug Daten, Fallback auf Standardwerte
             double consumptionRate = averageConsumptionRate;
             
-            // Sicherheits-Fallback: Falls die Rate unrealistisch ist
             if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
-                // Standardwerte je nach Modus
                 switch (currentModeIndex) {
                     case 0: consumptionRate = 0.025; break;
                     case 1: consumptionRate = 0.04; break;
@@ -729,17 +713,13 @@ public class OverlayService extends AccessibilityService {
                 Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
             }
             
-            // Berechne Minuten bis zum Ziel
             double minutesDouble = diff / consumptionRate;
-            
-            // Zufällige Schwankung ±20% (menschlich)
             double randomFactor = 0.80 + (random.nextDouble() * 0.40);
             minutesDouble = minutesDouble * randomFactor;
             
-            // Begrenzung auf 3-15 Minuten
             long minutes = Math.round(Math.max(3, Math.min(15, minutesDouble)));
             long waitTime = minutes * 60000;
-            waitTime += (long)(random.nextDouble() * 60000); // + 0-59 Sekunden
+            waitTime += (long)(random.nextDouble() * 60000);
             
             updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
                 String.format("%.3f", consumptionRate) + " GB/Min)");
@@ -756,7 +736,6 @@ public class OverlayService extends AccessibilityService {
             });
             
         } else {
-            // < 0,30 GB → Refill
             updateStatus("♻️ Volumen < 0,30 → Refill");
             Toast.makeText(this, "♻️ Volumen < 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
@@ -790,7 +769,6 @@ public class OverlayService extends AccessibilityService {
         prefs.edit().putInt("consumption_index", 3).apply();
         spinnerConsumption.setSelection(3);
         
-        // Verbrauchshistorie zurücksetzen für neuen Durchlauf
         volumeHistory.clear();
         timeHistory.clear();
         averageConsumptionRate = 0.03;
@@ -858,6 +836,7 @@ public class OverlayService extends AccessibilityService {
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
+        // ============ SPINNER MIT WEISSER SCHRIFT ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this,
             android.R.layout.simple_spinner_dropdown_item,
@@ -868,7 +847,17 @@ public class OverlayService extends AccessibilityService {
                 View view = super.getView(position, convertView, parent);
                 TextView text = (TextView) view;
                 text.setTextColor(Color.WHITE);
-                text.setTextSize(12);
+                text.setTextSize(14);
+                return view;
+            }
+            
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                TextView text = (TextView) view;
+                text.setTextColor(Color.WHITE);
+                text.setBackgroundColor(Color.parseColor("#333333"));
+                text.setTextSize(14);
                 return view;
             }
         };
