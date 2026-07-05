@@ -142,14 +142,16 @@ public class OverlayService extends AccessibilityService {
     private Mode currentMode = Mode.NONE;
     
     // ============ MENSCHLICHE ZEITEN ============
-    private static final long WAIT_AFTER_SWIPE_MIN = 8000;
-    private static final long WAIT_AFTER_SWIPE_MAX = 14000;
-    private static final long WAIT_AFTER_REFILL_MIN = 8000;
-    private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    private static final long SCREENSHOT_WAIT_MIN = 4000;
-    private static final long SCREENSHOT_WAIT_MAX = 18000;
+    private static final long WAIT_AFTER_SWIPE_MIN = 7000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 15000;
+    private static final long WAIT_AFTER_REFILL_MIN = 7000;
+    private static final long WAIT_AFTER_REFILL_MAX = 15000;
+    private static final long SCREENSHOT_WAIT_MIN = 3000;
+    private static final long SCREENSHOT_WAIT_MAX = 20000;
     private static final long PRE_REFILL_WAIT_MIN = 1000;
-    private static final long PRE_REFILL_WAIT_MAX = 3000;
+    private static final long PRE_REFILL_WAIT_MAX = 4000;
+    private static final long SWIPE_DURATION_MIN = 300;
+    private static final long SWIPE_DURATION_MAX = 900;
     
     private static final double AUTOREFILL_THRESHOLD = 0.30;
     
@@ -293,11 +295,21 @@ public class OverlayService extends AccessibilityService {
         createCropOverlay();
     }
     
+    // ============ CREATE CROP OVERLAY (NUR RAHMEN) ============
     private void createCropOverlay() {
         FrameLayout container = new FrameLayout(this);
         container.setBackgroundColor(Color.TRANSPARENT);
         
         cropOverlayView = new View(this) {
+            private Paint borderPaint = new Paint();
+            
+            {
+                // ===== NUR GRÜNER RAHMEN =====
+                borderPaint.setColor(Color.GREEN);
+                borderPaint.setStrokeWidth(8);
+                borderPaint.setStyle(Paint.Style.STROKE);
+            }
+            
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
@@ -307,21 +319,7 @@ public class OverlayService extends AccessibilityService {
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
-                    Paint textPaint = new Paint();
-                    textPaint.setColor(Color.WHITE);
-                    textPaint.setTextSize(30);
-                    textPaint.setStyle(Paint.Style.FILL);
-                    textPaint.setShadowLayer(5, 0, 0, Color.BLACK);
-                    
-                    String coords = (int)left + "," + (int)top + " - " + (int)right + "," + (int)bottom;
-                    String size = "Größe: " + (int)(right-left) + "x" + (int)(bottom-top);
-                    canvas.drawText(coords, left + 10, top + 50, textPaint);
-                    canvas.drawText(size, left + 10, top + 100, textPaint);
-                    
-                    Paint borderPaint = new Paint();
-                    borderPaint.setColor(Color.argb(100, 255, 255, 255));
-                    borderPaint.setStrokeWidth(2);
-                    borderPaint.setStyle(Paint.Style.STROKE);
+                    // ===== NUR RAHMEN ZEICHNEN =====
                     canvas.drawRect(left, top, right, bottom, borderPaint);
                 }
             }
@@ -365,7 +363,7 @@ public class OverlayService extends AccessibilityService {
                             "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
                             Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein! Bitte größer ziehen.", Toast.LENGTH_LONG).show();
                         return true;
                     }
                     
@@ -766,14 +764,14 @@ public class OverlayService extends AccessibilityService {
             }
             
             double minutesDouble = diff / consumptionRate;
-            double randomFactor = 0.75 + (random.nextDouble() * 0.50);
+            double randomFactor = 0.65 + (random.nextDouble() * 0.70);
             minutesDouble = minutesDouble * randomFactor;
             
-            long minutes = Math.round(Math.max(3, Math.min(18, minutesDouble)));
+            long minutes = Math.round(Math.max(2, Math.min(20, minutesDouble)));
             long waitTime = minutes * 60000;
-            waitTime += (long)(random.nextDouble() * 60000);
-            waitTime += (long)(random.nextDouble() * 120000);
-            waitTime = Math.min(waitTime, 1200000);
+            waitTime += (long)(random.nextDouble() * 89000);
+            waitTime += (long)(random.nextDouble() * 180000);
+            waitTime = Math.min(waitTime, 1320000);
             
             long minutesDisplay = waitTime / 60000;
             updateStatus("♻️ Adaptiv: " + minutesDisplay + " Min (Rate: " + 
@@ -1216,7 +1214,7 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ============ SWIPE-GESTE MIT EINEM FINGER ============
+    // ============ SWIPE-GESTE ============
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1225,9 +1223,9 @@ public class OverlayService extends AccessibilityService {
         
         totalSwipes++;
         
-        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
-        long randomDuration = 400 + (long)(random.nextDouble() * 400);
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 60);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 60);
+        long randomDuration = SWIPE_DURATION_MIN + (long)(random.nextDouble() * (SWIPE_DURATION_MAX - SWIPE_DURATION_MIN));
         long randomDelay = (long)(random.nextDouble() * 500);
         
         int startX = swipeStart.x + randomOffsetX;
@@ -1238,13 +1236,12 @@ public class OverlayService extends AccessibilityService {
         Path path = new Path();
         path.moveTo(startX, startY);
         path.quadTo(
-            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
-            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50),
+            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 120),
+            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 70),
             endX,
             endY
         );
         
-        // ===== EIN FINGER (NICHT DREI) =====
         GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
         gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
         
@@ -1285,8 +1282,8 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 30);
-        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 30);
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
         long clickDuration = 50 + (long)(random.nextDouble() * 150);
         long randomDelay = 100 + (long)(random.nextDouble() * 400);
         
