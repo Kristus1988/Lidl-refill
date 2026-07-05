@@ -141,11 +141,23 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN ============
-    private static final long WAIT_AFTER_SWIPE_MIN = 9000;
-    private static final long WAIT_AFTER_SWIPE_MAX = 11000;
-    private static final long WAIT_AFTER_REFILL_MIN = 9000;
-    private static final long WAIT_AFTER_REFILL_MAX = 11000;
+    // ============ MENSCHLICHE ZEITEN ============
+    // Nach Swipe: 8-14 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_SWIPE_MIN = 8000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 14000;
+    
+    // Nach Refill: 8-14 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_REFILL_MIN = 8000;
+    private static final long WAIT_AFTER_REFILL_MAX = 14000;
+    
+    // Screenshot warten: 4-18 Sekunden (natürlicher)
+    private static final long SCREENSHOT_WAIT_MIN = 4000;
+    private static final long SCREENSHOT_WAIT_MAX = 18000;
+    
+    // Kurze Pause vor Refill: 1-3 Sekunden (menschlicher)
+    private static final long PRE_REFILL_WAIT_MIN = 1000;
+    private static final long PRE_REFILL_WAIT_MAX = 3000;
+    
     private static final double AUTOREFILL_THRESHOLD = 0.30;
     
     // ============ CONSUMPTION OPTIONS ============
@@ -444,11 +456,14 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
-        
-        handler.postDelayed(() -> {
-            findScreenshotInAllFolders(1);
-        }, 5000);
+        // ===== MENSCHLICHERE WARTEZEIT AUF SCREENSHOT (4-18 Sekunden) =====
+        long waitTime = SCREENSHOT_WAIT_MIN + (long)(random.nextDouble() * (SCREENSHOT_WAIT_MAX - SCREENSHOT_WAIT_MIN));
+        updateStatus("⏳ Warte auf Screenshot...");
+        startCountdown(waitTime, () -> {
+            if (isRunning) {
+                findScreenshotInAllFolders(1);
+            }
+        });
     }
     
     // ============ SCREENSHOT FINDEN ============
@@ -597,11 +612,13 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
+                        // ===== MENSCHLICHE KURZE PAUSE VOR REFILL (1-3 Sekunden) =====
+                        long preRefillWait = PRE_REFILL_WAIT_MIN + (long)(random.nextDouble() * (PRE_REFILL_WAIT_MAX - PRE_REFILL_WAIT_MIN));
                         handler.postDelayed(() -> {
                             if (isRunning) {
                                 clickRefillButton();
                             }
-                        }, 1000);
+                        }, preRefillWait);
                     }
                 }
                 scaledBitmap.recycle();
@@ -659,7 +676,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION (ALLE ZAHLENFORMATE) ============
+    // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -735,7 +752,7 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ ADAPTIVE AUTOREFILL LOGIK ============
+    // ============ ADAPTIVE AUTOREFILL LOGIK (MENSCHLICHER) ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
@@ -757,18 +774,31 @@ public class OverlayService extends AccessibilityService {
                 Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
             }
             
+            // ===== MENSCHLICHE BERECHNUNG MIT ZUFALLSSCHWANKUNG =====
             double minutesDouble = diff / consumptionRate;
-            double randomFactor = 0.80 + (random.nextDouble() * 0.40);
+            
+            // Zufällige Schwankung ±25% (menschlicher)
+            double randomFactor = 0.75 + (random.nextDouble() * 0.50);
             minutesDouble = minutesDouble * randomFactor;
             
-            long minutes = Math.round(Math.max(3, Math.min(15, minutesDouble)));
+            // Begrenzung auf 3-18 Minuten (menschlicher)
+            long minutes = Math.round(Math.max(3, Math.min(18, minutesDouble)));
             long waitTime = minutes * 60000;
+            
+            // Zusätzliche zufällige Sekunden (0-59)
             waitTime += (long)(random.nextDouble() * 60000);
             
-            updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
+            // Zusätzliche zufällige Minuten (0-2) für mehr Natürlichkeit
+            waitTime += (long)(random.nextDouble() * 120000);
+            
+            // Auf maximal 20 Minuten begrenzen
+            waitTime = Math.min(waitTime, 1200000); // 20 Minuten Maximum
+            
+            long minutesDisplay = waitTime / 60000;
+            updateStatus("♻️ Adaptiv: " + minutesDisplay + " Min (Rate: " + 
                 String.format("%.3f", consumptionRate) + " GB/Min)");
             Toast.makeText(this, 
-                "♻️ Bis 0,30 GB: " + minutes + " Min (aktuell " + volume + " GB)", 
+                "♻️ Bis 0,30 GB: " + minutesDisplay + " Min (aktuell " + volume + " GB)", 
                 Toast.LENGTH_SHORT).show();
             
             currentPhase = Phase.WAIT_AFTER_OCR;
@@ -780,14 +810,18 @@ public class OverlayService extends AccessibilityService {
             });
             
         } else {
+            // < 0,30 GB → Refill (mit menschlicher Pause)
             updateStatus("♻️ Volumen < 0,30 → Refill");
             Toast.makeText(this, "♻️ Volumen < 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
+            
+            // ===== MENSCHLICHE KURZE PAUSE VOR REFILL (1-3 Sekunden) =====
+            long preRefillWait = PRE_REFILL_WAIT_MIN + (long)(random.nextDouble() * (PRE_REFILL_WAIT_MAX - PRE_REFILL_WAIT_MIN));
             handler.postDelayed(() -> {
                 if (isRunning) {
                     clickRefillButton();
                 }
-            }, 1000);
+            }, preRefillWait);
         }
     }
     
@@ -821,10 +855,8 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN (MAXIMALE SWIPE-LÄNGE FÜR CHROME) ============
+    // ============ POSITIONEN (MAXIMALE SWIPE-LÄNGE) ============
     private void loadPositions() {
-        // ===== MAXIMALE SWIPE-GESTE FÜR CHROME-REFRESH =====
-        // Startet bei 20px (ganz oben) und endet bei 90% der Bildschirmhöhe
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 20);
         swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
