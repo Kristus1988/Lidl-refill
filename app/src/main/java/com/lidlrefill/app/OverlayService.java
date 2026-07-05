@@ -179,7 +179,6 @@ public class OverlayService extends AccessibilityService {
         loadCropCoordinates();
         loadPositions();
         
-        // ===== AUTOREFILL STANDARDMÄSSIG AUSWÄHLEN =====
         int savedIndex = prefs.getInt("consumption_index", 3);
         currentModeIndex = savedIndex;
         isAutoRefillSelected = (savedIndex == 3);
@@ -660,7 +659,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION ============
+    // ============ GB-EXTRACTION (ALLE ZAHLENFORMATE) ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -672,12 +671,15 @@ public class OverlayService extends AccessibilityService {
         String[] patterns = {
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
             "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
-            "([0-9]+[\\.,][0-9]{2})",
-            "(\\d+)\\s*(GB|Gb|gB|gb)",
-            "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
+            "(\\d+[\\.,]\\d+)",
+            "(\\d+)",
             "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
             "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
-            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)"
+            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
+            "(0[\\.,]\\d{2})",
+            "(\\d{2}[\\.,]\\d{2})",
+            "(\\d{3}[\\.,]\\d{2})"
         };
         
         for (String patternStr : patterns) {
@@ -687,11 +689,49 @@ public class OverlayService extends AccessibilityService {
                 String value = matcher.group(1).replace(",", ".");
                 try {
                     double val = Double.parseDouble(value);
-                    if (val > 0 && val < 10) return value;
-                } catch (Exception e) {}
+                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
+                    if (val > 0 && val < 1000) {
+                        return value;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Parse Fehler: " + e.getMessage());
+                }
             }
         }
         
+        Pattern specialPattern = Pattern.compile(
+            "(\\d+[\\.,]\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher specialMatcher = specialPattern.matcher(text);
+        if (specialMatcher.find()) {
+            String value = specialMatcher.group(1).replace(",", ".");
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
+                if (val > 0 && val < 1000) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Pattern wholePattern = Pattern.compile(
+            "(\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher wholeMatcher = wholePattern.matcher(text);
+        if (wholeMatcher.find()) {
+            String value = wholeMatcher.group(1);
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Ganze Zahl gefunden: " + value + " GB");
+                if (val > 0 && val < 1000) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
@@ -783,10 +823,13 @@ public class OverlayService extends AccessibilityService {
     
     // ============ POSITIONEN (LÄNGERE SWIPE-GESTE) ============
     private void loadPositions() {
+        // ===== LÄNGERE SWIPE-GESTE FÜR CHROME-REFRESH =====
+        // Startet bei 50px (ganz oben) und endet bei 50% der Bildschirmhöhe
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
-        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 80);    // ← LÄNGER: 80 statt 100
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 50);
         swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
-        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 80); // ← LÄNGER: -80 statt -100
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight / 2);
+        
         swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
         
         refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
@@ -868,7 +911,6 @@ public class OverlayService extends AccessibilityService {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
         
-        // ===== AUTOREFILL STANDARDMÄSSIG AUSWÄHLEN =====
         spinnerConsumption.setSelection(3);
         isAutoRefillSelected = true;
         
