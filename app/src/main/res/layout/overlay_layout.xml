@@ -64,6 +64,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="4dp">
 
+        <!-- Swipe Positionierung - GELB -->
         <Button
             android:id="@+id/btnSwipePlace"
             android:layout_width="0dp"
@@ -72,21 +73,25 @@
             android:text="⬇ Swipe"
             android:textSize="11sp"
             android:backgroundTint="#FFC107"
+            android:textColor="#000000"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
+        <!-- Refill Positionierung - BLAU (größerer Kreis durch mehr Padding) -->
         <Button
             android:id="@+id/btnRefillPlace"
             android:layout_width="0dp"
-            android:layout_height="32dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
-            android:text="🔴 Refill"
+            android:text="🔵 Refill"
             android:textSize="11sp"
-            android:backgroundTint="#F44336"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"
             android:layout_marginStart="2dp"
             android:layout_marginEnd="2dp"
-            android:padding="2dp"/>
+            android:padding="4dp"/>
 
+        <!-- Crop - ORANGE -->
         <Button
             android:id="@+id/btnCrop"
             android:layout_width="0dp"
@@ -94,9 +99,9 @@
             android:layout_weight="1"
             android:text="✂️ Crop"
             android:textSize="11sp"
-            android:backgroundTint="#9C27B0"
-            android:layout_marginStart="2dp"
+            android:backgroundTint="#FF6F00"
             android:textColor="#FFFFFF"
+            android:layout_marginStart="2dp"
             android:padding="2dp"/>
     </LinearLayout>
 
@@ -107,6 +112,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="4dp">
 
+        <!-- Swipe Test - GELB -->
         <Button
             android:id="@+id/btnSwipeTest"
             android:layout_width="0dp"
@@ -114,10 +120,12 @@
             android:layout_weight="1"
             android:text="S Test"
             android:textSize="11sp"
-            android:backgroundTint="#4CAF50"
+            android:backgroundTint="#FFC107"
+            android:textColor="#000000"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
+        <!-- Refill Test - BLAU -->
         <Button
             android:id="@+id/btnRefillTest"
             android:layout_width="0dp"
@@ -125,11 +133,13 @@
             android:layout_weight="1"
             android:text="R Test"
             android:textSize="11sp"
-            android:backgroundTint="#FF5722"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"
             android:layout_marginStart="2dp"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
+        <!-- OCR - ORANGE -->
         <Button
             android:id="@+id/btnOcrNow"
             android:layout_width="0dp"
@@ -138,8 +148,8 @@
             android:text="📸 OCR"
             android:textSize="11sp"
             android:backgroundTint="#FF6F00"
-            android:layout_marginStart="2dp"
             android:textColor="#FFFFFF"
+            android:layout_marginStart="2dp"
             android:padding="2dp"/>
     </LinearLayout>
 
@@ -150,6 +160,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="4dp">
 
+        <!-- Start - GRÜN -->
         <Button
             android:id="@+id/btnStartAuto"
             android:layout_width="0dp"
@@ -157,10 +168,12 @@
             android:layout_weight="1"
             android:text="▶ Start"
             android:textSize="11sp"
-            android:backgroundTint="#2196F3"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF"
             android:layout_marginEnd="2dp"
             android:padding="2dp"/>
 
+        <!-- Stop - ROT -->
         <Button
             android:id="@+id/btnStopAuto"
             android:layout_width="0dp"
@@ -169,19 +182,21 @@
             android:text="⏹ Stop"
             android:textSize="11sp"
             android:backgroundTint="#F44336"
+            android:textColor="#FFFFFF"
             android:enabled="false"
             android:layout_marginStart="2dp"
             android:padding="2dp"/>
     </LinearLayout>
 
-    <!-- ===== SCHLIEßEN-BUTTON ===== -->
+    <!-- ===== SCHLIEßEN-BUTTON - ROT mit weißer Schrift ===== -->
     <Button
         android:id="@+id/btnClose"
         android:layout_width="match_parent"
         android:layout_height="30dp"
         android:text="✕ Schließen"
         android:textSize="11sp"
-        android:backgroundTint="#666666"
+        android:backgroundTint="#F44336"
+        android:textColor="#FFFFFF"
         android:padding="2dp"/>
 
 </LinearLayout>
