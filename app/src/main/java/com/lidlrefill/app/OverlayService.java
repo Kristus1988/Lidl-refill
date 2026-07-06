@@ -141,12 +141,23 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN ============
-    private static final long WAIT_AFTER_SWIPE_MIN = 9000;
-    private static final long WAIT_AFTER_SWIPE_MAX = 11000;
-    private static final long WAIT_AFTER_REFILL_MIN = 9000;
-    private static final long WAIT_AFTER_REFILL_MAX = 11000;
+    // ============ MENSCHLICHE WARTEZEITEN ============
+    // Nach Swipe: 4-7 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_SWIPE_MIN = 4000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 7000;
+    
+    // Nach Refill: 5-9 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_REFILL_MIN = 5000;
+    private static final long WAIT_AFTER_REFILL_MAX = 9000;
+    
+    // Warten auf Screenshot: 8-18 Sekunden (menschlicher, da Handy reagieren muss)
+    private static final long SCREENSHOT_WAIT_MIN = 8000;
+    private static final long SCREENSHOT_WAIT_MAX = 18000;
+    
+    // Adaptive Wartezeit: 2-12 Minuten (menschlicher)
     private static final double AUTOREFILL_THRESHOLD = 0.30;
+    private static final long AUTOREFILL_WAIT_MIN = 120000;  // 2 Minuten
+    private static final long AUTOREFILL_WAIT_MAX = 720000;  // 12 Minuten
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -444,11 +455,14 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
-        
-        handler.postDelayed(() -> {
-            findScreenshotInAllFolders(1);
-        }, 5000);
+        // ===== MENSCHLICHE WARTEZEIT AUF SCREENSHOT =====
+        long waitTime = SCREENSHOT_WAIT_MIN + (long)(random.nextDouble() * (SCREENSHOT_WAIT_MAX - SCREENSHOT_WAIT_MIN));
+        updateStatus("⏳ Warte auf Screenshot...");
+        startCountdown(waitTime, () -> {
+            if (isRunning) {
+                findScreenshotInAllFolders(1);
+            }
+        });
     }
     
     // ============ SCREENSHOT FINDEN ============
@@ -757,13 +771,15 @@ public class OverlayService extends AccessibilityService {
                 Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
             }
             
+            // ===== MENSCHLICHE BERECHNUNG MIT ZUFALL =====
             double minutesDouble = diff / consumptionRate;
-            double randomFactor = 0.80 + (random.nextDouble() * 0.40);
+            double randomFactor = 0.70 + (random.nextDouble() * 0.60); // 70%-130%
             minutesDouble = minutesDouble * randomFactor;
             
-            long minutes = Math.round(Math.max(3, Math.min(15, minutesDouble)));
+            // Begrenzung auf 2-12 Minuten
+            long minutes = Math.round(Math.max(2, Math.min(12, minutesDouble)));
             long waitTime = minutes * 60000;
-            waitTime += (long)(random.nextDouble() * 60000);
+            waitTime += (long)(random.nextDouble() * 60000); // + 0-59 Sekunden
             
             updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
                 String.format("%.3f", consumptionRate) + " GB/Min)");
@@ -821,14 +837,12 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN (MAXIMALE SWIPE-LÄNGE FÜR CHROME) ============
+    // ============ POSITIONEN ============
     private void loadPositions() {
-        // ===== MAXIMALE SWIPE-GESTE FÜR CHROME-REFRESH =====
-        // Startet bei 20px (ganz oben) und endet bei 90% der Bildschirmhöhe
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
-        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 20);
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 10);
         swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
-        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, (int)(screenHeight * 0.9));
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 10);
         
         swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
         
