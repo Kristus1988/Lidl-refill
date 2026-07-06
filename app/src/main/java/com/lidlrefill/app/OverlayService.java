@@ -141,11 +141,23 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN ============
-    private static final long WAIT_AFTER_SWIPE_MIN = 9000;
-    private static final long WAIT_AFTER_SWIPE_MAX = 11000;
-    private static final long WAIT_AFTER_REFILL_MIN = 9000;
-    private static final long WAIT_AFTER_REFILL_MAX = 11000;
+    // ============ ZEITEN (MENSCHLICHER) ============
+    // Wartezeit nach Swipe: 8-14 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_SWIPE_MIN = 8000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 14000;
+    
+    // Wartezeit nach Refill: 8-14 Sekunden (menschlicher)
+    private static final long WAIT_AFTER_REFILL_MIN = 8000;
+    private static final long WAIT_AFTER_REFILL_MAX = 14000;
+    
+    // AUTOREFILL Wartezeit: 4-9 Minuten (menschlicher)
+    private static final long AUTOREFILL_WAIT_MIN = 240000;  // 4 Minuten
+    private static final long AUTOREFILL_WAIT_MAX = 540000;  // 9 Minuten
+    
+    // ===== NICHT ÄNDERN! OCR & CROP WARTEZEITEN =====
+    // Wartezeit auf Screenshot: 5-15 Sekunden (bleibt)
+    // OCR und Crop: unverändert
+    
     private static final double AUTOREFILL_THRESHOLD = 0.30;
     
     // ============ CONSUMPTION OPTIONS ============
@@ -758,10 +770,10 @@ public class OverlayService extends AccessibilityService {
             }
             
             double minutesDouble = diff / consumptionRate;
-            double randomFactor = 0.80 + (random.nextDouble() * 0.40);
+            double randomFactor = 0.70 + (random.nextDouble() * 0.60); // 30% Schwankung für Menschlichkeit
             minutesDouble = minutesDouble * randomFactor;
             
-            long minutes = Math.round(Math.max(3, Math.min(15, minutesDouble)));
+            long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
             long waitTime = minutes * 60000;
             waitTime += (long)(random.nextDouble() * 60000);
             
