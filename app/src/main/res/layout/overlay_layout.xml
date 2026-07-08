@@ -106,7 +106,7 @@
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:text="✂️ Crop & OCR"
+                    android:text="✂️ Crop &amp; OCR"
                     android:textColor="@android:color/white"
                     android:background="#FF6F00"
                     android:layout_marginEnd="4dp" />
