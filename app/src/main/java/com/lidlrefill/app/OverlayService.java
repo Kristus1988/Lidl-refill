@@ -30,7 +30,6 @@ import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -57,7 +56,6 @@ public class OverlayService extends AccessibilityService {
     private FrameLayout floatingView;
     private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
     private Spinner spinnerConsumption;
-    private EditText etPuffer;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
     private Button btnClose, btnCrop;
@@ -76,10 +74,6 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_CROP_TOP = "crop_top";
     private static final String PREF_CROP_RIGHT = "crop_right";
     private static final String PREF_CROP_BOTTOM = "crop_bottom";
-    private static final String PREF_PUFFER = "puffer_value";
-    
-    // ============ PUFFER ============
-    private double pufferThreshold = 0.30; // Standardwert
     
     // ============ VERBRAUCHS-HISTORIE ============
     private ArrayList<Double> volumeHistory = new ArrayList<>();
@@ -147,20 +141,21 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN (MENSCHLICHER) ============
+    // ============ ZEITEN ============
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    private static final long AUTOREFILL_WAIT_MIN = 240000;
-    private static final long AUTOREFILL_WAIT_MAX = 540000;
+    
+    // ===== NEUER PUFFER: 0,50 GB =====
+    private static final double AUTOREFILL_THRESHOLD = 0.50;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL"
+        "♻️ AUTOREFILL (0,50 GB)"
     };
     private int currentModeIndex = 0;
     
@@ -185,7 +180,6 @@ public class OverlayService extends AccessibilityService {
         
         loadCropCoordinates();
         loadPositions();
-        loadPuffer();
         
         int savedIndex = prefs.getInt("consumption_index", 3);
         currentModeIndex = savedIndex;
@@ -217,24 +211,6 @@ public class OverlayService extends AccessibilityService {
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
-    }
-    
-    // ============ PUFFER LADEN/SPEICHERN ============
-    private void loadPuffer() {
-        String saved = prefs.getString(PREF_PUFFER, "0.30");
-        try {
-            pufferThreshold = Double.parseDouble(saved);
-            if (pufferThreshold < 0.10) pufferThreshold = 0.10;
-            if (pufferThreshold > 2.00) pufferThreshold = 2.00;
-        } catch (Exception e) {
-            pufferThreshold = 0.30;
-        }
-        Log.d(TAG, "🎯 Puffer geladen: " + pufferThreshold + " GB");
-    }
-    
-    private void savePuffer() {
-        prefs.edit().putString(PREF_PUFFER, String.valueOf(pufferThreshold)).apply();
-        Log.d(TAG, "💾 Puffer gespeichert: " + pufferThreshold + " GB");
     }
     
     // ============ CROP ============
@@ -685,7 +661,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION ============
+    // ============ GB-EXTRACTION MIT MAXIMALBEGRENZUNG ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -694,8 +670,8 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
-        // ===== MAXIMALER VERBRAUCH =====
-        final double MAX_VOLUME = 100.00;
+        // ===== MAXIMALER VERBRAUCH (2.00 GB) =====
+        final double MAX_VOLUME = 2.00;
         
         String[] patterns = {
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
@@ -731,7 +707,7 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        Log.d(TAG, "❌ Kein GB-Wert gefunden");
+        Log.d(TAG, "❌ Kein GB-Wert im Bereich 0,01 - " + MAX_VOLUME + " gefunden");
         return null;
     }
     
@@ -740,52 +716,57 @@ public class OverlayService extends AccessibilityService {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
-        Log.d(TAG, "🎯 Aktueller Puffer = " + pufferThreshold + " GB");
         
-        // ===== MEHRSTUFIGE ANPASSUNG =====
+        // ===== MEHRSTUFIGE ANPASSUNG (0,50 GB PUFFER) =====
         long waitTime = 0;
         String reason = "";
-        double targetVolume = pufferThreshold;
+        double targetVolume = 0.50;
         
         if (volume > 50.0) {
+            // > 50 GB → 12-18 Stunden warten
             long hours = 12 + (long)(random.nextDouble() * 6);
             waitTime = hours * 3600000;
             targetVolume = 50.0;
             reason = "> 50 GB → " + hours + " Std";
             
         } else if (volume > 25.0) {
+            // > 25 GB → 8-12 Stunden
             long hours = 8 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 25.0;
             reason = "> 25 GB → " + hours + " Std";
             
         } else if (volume > 10.0) {
+            // > 10 GB → 4-8 Stunden
             long hours = 4 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 10.0;
             reason = "> 10 GB → " + hours + " Std";
             
         } else if (volume > 5.0) {
+            // > 5 GB → 2-4 Stunden
             long hours = 2 + (long)(random.nextDouble() * 2);
             waitTime = hours * 3600000;
             targetVolume = 5.0;
             reason = "> 5 GB → " + hours + " Std";
             
         } else if (volume > 2.0) {
+            // > 2 GB → 1-2 Stunden
             long hours = 1 + (long)(random.nextDouble());
             waitTime = hours * 3600000;
             targetVolume = 2.0;
             reason = "> 2 GB → " + hours + " Std";
             
         } else if (volume > 1.0) {
+            // > 1 GB → 30-60 Minuten
             long minutes = 30 + (long)(random.nextDouble() * 30);
             waitTime = minutes * 60000;
             targetVolume = 1.0;
             reason = "> 1 GB → " + minutes + " Min";
             
-        } else if (volume > pufferThreshold) {
-            // ===== ADAPTIVE WARTEZEIT BIS ZUM PUFFER =====
-            double diff = volume - pufferThreshold;
+        } else if (volume > AUTOREFILL_THRESHOLD) {
+            // > 0,50 GB → Adaptive Wartezeit (5-9 Minuten)
+            double diff = volume - AUTOREFILL_THRESHOLD;
             
             double consumptionRate = averageConsumptionRate;
             if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
@@ -805,13 +786,13 @@ public class OverlayService extends AccessibilityService {
             long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
             waitTime = minutes * 60000;
             waitTime += (long)(random.nextDouble() * 60000);
-            targetVolume = pufferThreshold;
+            targetVolume = AUTOREFILL_THRESHOLD;
             reason = "Adaptiv: " + minutes + " Min (auf " + targetVolume + " GB)";
             
         } else {
-            // ≤ Puffer → Refill
-            updateStatus("♻️ Volumen ≤ " + pufferThreshold + " → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ " + pufferThreshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            // ≤ 0,50 GB → Refill
+            updateStatus("♻️ Volumen ≤ 0,50 → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ 0,50 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -869,15 +850,11 @@ public class OverlayService extends AccessibilityService {
         prefs.edit().putInt("consumption_index", 3).apply();
         spinnerConsumption.setSelection(3);
         
-        // Puffer laden
-        loadPuffer();
-        etPuffer.setText(String.format("%.2f", pufferThreshold));
-        
         volumeHistory.clear();
         timeHistory.clear();
         averageConsumptionRate = 0.03;
         
-        Toast.makeText(this, "♻️ AUTOREFILL gestartet! (Puffer: " + pufferThreshold + " GB)", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
@@ -985,7 +962,6 @@ public class OverlayService extends AccessibilityService {
         tvCycle = controlView.findViewById(R.id.tvCycle);
         tvOcrResult = controlView.findViewById(R.id.tvOcrResult);
         spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
-        etPuffer = controlView.findViewById(R.id.etPuffer);
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
         btnOcrNow = controlView.findViewById(R.id.btnOcrNow);
@@ -995,36 +971,6 @@ public class OverlayService extends AccessibilityService {
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         btnClose = controlView.findViewById(R.id.btnClose);
         btnCrop = controlView.findViewById(R.id.btnCrop);
-        
-        // ============ PUFFER EINGABE ============
-        etPuffer.setText(String.format("%.2f", pufferThreshold));
-        
-        // Tastatur beim Klick auf das Feld
-        etPuffer.setOnFocusChangeListener((v, hasFocus) -> {
-            if (hasFocus) {
-                // Tastatur anzeigen
-                android.view.inputmethod.InputMethodManager imm = 
-                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                imm.showSoftInput(etPuffer, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
-            }
-        });
-        
-        // Puffer speichern bei Änderung
-        etPuffer.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || 
-                event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER) {
-                savePufferFromInput();
-                return true;
-            }
-            return false;
-        });
-        
-        // Auch bei Verlassen des Feldes speichern
-        etPuffer.setOnFocusChangeListener((v, hasFocus) -> {
-            if (!hasFocus) {
-                savePufferFromInput();
-            }
-        });
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
@@ -1069,7 +1015,7 @@ public class OverlayService extends AccessibilityService {
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
                 if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Puffer: " + pufferThreshold + " GB)", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
                 }
             }
             @Override
@@ -1111,6 +1057,7 @@ public class OverlayService extends AccessibilityService {
             performScreenshotAndOcr();
         });
         
+        // ===== SWIPE TEST =====
         btnSwipeTest.setOnClickListener(v -> {
             if (!swipePlaced) {
                 Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_LONG).show();
@@ -1126,6 +1073,7 @@ public class OverlayService extends AccessibilityService {
             }
         });
         
+        // ===== REFILL TEST =====
         btnRefillTest.setOnClickListener(v -> {
             if (!refillPlaced) {
                 Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_LONG).show();
@@ -1166,7 +1114,6 @@ public class OverlayService extends AccessibilityService {
             stopAutomation();
             hideVisuals();
             savePositions();
-            savePuffer();
             if (floatingView != null && windowManager != null) {
                 try { windowManager.removeView(floatingView); } catch (Exception e) {}
             }
@@ -1229,35 +1176,6 @@ public class OverlayService extends AccessibilityService {
         floatingView = mainContainer;
         floatingView.setElevation(999);
         windowManager.addView(floatingView, params);
-    }
-    
-    // ============ PUFFER SPEICHERN ============
-    private void savePufferFromInput() {
-        if (etPuffer == null) return;
-        
-        String text = etPuffer.getText().toString().trim();
-        if (text.isEmpty()) {
-            etPuffer.setText(String.format("%.2f", pufferThreshold));
-            return;
-        }
-        
-        try {
-            double value = Double.parseDouble(text.replace(",", "."));
-            if (value < 0.10) {
-                value = 0.10;
-                Toast.makeText(this, "⚠️ Minimal 0,10 GB", Toast.LENGTH_SHORT).show();
-            } else if (value > 2.00) {
-                value = 2.00;
-                Toast.makeText(this, "⚠️ Maximal 2,00 GB", Toast.LENGTH_SHORT).show();
-            }
-            pufferThreshold = value;
-            etPuffer.setText(String.format("%.2f", pufferThreshold));
-            savePuffer();
-            Toast.makeText(this, "✅ Puffer auf " + pufferThreshold + " GB gesetzt", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            etPuffer.setText(String.format("%.2f", pufferThreshold));
-            Toast.makeText(this, "⚠️ Bitte gültige Zahl eingeben", Toast.LENGTH_SHORT).show();
-        }
     }
     
     // ============ SWIPE TEST (NUR GESTE) ============
@@ -1572,7 +1490,6 @@ public class OverlayService extends AccessibilityService {
     public void onDestroy() {
         super.onDestroy();
         savePositions();
-        savePuffer();
         hideVisuals();
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
