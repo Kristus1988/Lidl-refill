@@ -64,8 +64,7 @@
                 android:layout_height="48dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/spinner_border"
-                android:popupBackground="@android:color/black"
-                android:entries="@array/mode_entries" />
+                android:popupBackground="@android:color/black" />
 
             <!-- Button Grid -->
             <LinearLayout
@@ -145,7 +144,7 @@
         android:clickable="true">
 
         <!-- Crop Handles -->
-        <ImageView
+        <ImageButton
             android:id="@+id/cropHandleTL"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -154,7 +153,7 @@
             android:background="#FFFFFF"
             android:padding="8dp" />
 
-        <ImageView
+        <ImageButton
             android:id="@+id/cropHandleBR"
             android:layout_width="40dp"
             android:layout_height="40dp"
