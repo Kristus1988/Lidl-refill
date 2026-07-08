@@ -135,7 +135,7 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- Crop Overlay - Vereinfacht (ohne Drawables) -->
+    <!-- Crop Overlay -->
     <FrameLayout
         android:id="@+id/cropOverlay"
         android:layout_width="300dp"
@@ -144,27 +144,24 @@
         android:background="#44FF0000"
         android:clickable="true">
 
-        <!-- Crop Handle Top-Left -->
-        <View
+        <!-- Crop Handles -->
+        <ImageView
             android:id="@+id/cropHandleTL"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_gravity="top|start"
+            android:src="@drawable/ic_crop_handle"
             android:background="#FFFFFF"
-            android:elevation="8dp"
-            android:layout_marginLeft="-8dp"
-            android:layout_marginTop="-8dp" />
+            android:padding="8dp" />
 
-        <!-- Crop Handle Bottom-Right -->
-        <View
+        <ImageView
             android:id="@+id/cropHandleBR"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_gravity="bottom|end"
+            android:src="@drawable/ic_crop_handle"
             android:background="#FFFFFF"
-            android:elevation="8dp"
-            android:layout_marginRight="-8dp"
-            android:layout_marginBottom="-8dp" />
+            android:padding="8dp" />
 
     </FrameLayout>
 
