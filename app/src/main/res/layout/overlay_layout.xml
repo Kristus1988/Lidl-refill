@@ -7,7 +7,6 @@
     android:padding="14dp"
     android:elevation="999dp">
 
-    <!-- ===== STATUSZEILE ===== -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
@@ -46,50 +45,6 @@
         android:singleLine="true"
         android:layout_marginBottom="6dp"/>
 
-    <!-- ===== PUFFER-EINGABE ===== -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginBottom="6dp"
-        android:gravity="center_vertical">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎯 Puffer:"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:layout_marginEnd="8dp"/>
-
-        <EditText
-            android:id="@+id/etPuffer"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:inputType="numberDecimal"
-            android:text="0.30"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:background="@drawable/spinner_border"
-            android:padding="6dp"
-            android:gravity="center"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:clickable="true"
-            android:cursorVisible="true"/>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=" GB"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:layout_marginStart="6dp"/>
-
-    </LinearLayout>
-
-    <!-- ===== SPINNER ===== -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
@@ -100,7 +55,6 @@
         android:textColor="#FFFFFF"
         android:padding="8dp"/>
 
-    <!-- ===== POSITIONIERUNGS-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -145,7 +99,6 @@
             android:padding="4dp"/>
     </LinearLayout>
 
-    <!-- ===== TEST-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -190,7 +143,6 @@
             android:padding="4dp"/>
     </LinearLayout>
 
-    <!-- ===== AUTOMATIK-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -223,7 +175,6 @@
             android:padding="4dp"/>
     </LinearLayout>
 
-    <!-- ===== SCHLIEßEN-BUTTON ===== -->
     <Button
         android:id="@+id/btnClose"
         android:layout_width="match_parent"
