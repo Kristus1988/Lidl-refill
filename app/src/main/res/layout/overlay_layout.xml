@@ -144,7 +144,7 @@
         android:background="#44FF0000"
         android:clickable="true">
 
-        <!-- Crop Handle Top-Left - Als View statt ImageView -->
+        <!-- Crop Handle Top-Left -->
         <View
             android:id="@+id/cropHandleTL"
             android:layout_width="20dp"
@@ -155,7 +155,7 @@
             android:layout_marginLeft="-8dp"
             android:layout_marginTop="-8dp" />
 
-        <!-- Crop Handle Bottom-Right - Als View statt ImageView -->
+        <!-- Crop Handle Bottom-Right -->
         <View
             android:id="@+id/cropHandleBR"
             android:layout_width="20dp"
