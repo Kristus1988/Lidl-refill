@@ -7,6 +7,7 @@
     android:padding="14dp"
     android:elevation="999dp">
 
+    <!-- ===== STATUSZEILE ===== -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
@@ -45,6 +46,7 @@
         android:singleLine="true"
         android:layout_marginBottom="6dp"/>
 
+    <!-- ===== SPINNER ===== -->
     <Spinner
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
@@ -55,6 +57,7 @@
         android:textColor="#FFFFFF"
         android:padding="8dp"/>
 
+    <!-- ===== POSITIONIERUNGS-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -99,6 +102,7 @@
             android:padding="4dp"/>
     </LinearLayout>
 
+    <!-- ===== TEST-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -143,6 +147,7 @@
             android:padding="4dp"/>
     </LinearLayout>
 
+    <!-- ===== AUTOMATIK-BUTTONS ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -175,6 +180,7 @@
             android:padding="4dp"/>
     </LinearLayout>
 
+    <!-- ===== SCHLIEßEN-BUTTON ===== -->
     <Button
         android:id="@+id/btnClose"
         android:layout_width="match_parent"
