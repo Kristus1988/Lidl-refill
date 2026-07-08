@@ -30,6 +30,7 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -74,8 +75,8 @@ public class OverlayService extends AccessibilityService {
     private Button btnClose;
     private Spinner modeSpinner;
     private LinearLayout cropOverlay;
-    private View cropHandleTL;
-    private View cropHandleBR;
+    private ImageButton cropHandleTL;
+    private ImageButton cropHandleBR;
     private ScrollView scrollView;
 
     // Crop
@@ -132,21 +133,25 @@ public class OverlayService extends AccessibilityService {
         super.onCreate();
         Log.d(TAG, "OverlayService created");
         
-        prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
-        createNotificationChannel();
-        startForeground(NOTIFICATION_ID, createNotification());
-        
-        textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-        ocrExecutor = Executors.newSingleThreadExecutor();
-        
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        createOverlay();
-        loadCropRect();
-        updateCropOverlay();
-        
-        // Start Auto-Refill if it was running
-        if (prefs.getBoolean("auto_running", false)) {
-            startAutoRefill();
+        try {
+            prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+            createNotificationChannel();
+            startForeground(NOTIFICATION_ID, createNotification());
+            
+            textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+            ocrExecutor = Executors.newSingleThreadExecutor();
+            
+            windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            createOverlay();
+            loadCropRect();
+            updateCropOverlay();
+            
+            // Start Auto-Refill if it was running
+            if (prefs.getBoolean("auto_running", false)) {
+                startAutoRefill();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onCreate: " + e.getMessage(), e);
         }
     }
 
@@ -361,33 +366,28 @@ public class OverlayService extends AccessibilityService {
     private void updateCropOverlay() {
         if (cropOverlay == null || cropOverlay.getVisibility() != View.VISIBLE) return;
         
-        try {
-            // Get screen dimensions
-            DisplayMetrics metrics = new DisplayMetrics();
-            windowManager.getDefaultDisplay().getMetrics(metrics);
+        // Get screen dimensions
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
 
-            // Update crop rectangle position
-            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) cropOverlay.getLayoutParams();
-            params.leftMargin = cropRect.left;
-            params.topMargin = cropRect.top;
-            params.width = cropRect.right - cropRect.left;
-            params.height = cropRect.bottom - cropRect.top;
-            cropOverlay.setLayoutParams(params);
+        // Update crop rectangle position
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) cropOverlay.getLayoutParams();
+        params.leftMargin = cropRect.left;
+        params.topMargin = cropRect.top;
+        params.width = cropRect.right - cropRect.left;
+        params.height = cropRect.bottom - cropRect.top;
+        cropOverlay.setLayoutParams(params);
 
-            // Update handle positions
-            FrameLayout.LayoutParams tlParams = (FrameLayout.LayoutParams) cropHandleTL.getLayoutParams();
-            tlParams.leftMargin = -8;
-            tlParams.topMargin = -8;
-            cropHandleTL.setLayoutParams(tlParams);
+        // Update handle positions
+        FrameLayout.LayoutParams tlParams = (FrameLayout.LayoutParams) cropHandleTL.getLayoutParams();
+        tlParams.leftMargin = -20;
+        tlParams.topMargin = -20;
+        cropHandleTL.setLayoutParams(tlParams);
 
-            FrameLayout.LayoutParams brParams = (FrameLayout.LayoutParams) cropHandleBR.getLayoutParams();
-            brParams.leftMargin = params.width - 12;
-            brParams.topMargin = params.height - 12;
-            cropHandleBR.setLayoutParams(brParams);
-            
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating crop overlay: " + e.getMessage());
-        }
+        FrameLayout.LayoutParams brParams = (FrameLayout.LayoutParams) cropHandleBR.getLayoutParams();
+        brParams.leftMargin = params.width - 20;
+        brParams.topMargin = params.height - 20;
+        cropHandleBR.setLayoutParams(brParams);
     }
 
     private void saveCropRect() {
@@ -781,8 +781,6 @@ public class OverlayService extends AccessibilityService {
     }
 
     private void performRefill() {
-        // Find and click the Refill button
-        // This is a simplified version - you might need to adapt this based on the actual UI
         runOnUiThread(() -> {
             statusText.setText("✅ Refill-Button gedrückt");
             ocrResultText.setText("🔄 Refill durchgeführt!");
