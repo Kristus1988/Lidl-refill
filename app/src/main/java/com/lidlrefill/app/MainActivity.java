@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
         btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         btnRequestStorage = findViewById(R.id.btnRequestStorage);
         
-        // ===== 1. OVERLAY =====
+        // 1. Overlay
         btnRequestPermissions.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!Settings.canDrawOverlays(this)) {
@@ -50,16 +50,13 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
             }
-            // Nach Overlay → Speicher
             requestStoragePermission();
         });
         
-        // ===== 2. SPEICHER =====
-        btnRequestStorage.setOnClickListener(v -> {
-            requestStoragePermission();
-        });
+        // 2. Speicher
+        btnRequestStorage.setOnClickListener(v -> requestStoragePermission());
         
-        // ===== 3. ACCESSIBILITY =====
+        // 3. Accessibility
         btnRefreshAccessibility.setOnClickListener(v -> {
             Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
@@ -98,7 +95,6 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent, MANAGE_STORAGE_REQUEST);
             } else {
                 Toast.makeText(this, "✅ Speicherzugriff bereits gewährt!", Toast.LENGTH_SHORT).show();
-                // Nach Speicher → Accessibility
                 requestAccessibilityPermission();
             }
         } else {
