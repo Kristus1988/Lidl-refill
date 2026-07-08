@@ -141,13 +141,11 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN (MENSCHLICHER) ============
+    // ============ ZEITEN ============
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    private static final long AUTOREFILL_WAIT_MIN = 240000;
-    private static final long AUTOREFILL_WAIT_MAX = 540000;
     private static final double AUTOREFILL_THRESHOLD = 0.30;
     
     // ============ CONSUMPTION OPTIONS ============
@@ -661,7 +659,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION (ALLE ZAHLENFORMATE) ============
+    // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -701,53 +699,68 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        Pattern specialPattern = Pattern.compile(
-            "(\\d+[\\.,]\\d+)\\s*GB",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher specialMatcher = specialPattern.matcher(text);
-        if (specialMatcher.find()) {
-            String value = specialMatcher.group(1).replace(",", ".");
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
-                if (val > 0 && val < 1000) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
-        Pattern wholePattern = Pattern.compile(
-            "(\\d+)\\s*GB",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher wholeMatcher = wholePattern.matcher(text);
-        if (wholeMatcher.find()) {
-            String value = wholeMatcher.group(1);
-            try {
-                double val = Double.parseDouble(value);
-                Log.d(TAG, "🔍 Ganze Zahl gefunden: " + value + " GB");
-                if (val > 0 && val < 1000) {
-                    return value;
-                }
-            } catch (Exception e) {}
-        }
-        
         Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
-    // ============ ADAPTIVE AUTOREFILL LOGIK ============
+    // ============ INTELLIGENTE AUTOREFILL LOGIK ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        if (volume >= AUTOREFILL_THRESHOLD) {
+        // ===== MEHRSTUFIGE ANPASSUNG =====
+        long waitTime = 0;
+        String reason = "";
+        double targetVolume = 0.30;
+        
+        if (volume > 50.0) {
+            // > 50 GB → 12-18 Stunden warten
+            long hours = 12 + (long)(random.nextDouble() * 6);
+            waitTime = hours * 3600000;
+            targetVolume = 50.0;
+            reason = "> 50 GB → " + hours + " Std";
+            
+        } else if (volume > 25.0) {
+            // > 25 GB → 8-12 Stunden
+            long hours = 8 + (long)(random.nextDouble() * 4);
+            waitTime = hours * 3600000;
+            targetVolume = 25.0;
+            reason = "> 25 GB → " + hours + " Std";
+            
+        } else if (volume > 10.0) {
+            // > 10 GB → 4-8 Stunden
+            long hours = 4 + (long)(random.nextDouble() * 4);
+            waitTime = hours * 3600000;
+            targetVolume = 10.0;
+            reason = "> 10 GB → " + hours + " Std";
+            
+        } else if (volume > 5.0) {
+            // > 5 GB → 2-4 Stunden
+            long hours = 2 + (long)(random.nextDouble() * 2);
+            waitTime = hours * 3600000;
+            targetVolume = 5.0;
+            reason = "> 5 GB → " + hours + " Std";
+            
+        } else if (volume > 2.0) {
+            // > 2 GB → 1-2 Stunden
+            long hours = 1 + (long)(random.nextDouble());
+            waitTime = hours * 3600000;
+            targetVolume = 2.0;
+            reason = "> 2 GB → " + hours + " Std";
+            
+        } else if (volume > 1.0) {
+            // > 1 GB → 30-60 Minuten
+            long minutes = 30 + (long)(random.nextDouble() * 30);
+            waitTime = minutes * 60000;
+            targetVolume = 1.0;
+            reason = "> 1 GB → " + minutes + " Min";
+            
+        } else if (volume > AUTOREFILL_THRESHOLD) {
+            // > 0,30 GB → Adaptive Wartezeit (4-9 Minuten)
             double diff = volume - AUTOREFILL_THRESHOLD;
             
             double consumptionRate = averageConsumptionRate;
-            
             if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
                 switch (currentModeIndex) {
                     case 0: consumptionRate = 0.025; break;
@@ -756,7 +769,6 @@ public class OverlayService extends AccessibilityService {
                     case 3: 
                     default: consumptionRate = 0.03; break;
                 }
-                Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
             }
             
             double minutesDouble = diff / consumptionRate;
@@ -764,33 +776,48 @@ public class OverlayService extends AccessibilityService {
             minutesDouble = minutesDouble * randomFactor;
             
             long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
-            long waitTime = minutes * 60000;
+            waitTime = minutes * 60000;
             waitTime += (long)(random.nextDouble() * 60000);
-            
-            updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
-                String.format("%.3f", consumptionRate) + " GB/Min)");
-            Toast.makeText(this, 
-                "♻️ Bis 0,30 GB: " + minutes + " Min (aktuell " + volume + " GB)", 
-                Toast.LENGTH_SHORT).show();
-            
-            currentPhase = Phase.WAIT_AFTER_OCR;
-            startCountdown(waitTime, () -> {
-                if (isRunning) {
-                    currentPhase = Phase.SWIPE;
-                    performSwipeGesture();
-                }
-            });
+            targetVolume = AUTOREFILL_THRESHOLD;
+            reason = "Adaptiv: " + minutes + " Min (auf " + targetVolume + " GB)";
             
         } else {
-            updateStatus("♻️ Volumen < 0,30 → Refill");
-            Toast.makeText(this, "♻️ Volumen < 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            // ≤ 0,30 GB → Refill
+            updateStatus("♻️ Volumen ≤ 0,30 → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
                     clickRefillButton();
                 }
             }, 1000);
+            return;
         }
+        
+        // ===== WARTEZEIT ANZEIGEN =====
+        long minutes = waitTime / 60000;
+        long hours = minutes / 60;
+        minutes = minutes % 60;
+        
+        if (hours > 0) {
+            updateStatus("♻️ Warte " + hours + " Std " + minutes + " Min (" + reason + ")");
+            Toast.makeText(this, 
+                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + targetVolume + " GB", 
+                Toast.LENGTH_LONG).show();
+        } else {
+            updateStatus("♻️ Warte " + minutes + " Min (" + reason + ")");
+            Toast.makeText(this, 
+                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + targetVolume + " GB", 
+                Toast.LENGTH_LONG).show();
+        }
+        
+        currentPhase = Phase.WAIT_AFTER_OCR;
+        startCountdown(waitTime, () -> {
+            if (isRunning) {
+                currentPhase = Phase.SWIPE;
+                performSwipeGesture();
+            }
+        });
     }
     
     private void startAutoRefill() {
@@ -849,7 +876,7 @@ public class OverlayService extends AccessibilityService {
             .apply();
     }
     
-    // ============ VISUAL HELPERS (GRÖSSERER REFILL-KREIS) ============
+    // ============ VISUAL HELPERS ============
     private void createVisualHelpers() {
         swipeVisual = new View(this) {
             @Override
@@ -1040,7 +1067,6 @@ public class OverlayService extends AccessibilityService {
             }
         });
         
-        // ===== REFILL TEST =====
         btnRefillTest.setOnClickListener(v -> {
             if (!refillPlaced) {
                 Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_LONG).show();
