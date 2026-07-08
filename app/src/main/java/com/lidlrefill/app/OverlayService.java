@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.Path;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -47,8 +48,6 @@ import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.nio.ByteBuffer;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -76,8 +75,8 @@ public class OverlayService extends AccessibilityService {
     private Button btnClose;
     private Spinner modeSpinner;
     private LinearLayout cropOverlay;
-    private ImageButton cropHandleTL;
-    private ImageButton cropHandleBR;
+    private View cropHandleTL;
+    private View cropHandleBR;
     private ScrollView scrollView;
 
     // Crop
@@ -350,7 +349,7 @@ public class OverlayService extends AccessibilityService {
             updateCropOverlay();
         } else {
             cropOverlay.setVisibility(View.GONE);
-            btnCrop.setText("✂️ Crop & OCR");
+            btnCrop.setText("✂️ Crop &amp; OCR");
             saveCropRect();
         }
     }
@@ -374,13 +373,13 @@ public class OverlayService extends AccessibilityService {
 
         // Update handle positions
         FrameLayout.LayoutParams tlParams = (FrameLayout.LayoutParams) cropHandleTL.getLayoutParams();
-        tlParams.leftMargin = -20;
-        tlParams.topMargin = -20;
+        tlParams.leftMargin = -8;
+        tlParams.topMargin = -8;
         cropHandleTL.setLayoutParams(tlParams);
 
         FrameLayout.LayoutParams brParams = (FrameLayout.LayoutParams) cropHandleBR.getLayoutParams();
-        brParams.leftMargin = params.width - 20;
-        brParams.topMargin = params.height - 20;
+        brParams.leftMargin = params.width - 12;
+        brParams.topMargin = params.height - 12;
         cropHandleBR.setLayoutParams(brParams);
     }
 
@@ -510,7 +509,7 @@ public class OverlayService extends AccessibilityService {
             runOnUiThread(() -> {
                 statusText.setText("❌ Screenshot fehlgeschlagen");
                 countdownText.setText("");
-                scheduleNextCycle(60000); // Retry after 1 minute
+                scheduleNextCycle(60000);
             });
             return;
         }
@@ -628,7 +627,7 @@ public class OverlayService extends AccessibilityService {
         String finalModeName = modeName;
         double finalThreshold = threshold;
 
-        if (consumption <= threshold) {
+        if (consumption <= finalThreshold) {
             // Refill needed
             runOnUiThread(() -> {
                 statusText.setText("🔄 Refill nötig (" + finalModeName + ")");
