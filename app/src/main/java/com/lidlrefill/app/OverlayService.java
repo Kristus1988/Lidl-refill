@@ -30,6 +30,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -56,9 +57,10 @@ public class OverlayService extends AccessibilityService {
     private FrameLayout floatingView;
     private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
     private Spinner spinnerConsumption;
+    private EditText etPuffer;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
-    private Button btnClose, btnCrop;
+    private Button btnClose, btnCrop, btnSetPuffer;
     
     // ============ PREFERENCES ============
     private SharedPreferences prefs;
@@ -74,6 +76,10 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_CROP_TOP = "crop_top";
     private static final String PREF_CROP_RIGHT = "crop_right";
     private static final String PREF_CROP_BOTTOM = "crop_bottom";
+    private static final String PREF_PUFFER = "puffer_value";
+    
+    // ============ PUFFER (einstellbar) ============
+    private double pufferValue = 0.30;
     
     // ============ VERBRAUCHS-HISTORIE ============
     private ArrayList<Double> volumeHistory = new ArrayList<>();
@@ -146,7 +152,6 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    private static final double AUTOREFILL_THRESHOLD = 0.30;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -168,6 +173,10 @@ public class OverlayService extends AccessibilityService {
         Log.d(TAG, "onCreate - Service wird initialisiert");
         
         prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        
+        // ===== PUFFER LADEN =====
+        pufferValue = Double.parseDouble(prefs.getString(PREF_PUFFER, "0.30"));
+        pufferValue = Math.max(0.05, Math.min(2.00, pufferValue));
         
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         Display display = wm.getDefaultDisplay();
@@ -703,62 +712,56 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ INTELLIGENTE AUTOREFILL LOGIK ============
+    // ============ INTELLIGENTE AUTOREFILL LOGIK (mit Puffer) ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
-        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB, Puffer = " + pufferValue + " GB");
         
         // ===== MEHRSTUFIGE ANPASSUNG =====
         long waitTime = 0;
         String reason = "";
-        double targetVolume = 0.30;
+        double targetVolume = pufferValue;
         
         if (volume > 50.0) {
-            // > 50 GB → 12-18 Stunden warten
             long hours = 12 + (long)(random.nextDouble() * 6);
             waitTime = hours * 3600000;
             targetVolume = 50.0;
             reason = "> 50 GB → " + hours + " Std";
             
         } else if (volume > 25.0) {
-            // > 25 GB → 8-12 Stunden
             long hours = 8 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 25.0;
             reason = "> 25 GB → " + hours + " Std";
             
         } else if (volume > 10.0) {
-            // > 10 GB → 4-8 Stunden
             long hours = 4 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 10.0;
             reason = "> 10 GB → " + hours + " Std";
             
         } else if (volume > 5.0) {
-            // > 5 GB → 2-4 Stunden
             long hours = 2 + (long)(random.nextDouble() * 2);
             waitTime = hours * 3600000;
             targetVolume = 5.0;
             reason = "> 5 GB → " + hours + " Std";
             
         } else if (volume > 2.0) {
-            // > 2 GB → 1-2 Stunden
             long hours = 1 + (long)(random.nextDouble());
             waitTime = hours * 3600000;
             targetVolume = 2.0;
             reason = "> 2 GB → " + hours + " Std";
             
         } else if (volume > 1.0) {
-            // > 1 GB → 30-60 Minuten
             long minutes = 30 + (long)(random.nextDouble() * 30);
             waitTime = minutes * 60000;
             targetVolume = 1.0;
             reason = "> 1 GB → " + minutes + " Min";
             
-        } else if (volume > AUTOREFILL_THRESHOLD) {
-            // > 0,30 GB → Adaptive Wartezeit (4-9 Minuten)
-            double diff = volume - AUTOREFILL_THRESHOLD;
+        } else if (volume > pufferValue) {
+            // > Puffer → Adaptive Wartezeit
+            double diff = volume - pufferValue;
             
             double consumptionRate = averageConsumptionRate;
             if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
@@ -778,13 +781,15 @@ public class OverlayService extends AccessibilityService {
             long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
             waitTime = minutes * 60000;
             waitTime += (long)(random.nextDouble() * 60000);
-            targetVolume = AUTOREFILL_THRESHOLD;
-            reason = "Adaptiv: " + minutes + " Min (auf " + targetVolume + " GB)";
+            targetVolume = pufferValue;
+            reason = "Adaptiv: " + minutes + " Min (auf " + String.format("%.2f", pufferValue) + " GB)";
             
         } else {
-            // ≤ 0,30 GB → Refill
-            updateStatus("♻️ Volumen ≤ 0,30 → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            // ≤ Puffer → Refill
+            updateStatus("♻️ Volumen ≤ " + String.format("%.2f", pufferValue) + " → Refill");
+            Toast.makeText(this, 
+                "♻️ Volumen ≤ " + String.format("%.2f", pufferValue) + " GB → Refill wird gedrückt", 
+                Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -802,12 +807,12 @@ public class OverlayService extends AccessibilityService {
         if (hours > 0) {
             updateStatus("♻️ Warte " + hours + " Std " + minutes + " Min (" + reason + ")");
             Toast.makeText(this, 
-                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + targetVolume + " GB", 
+                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + String.format("%.2f", targetVolume) + " GB", 
                 Toast.LENGTH_LONG).show();
         } else {
             updateStatus("♻️ Warte " + minutes + " Min (" + reason + ")");
             Toast.makeText(this, 
-                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + targetVolume + " GB", 
+                "♻️ " + reason + "\nAktuell: " + volume + " GB → Ziel: " + String.format("%.2f", targetVolume) + " GB", 
                 Toast.LENGTH_LONG).show();
         }
         
@@ -846,7 +851,7 @@ public class OverlayService extends AccessibilityService {
         timeHistory.clear();
         averageConsumptionRate = 0.03;
         
-        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet! (Puffer: " + String.format("%.2f", pufferValue) + " GB)", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
@@ -954,6 +959,7 @@ public class OverlayService extends AccessibilityService {
         tvCycle = controlView.findViewById(R.id.tvCycle);
         tvOcrResult = controlView.findViewById(R.id.tvOcrResult);
         spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
+        etPuffer = controlView.findViewById(R.id.etPuffer);
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
         btnOcrNow = controlView.findViewById(R.id.btnOcrNow);
@@ -963,6 +969,24 @@ public class OverlayService extends AccessibilityService {
         btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
         btnClose = controlView.findViewById(R.id.btnClose);
         btnCrop = controlView.findViewById(R.id.btnCrop);
+        btnSetPuffer = controlView.findViewById(R.id.btnSetPuffer);
+        
+        // ===== PUFFER SETZEN =====
+        etPuffer.setText(String.format("%.2f", pufferValue));
+        
+        btnSetPuffer.setOnClickListener(v -> {
+            try {
+                double newPuffer = Double.parseDouble(etPuffer.getText().toString().replace(",", "."));
+                newPuffer = Math.max(0.05, Math.min(2.00, newPuffer));
+                pufferValue = newPuffer;
+                prefs.edit().putString(PREF_PUFFER, String.valueOf(pufferValue)).apply();
+                Toast.makeText(this, "✅ Puffer auf " + String.format("%.2f", pufferValue) + " GB gesetzt", Toast.LENGTH_SHORT).show();
+                updateStatus("● Puffer: " + String.format("%.2f", pufferValue) + " GB");
+                etPuffer.setText(String.format("%.2f", pufferValue));
+            } catch (Exception e) {
+                Toast.makeText(this, "❌ Ungültige Eingabe! Bitte Zahl eingeben (z.B. 0.30)", Toast.LENGTH_LONG).show();
+            }
+        });
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
@@ -1007,7 +1031,7 @@ public class OverlayService extends AccessibilityService {
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
                 if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Puffer: " + String.format("%.2f", pufferValue) + " GB)", Toast.LENGTH_LONG).show();
                 }
             }
             @Override
@@ -1049,7 +1073,7 @@ public class OverlayService extends AccessibilityService {
             performScreenshotAndOcr();
         });
         
-        // ===== SWIPE TEST (ABHÄNGIG VOM AUTOMATIK-MODUS) =====
+        // ===== SWIPE TEST =====
         btnSwipeTest.setOnClickListener(v -> {
             if (!swipePlaced) {
                 Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_LONG).show();
@@ -1057,11 +1081,9 @@ public class OverlayService extends AccessibilityService {
             }
             
             if (isRunning) {
-                // ===== AUTOMATIK LÄUFT → VOLLER ZYKLUS =====
                 updateStatus("🔄 Swipe Test (Automatik läuft)...");
                 performSwipeGesture();
             } else {
-                // ===== AUTOMATIK GESTOPPT → NUR SWIPE-TEST =====
                 updateStatus("🔄 Swipe Test (nur Geste)...");
                 performSwipeTestGesture();
             }
@@ -1453,50 +1475,4 @@ public class OverlayService extends AccessibilityService {
                                 swipePlaced = true;
                                 currentMode = Mode.NONE;
                                 activeVisual = null;
-                                hideVisuals();
-                                savePositions();
-                                updateStatus("● Swipe gespeichert");
-                                Toast.makeText(OverlayService.this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
-                                break;
-                            case REFILL_PLACE:
-                                refillButton.set(params.x + 50, params.y + 50);
-                                refillPlaced = true;
-                                currentMode = Mode.NONE;
-                                activeVisual = null;
-                                hideVisuals();
-                                savePositions();
-                                updateStatus("● Refill gespeichert");
-                                Toast.makeText(OverlayService.this, "✅ Refill platziert!", Toast.LENGTH_SHORT).show();
-                                break;
-                        }
-                    }
-                    return true;
-            }
-            return false;
-        });
-    }
-    
-    private void hideVisuals() { removeVisual(swipeVisual); removeVisual(refillVisual); activeVisual = null; }
-    private void removeVisual(View visual) { if (visual != null && visual.getParent() != null) { try { windowManager.removeView(visual); } catch (Exception e) {} } }
-    
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        savePositions();
-        hideVisuals();
-        if (floatingView != null && windowManager != null) {
-            try { windowManager.removeView(floatingView); } catch (Exception e) {}
-        }
-        if (cropOverlayView != null) {
-            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-            cropOverlayView = null;
-        }
-        handler.removeCallbacksAndMessages(null);
-        if (textRecognizer != null) {
-            textRecognizer.close();
-        }
-        if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
-            lastScreenshotFile.delete();
-        }
-    }
-}
+                                hideVisual
