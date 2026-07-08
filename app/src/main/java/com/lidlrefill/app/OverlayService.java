@@ -30,7 +30,6 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -196,95 +195,100 @@ public class OverlayService extends AccessibilityService {
     }
 
     private void createOverlay() {
-        LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
-        overlayView = (FrameLayout) inflater.inflate(R.layout.overlay_layout, null);
+        try {
+            LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
+            overlayView = (FrameLayout) inflater.inflate(R.layout.overlay_layout, null);
 
-        // Initialize UI elements
-        statusText = overlayView.findViewById(R.id.statusText);
-        countdownText = overlayView.findViewById(R.id.countdownText);
-        ocrResultText = overlayView.findViewById(R.id.ocrResultText);
-        btnSwipe = overlayView.findViewById(R.id.btnSwipe);
-        btnRefill = overlayView.findViewById(R.id.btnRefill);
-        btnCrop = overlayView.findViewById(R.id.btnCrop);
-        btnStartStop = overlayView.findViewById(R.id.btnStartStop);
-        btnClose = overlayView.findViewById(R.id.btnClose);
-        modeSpinner = overlayView.findViewById(R.id.modeSpinner);
-        cropOverlay = overlayView.findViewById(R.id.cropOverlay);
-        cropHandleTL = overlayView.findViewById(R.id.cropHandleTL);
-        cropHandleBR = overlayView.findViewById(R.id.cropHandleBR);
-        scrollView = overlayView.findViewById(R.id.scrollView);
+            // Initialize UI elements
+            statusText = overlayView.findViewById(R.id.statusText);
+            countdownText = overlayView.findViewById(R.id.countdownText);
+            ocrResultText = overlayView.findViewById(R.id.ocrResultText);
+            btnSwipe = overlayView.findViewById(R.id.btnSwipe);
+            btnRefill = overlayView.findViewById(R.id.btnRefill);
+            btnCrop = overlayView.findViewById(R.id.btnCrop);
+            btnStartStop = overlayView.findViewById(R.id.btnStartStop);
+            btnClose = overlayView.findViewById(R.id.btnClose);
+            modeSpinner = overlayView.findViewById(R.id.modeSpinner);
+            cropOverlay = overlayView.findViewById(R.id.cropOverlay);
+            cropHandleTL = overlayView.findViewById(R.id.cropHandleTL);
+            cropHandleBR = overlayView.findViewById(R.id.cropHandleBR);
+            scrollView = overlayView.findViewById(R.id.scrollView);
 
-        // Setup Mode Spinner
-        String[] modes = {"♻️ AUTOREFILL (0,30 GB)", "♻️ AUTOREFILL (0,50 GB)", "🤖 AUTO (0,30/0,50 GB)"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        modeSpinner.setAdapter(adapter);
-        
-        // Load saved mode
-        int savedMode = prefs.getInt(KEY_MODE, MODE_30);
-        modeSpinner.setSelection(savedMode);
-        
-        modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                prefs.edit().putInt(KEY_MODE, position).apply();
-                updateStatusText();
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
-        });
-
-        // Setup button listeners
-        btnSwipe.setOnClickListener(v -> performSwipe());
-        btnRefill.setOnClickListener(v -> performRefill());
-        btnCrop.setOnClickListener(v -> toggleCropMode());
-        btnStartStop.setOnClickListener(v -> toggleAutoRefill());
-        btnClose.setOnClickListener(v -> stopSelf());
-
-        // Crop handle touch listeners
-        setupCropHandles();
-
-        // Window parameters
-        overlayParams = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
-                        WindowManager.LayoutParams.TYPE_PHONE,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT
-        );
-        overlayParams.gravity = Gravity.TOP | Gravity.START;
-        overlayParams.x = 0;
-        overlayParams.y = 0;
-
-        // Make overlay draggable
-        overlayView.setOnTouchListener(new View.OnTouchListener() {
-            private int initialX, initialY;
-            private float initialTouchX, initialTouchY;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        initialX = overlayParams.x;
-                        initialY = overlayParams.y;
-                        initialTouchX = event.getRawX();
-                        initialTouchY = event.getRawY();
-                        return true;
-                    case MotionEvent.ACTION_MOVE:
-                        overlayParams.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        overlayParams.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        windowManager.updateViewLayout(overlayView, overlayParams);
-                        return true;
+            // Setup Mode Spinner
+            String[] modes = {"♻️ AUTOREFILL (0,30 GB)", "♻️ AUTOREFILL (0,50 GB)", "🤖 AUTO (0,30/0,50 GB)"};
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            modeSpinner.setAdapter(adapter);
+            
+            // Load saved mode
+            int savedMode = prefs.getInt(KEY_MODE, MODE_30);
+            modeSpinner.setSelection(savedMode);
+            
+            modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                    prefs.edit().putInt(KEY_MODE, position).apply();
+                    updateStatusText();
                 }
-                return false;
-            }
-        });
 
-        windowManager.addView(overlayView, overlayParams);
-        updateStatusText();
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) {}
+            });
+
+            // Setup button listeners
+            btnSwipe.setOnClickListener(v -> performSwipe());
+            btnRefill.setOnClickListener(v -> performRefill());
+            btnCrop.setOnClickListener(v -> toggleCropMode());
+            btnStartStop.setOnClickListener(v -> toggleAutoRefill());
+            btnClose.setOnClickListener(v -> stopSelf());
+
+            // Crop handle touch listeners
+            setupCropHandles();
+
+            // Window parameters
+            overlayParams = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                            WindowManager.LayoutParams.TYPE_PHONE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    PixelFormat.TRANSLUCENT
+            );
+            overlayParams.gravity = Gravity.TOP | Gravity.START;
+            overlayParams.x = 0;
+            overlayParams.y = 0;
+
+            // Make overlay draggable
+            overlayView.setOnTouchListener(new View.OnTouchListener() {
+                private int initialX, initialY;
+                private float initialTouchX, initialTouchY;
+
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            initialX = overlayParams.x;
+                            initialY = overlayParams.y;
+                            initialTouchX = event.getRawX();
+                            initialTouchY = event.getRawY();
+                            return true;
+                        case MotionEvent.ACTION_MOVE:
+                            overlayParams.x = initialX + (int) (event.getRawX() - initialTouchX);
+                            overlayParams.y = initialY + (int) (event.getRawY() - initialTouchY);
+                            windowManager.updateViewLayout(overlayView, overlayParams);
+                            return true;
+                    }
+                    return false;
+                }
+            });
+
+            windowManager.addView(overlayView, overlayParams);
+            updateStatusText();
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating overlay: " + e.getMessage(), e);
+        }
     }
 
     private void setupCropHandles() {
@@ -349,7 +353,7 @@ public class OverlayService extends AccessibilityService {
             updateCropOverlay();
         } else {
             cropOverlay.setVisibility(View.GONE);
-            btnCrop.setText("✂️ Crop &amp; OCR");
+            btnCrop.setText("✂️ Crop & OCR");
             saveCropRect();
         }
     }
@@ -357,30 +361,33 @@ public class OverlayService extends AccessibilityService {
     private void updateCropOverlay() {
         if (cropOverlay == null || cropOverlay.getVisibility() != View.VISIBLE) return;
         
-        // Get screen dimensions
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getMetrics(metrics);
-        int screenWidth = metrics.widthPixels;
-        int screenHeight = metrics.heightPixels;
+        try {
+            // Get screen dimensions
+            DisplayMetrics metrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(metrics);
 
-        // Update crop rectangle position
-        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) cropOverlay.getLayoutParams();
-        params.leftMargin = cropRect.left;
-        params.topMargin = cropRect.top;
-        params.width = cropRect.right - cropRect.left;
-        params.height = cropRect.bottom - cropRect.top;
-        cropOverlay.setLayoutParams(params);
+            // Update crop rectangle position
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) cropOverlay.getLayoutParams();
+            params.leftMargin = cropRect.left;
+            params.topMargin = cropRect.top;
+            params.width = cropRect.right - cropRect.left;
+            params.height = cropRect.bottom - cropRect.top;
+            cropOverlay.setLayoutParams(params);
 
-        // Update handle positions
-        FrameLayout.LayoutParams tlParams = (FrameLayout.LayoutParams) cropHandleTL.getLayoutParams();
-        tlParams.leftMargin = -8;
-        tlParams.topMargin = -8;
-        cropHandleTL.setLayoutParams(tlParams);
+            // Update handle positions
+            FrameLayout.LayoutParams tlParams = (FrameLayout.LayoutParams) cropHandleTL.getLayoutParams();
+            tlParams.leftMargin = -8;
+            tlParams.topMargin = -8;
+            cropHandleTL.setLayoutParams(tlParams);
 
-        FrameLayout.LayoutParams brParams = (FrameLayout.LayoutParams) cropHandleBR.getLayoutParams();
-        brParams.leftMargin = params.width - 12;
-        brParams.topMargin = params.height - 12;
-        cropHandleBR.setLayoutParams(brParams);
+            FrameLayout.LayoutParams brParams = (FrameLayout.LayoutParams) cropHandleBR.getLayoutParams();
+            brParams.leftMargin = params.width - 12;
+            brParams.topMargin = params.height - 12;
+            cropHandleBR.setLayoutParams(brParams);
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error updating crop overlay: " + e.getMessage());
+        }
     }
 
     private void saveCropRect() {
@@ -474,33 +481,42 @@ public class OverlayService extends AccessibilityService {
     }
 
     private void takeScreenshotAndOCR() {
-        DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getMetrics(metrics);
-        
-        int width = metrics.widthPixels;
-        int height = metrics.heightPixels;
-        int density = metrics.densityDpi;
+        try {
+            DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+            DisplayMetrics metrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(metrics);
+            
+            int width = metrics.widthPixels;
+            int height = metrics.heightPixels;
+            int density = metrics.densityDpi;
 
-        ImageReader imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1);
-        VirtualDisplay virtualDisplay = displayManager.createVirtualDisplay(
-                "ScreenshotDisplay",
-                width, height, density,
-                imageReader.getSurface(),
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR
-        );
+            ImageReader imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1);
+            VirtualDisplay virtualDisplay = displayManager.createVirtualDisplay(
+                    "ScreenshotDisplay",
+                    width, height, density,
+                    imageReader.getSurface(),
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR
+            );
 
-        // Wait for screenshot
-        long waitTime = WAIT_SCREENSHOT_MIN + (long) (Math.random() * (WAIT_SCREENSHOT_MAX - WAIT_SCREENSHOT_MIN));
-        startCountdown(waitTime, "Screenshot erstellen", () -> {
-            Image image = imageReader.acquireLatestImage();
-            if (image != null) {
-                processImage(image);
-                image.close();
-            }
-            virtualDisplay.release();
-            imageReader.close();
-        });
+            // Wait for screenshot
+            long waitTime = WAIT_SCREENSHOT_MIN + (long) (Math.random() * (WAIT_SCREENSHOT_MAX - WAIT_SCREENSHOT_MIN));
+            startCountdown(waitTime, "Screenshot erstellen", () -> {
+                Image image = imageReader.acquireLatestImage();
+                if (image != null) {
+                    processImage(image);
+                    image.close();
+                }
+                virtualDisplay.release();
+                imageReader.close();
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Error taking screenshot: " + e.getMessage());
+            runOnUiThread(() -> {
+                statusText.setText("❌ Screenshot fehlgeschlagen");
+                countdownText.setText("");
+                scheduleNextCycle(60000);
+            });
+        }
     }
 
     private void processImage(Image image) {
@@ -514,55 +530,69 @@ public class OverlayService extends AccessibilityService {
             return;
         }
 
-        // Crop the bitmap
-        Bitmap croppedBitmap = Bitmap.createBitmap(
-                bitmap,
-                Math.max(0, cropRect.left),
-                Math.max(0, cropRect.top),
-                Math.min(bitmap.getWidth() - cropRect.left, cropRect.right - cropRect.left),
-                Math.min(bitmap.getHeight() - cropRect.top, cropRect.bottom - cropRect.top)
-        );
-        bitmap.recycle();
+        try {
+            // Crop the bitmap
+            Bitmap croppedBitmap = Bitmap.createBitmap(
+                    bitmap,
+                    Math.max(0, cropRect.left),
+                    Math.max(0, cropRect.top),
+                    Math.min(bitmap.getWidth() - cropRect.left, cropRect.right - cropRect.left),
+                    Math.min(bitmap.getHeight() - cropRect.top, cropRect.bottom - cropRect.top)
+            );
+            bitmap.recycle();
 
-        InputImage inputImage = InputImage.fromBitmap(croppedBitmap, 0);
-        
-        ocrExecutor.execute(() -> {
-            textRecognizer.process(inputImage)
-                    .addOnSuccessListener(result -> {
-                        croppedBitmap.recycle();
-                        String recognizedText = result.getText();
-                        double consumption = extractConsumption(recognizedText);
-                        
-                        runOnUiThread(() -> {
-                            ocrResultText.setText("📊 " + String.format(Locale.GERMANY, "%.2f GB", consumption));
-                            decideRefillAction(consumption);
+            InputImage inputImage = InputImage.fromBitmap(croppedBitmap, 0);
+            
+            ocrExecutor.execute(() -> {
+                textRecognizer.process(inputImage)
+                        .addOnSuccessListener(result -> {
+                            croppedBitmap.recycle();
+                            String recognizedText = result.getText();
+                            double consumption = extractConsumption(recognizedText);
+                            
+                            runOnUiThread(() -> {
+                                ocrResultText.setText("📊 " + String.format(Locale.GERMANY, "%.2f GB", consumption));
+                                decideRefillAction(consumption);
+                            });
+                        })
+                        .addOnFailureListener(e -> {
+                            croppedBitmap.recycle();
+                            runOnUiThread(() -> {
+                                statusText.setText("❌ OCR fehlgeschlagen: " + e.getMessage());
+                                countdownText.setText("");
+                                scheduleNextCycle(60000);
+                            });
                         });
-                    })
-                    .addOnFailureListener(e -> {
-                        croppedBitmap.recycle();
-                        runOnUiThread(() -> {
-                            statusText.setText("❌ OCR fehlgeschlagen: " + e.getMessage());
-                            countdownText.setText("");
-                            scheduleNextCycle(60000);
-                        });
-                    });
-        });
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing image: " + e.getMessage());
+            runOnUiThread(() -> {
+                statusText.setText("❌ Bildverarbeitung fehlgeschlagen");
+                countdownText.setText("");
+                scheduleNextCycle(60000);
+            });
+        }
     }
 
     private Bitmap imageToBitmap(Image image) {
-        Image.Plane[] planes = image.getPlanes();
-        ByteBuffer buffer = planes[0].getBuffer();
-        int pixelStride = planes[0].getPixelStride();
-        int rowStride = planes[0].getRowStride();
-        int rowPadding = rowStride - pixelStride * image.getWidth();
+        try {
+            Image.Plane[] planes = image.getPlanes();
+            ByteBuffer buffer = planes[0].getBuffer();
+            int pixelStride = planes[0].getPixelStride();
+            int rowStride = planes[0].getRowStride();
+            int rowPadding = rowStride - pixelStride * image.getWidth();
 
-        Bitmap bitmap = Bitmap.createBitmap(
-                image.getWidth() + rowPadding / pixelStride,
-                image.getHeight(),
-                Bitmap.Config.ARGB_8888
-        );
-        bitmap.copyPixelsFromBuffer(buffer);
-        return Bitmap.createBitmap(bitmap, 0, 0, image.getWidth(), image.getHeight());
+            Bitmap bitmap = Bitmap.createBitmap(
+                    image.getWidth() + rowPadding / pixelStride,
+                    image.getHeight(),
+                    Bitmap.Config.ARGB_8888
+            );
+            bitmap.copyPixelsFromBuffer(buffer);
+            return Bitmap.createBitmap(bitmap, 0, 0, image.getWidth(), image.getHeight());
+        } catch (Exception e) {
+            Log.e(TAG, "Error converting image to bitmap: " + e.getMessage());
+            return null;
+        }
     }
 
     private double extractConsumption(String text) {
@@ -725,36 +755,34 @@ public class OverlayService extends AccessibilityService {
     }
 
     private void performSwipe() {
-        // Simulate swipe from top to bottom
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getMetrics(metrics);
-        
-        int startX = metrics.widthPixels / 2;
-        int startY = metrics.heightPixels / 10;
-        int endY = metrics.heightPixels / 2;
+        try {
+            // Simulate swipe from top to bottom
+            DisplayMetrics metrics = new DisplayMetrics();
+            windowManager.getDefaultDisplay().getMetrics(metrics);
+            
+            int startX = metrics.widthPixels / 2;
+            int startY = metrics.heightPixels / 10;
+            int endY = metrics.heightPixels / 2;
 
-        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
-        Path path = new Path();
-        path.moveTo(startX, startY);
-        path.lineTo(startX, endY);
-        
-        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, 500));
-        
-        dispatchGesture(gestureBuilder.build(), null, null);
-        runOnUiThread(() -> {
-            statusText.setText("✅ Swipe ausgeführt");
-        });
+            GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+            Path path = new Path();
+            path.moveTo(startX, startY);
+            path.lineTo(startX, endY);
+            
+            gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, 500));
+            
+            dispatchGesture(gestureBuilder.build(), null, null);
+            runOnUiThread(() -> {
+                statusText.setText("✅ Swipe ausgeführt");
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Error performing swipe: " + e.getMessage());
+        }
     }
 
     private void performRefill() {
         // Find and click the Refill button
         // This is a simplified version - you might need to adapt this based on the actual UI
-        performActionOnButton("1 GB");
-    }
-
-    private void performActionOnButton(String buttonText) {
-        // AccessibilityService method to find and click a button
-        // This is a placeholder - actual implementation would use accessibility node traversal
         runOnUiThread(() -> {
             statusText.setText("✅ Refill-Button gedrückt");
             ocrResultText.setText("🔄 Refill durchgeführt!");
