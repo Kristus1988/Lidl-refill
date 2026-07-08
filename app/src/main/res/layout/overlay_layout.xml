@@ -46,17 +46,6 @@
         android:singleLine="true"
         android:layout_marginBottom="6dp"/>
 
-    <!-- ===== SPINNER ===== -->
-    <Spinner
-        android:id="@+id/spinnerConsumption"
-        android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:layout_marginBottom="6dp"
-        android:background="@drawable/spinner_border"
-        android:popupBackground="#333333"
-        android:textColor="#FFFFFF"
-        android:padding="8dp"/>
-
     <!-- ===== PUFFER-EINGABE ===== -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -76,27 +65,35 @@
         <EditText
             android:id="@+id/etPuffer"
             android:layout_width="0dp"
-            android:layout_height="32dp"
+            android:layout_height="36dp"
             android:layout_weight="1"
             android:inputType="numberDecimal"
             android:text="0.30"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:background="@drawable/spinner_border"
-            android:padding="4dp"
-            android:gravity="center"/>
+            android:padding="6dp"/>
 
-        <Button
-            android:id="@+id/btnSetPuffer"
+        <TextView
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:text="Setzen"
-            android:textSize="11sp"
-            android:backgroundTint="#4CAF50"
+            android:layout_height="wrap_content"
+            android:text=" GB"
             android:textColor="#FFFFFF"
-            android:layout_marginStart="4dp"
-            android:padding="4dp"/>
+            android:textSize="12sp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="4dp"/>
     </LinearLayout>
+
+    <!-- ===== SPINNER ===== -->
+    <Spinner
+        android:id="@+id/spinnerConsumption"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/spinner_border"
+        android:popupBackground="#333333"
+        android:textColor="#FFFFFF"
+        android:padding="8dp"/>
 
     <!-- ===== POSITIONIERUNGS-BUTTONS ===== -->
     <LinearLayout
