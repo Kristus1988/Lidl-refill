@@ -1,5 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lidl Refill</string>
-    <string name="accessibility_service_description">Lidl Refill nutzt diesen Dienst für Gestensteuerung und Screenshots.</string>
+    <string name="accessibility_description">Lidl Refill Accessibility Service</string>
+    <!-- Spinner-Einträge: 0,30 GB, 0,50 GB, Auto-Modus -->
+    <string-array name="mode_entries">
+        <item>♻️ AUTOREFILL (0,30 GB)</item>
+        <item>♻️ AUTOREFILL (0,50 GB)</item>
+        <item>🤖 AUTO (0,30/0,50 GB)</item>
+    </string-array>
 </resources>
