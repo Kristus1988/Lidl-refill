@@ -76,16 +76,16 @@ public class OverlayService extends AccessibilityService {
     private static final String PREF_CROP_TOP = "crop_top";
     private static final String PREF_CROP_RIGHT = "crop_right";
     private static final String PREF_CROP_BOTTOM = "crop_bottom";
-    private static final String PREF_PUFFER = "puffer";
+    private static final String PREF_PUFFER = "puffer_value";
+    
+    // ============ PUFFER ============
+    private double pufferThreshold = 0.30; // Standardwert
     
     // ============ VERBRAUCHS-HISTORIE ============
     private ArrayList<Double> volumeHistory = new ArrayList<>();
     private ArrayList<Long> timeHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10;
     private double averageConsumptionRate = 0.03;
-    
-    // ============ PUFFER ============
-    private double pufferThreshold = 0.30;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -147,11 +147,13 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN ============
+    // ============ ZEITEN (MENSCHLICHER) ============
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
+    private static final long AUTOREFILL_WAIT_MIN = 240000;
+    private static final long AUTOREFILL_WAIT_MAX = 540000;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -217,30 +219,22 @@ public class OverlayService extends AccessibilityService {
         updateOcrResult("📸 OCR: --");
     }
     
-    // ============ PUFFER ============
+    // ============ PUFFER LADEN/SPEICHERN ============
     private void loadPuffer() {
-        pufferThreshold = Double.parseDouble(prefs.getString(PREF_PUFFER, "0.30"));
-        if (pufferThreshold < 0.10) pufferThreshold = 0.10;
-        if (pufferThreshold > 2.00) pufferThreshold = 2.00;
+        String saved = prefs.getString(PREF_PUFFER, "0.30");
+        try {
+            pufferThreshold = Double.parseDouble(saved);
+            if (pufferThreshold < 0.10) pufferThreshold = 0.10;
+            if (pufferThreshold > 2.00) pufferThreshold = 2.00;
+        } catch (Exception e) {
+            pufferThreshold = 0.30;
+        }
         Log.d(TAG, "🎯 Puffer geladen: " + pufferThreshold + " GB");
     }
     
     private void savePuffer() {
-        if (etPuffer != null) {
-            try {
-                double value = Double.parseDouble(etPuffer.getText().toString().replace(",", "."));
-                if (value >= 0.10 && value <= 2.00) {
-                    pufferThreshold = value;
-                    prefs.edit().putString(PREF_PUFFER, String.valueOf(value)).apply();
-                    Log.d(TAG, "💾 Puffer gespeichert: " + pufferThreshold + " GB");
-                    Toast.makeText(this, "✅ Puffer auf " + pufferThreshold + " GB gesetzt", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "⚠️ Puffer muss zwischen 0,10 und 2,00 GB liegen", Toast.LENGTH_LONG).show();
-                }
-            } catch (Exception e) {
-                Toast.makeText(this, "❌ Ungültige Eingabe! Bitte Zahl eingeben.", Toast.LENGTH_LONG).show();
-            }
-        }
+        prefs.edit().putString(PREF_PUFFER, String.valueOf(pufferThreshold)).apply();
+        Log.d(TAG, "💾 Puffer gespeichert: " + pufferThreshold + " GB");
     }
     
     // ============ CROP ============
@@ -700,8 +694,8 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
         
-        // ===== MAXIMALER VERBRAUCH (10 GB) =====
-        final double MAX_VOLUME = 10.0;
+        // ===== MAXIMALER VERBRAUCH =====
+        final double MAX_VOLUME = 100.00;
         
         String[] patterns = {
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
@@ -737,7 +731,7 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        Log.d(TAG, "❌ Kein GB-Wert im Bereich 0,01 - " + MAX_VOLUME + " gefunden");
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
@@ -745,9 +739,10 @@ public class OverlayService extends AccessibilityService {
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
-        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB, Puffer = " + pufferThreshold + " GB");
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        Log.d(TAG, "🎯 Aktueller Puffer = " + pufferThreshold + " GB");
         
-        // ===== MEHRSTUFIGE ANPASSUNG MIT PUFFER =====
+        // ===== MEHRSTUFIGE ANPASSUNG =====
         long waitTime = 0;
         String reason = "";
         double targetVolume = pufferThreshold;
@@ -868,14 +863,15 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Puffer speichern
-        savePuffer();
-        
         isAutoRefillMode = true;
         isAutoRefillSelected = true;
         currentModeIndex = 3;
         prefs.edit().putInt("consumption_index", 3).apply();
         spinnerConsumption.setSelection(3);
+        
+        // Puffer laden
+        loadPuffer();
+        etPuffer.setText(String.format("%.2f", pufferThreshold));
         
         volumeHistory.clear();
         timeHistory.clear();
@@ -1000,8 +996,35 @@ public class OverlayService extends AccessibilityService {
         btnClose = controlView.findViewById(R.id.btnClose);
         btnCrop = controlView.findViewById(R.id.btnCrop);
         
-        // ===== PUFFER EINSTELLEN =====
+        // ============ PUFFER EINGABE ============
         etPuffer.setText(String.format("%.2f", pufferThreshold));
+        
+        // Tastatur beim Klick auf das Feld
+        etPuffer.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) {
+                // Tastatur anzeigen
+                android.view.inputmethod.InputMethodManager imm = 
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                imm.showSoftInput(etPuffer, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
+        
+        // Puffer speichern bei Änderung
+        etPuffer.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || 
+                event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER) {
+                savePufferFromInput();
+                return true;
+            }
+            return false;
+        });
+        
+        // Auch bei Verlassen des Feldes speichern
+        etPuffer.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) {
+                savePufferFromInput();
+            }
+        });
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
@@ -1046,7 +1069,7 @@ public class OverlayService extends AccessibilityService {
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
                 if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Puffer: " + pufferThreshold + " GB)", Toast.LENGTH_LONG).show();
                 }
             }
             @Override
@@ -1143,6 +1166,7 @@ public class OverlayService extends AccessibilityService {
             stopAutomation();
             hideVisuals();
             savePositions();
+            savePuffer();
             if (floatingView != null && windowManager != null) {
                 try { windowManager.removeView(floatingView); } catch (Exception e) {}
             }
@@ -1205,6 +1229,35 @@ public class OverlayService extends AccessibilityService {
         floatingView = mainContainer;
         floatingView.setElevation(999);
         windowManager.addView(floatingView, params);
+    }
+    
+    // ============ PUFFER SPEICHERN ============
+    private void savePufferFromInput() {
+        if (etPuffer == null) return;
+        
+        String text = etPuffer.getText().toString().trim();
+        if (text.isEmpty()) {
+            etPuffer.setText(String.format("%.2f", pufferThreshold));
+            return;
+        }
+        
+        try {
+            double value = Double.parseDouble(text.replace(",", "."));
+            if (value < 0.10) {
+                value = 0.10;
+                Toast.makeText(this, "⚠️ Minimal 0,10 GB", Toast.LENGTH_SHORT).show();
+            } else if (value > 2.00) {
+                value = 2.00;
+                Toast.makeText(this, "⚠️ Maximal 2,00 GB", Toast.LENGTH_SHORT).show();
+            }
+            pufferThreshold = value;
+            etPuffer.setText(String.format("%.2f", pufferThreshold));
+            savePuffer();
+            Toast.makeText(this, "✅ Puffer auf " + pufferThreshold + " GB gesetzt", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            etPuffer.setText(String.format("%.2f", pufferThreshold));
+            Toast.makeText(this, "⚠️ Bitte gültige Zahl eingeben", Toast.LENGTH_SHORT).show();
+        }
     }
     
     // ============ SWIPE TEST (NUR GESTE) ============
@@ -1519,6 +1572,7 @@ public class OverlayService extends AccessibilityService {
     public void onDestroy() {
         super.onDestroy();
         savePositions();
+        savePuffer();
         hideVisuals();
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
