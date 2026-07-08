@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">Lidl Refill</string>
-    <string name="accessibility_description">Lidl Refill Accessibility Service</string>
-    <!-- Spinner-Einträge: 0,30 GB, 0,50 GB, Auto-Modus -->
+    <string name="accessibility_service_description">Ermöglicht Lidl Refill das automatische Erkennen des Datenverbrauchs und Ausführen von Refill-Aktionen</string>
+    
+    <!-- Spinner-Einträge für Modi -->
     <string-array name="mode_entries">
         <item>♻️ AUTOREFILL (0,30 GB)</item>
         <item>♻️ AUTOREFILL (0,50 GB)</item>
