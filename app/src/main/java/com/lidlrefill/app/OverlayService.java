@@ -141,20 +141,15 @@ public class OverlayService extends AccessibilityService {
     private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
     private Mode currentMode = Mode.NONE;
     
-    // ============ ZEITEN ============
+    // ============ ZEITEN (MENSCHLICHER) ============
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
-    // ===== NEUER PUFFER: 0,50 GB =====
-    private static final double AUTOREFILL_THRESHOLD = 0.50;
-    
-    // ============ CONSUMPTION OPTIONS ============
+    // ============ CONSUMPTION OPTIONS (NUR AUTOREFILL) ============
     private static final String[] CONSUMPTION_LABELS = {
-        "📱 Surfen (18-22 Min)",
-        "📺 FullHD (11-14 Min)",
-        "🎬 4K (6-9 Min)",
+        "♻️ AUTOREFILL (0,30 GB)",
         "♻️ AUTOREFILL (0,50 GB)"
     };
     private int currentModeIndex = 0;
@@ -181,9 +176,9 @@ public class OverlayService extends AccessibilityService {
         loadCropCoordinates();
         loadPositions();
         
-        int savedIndex = prefs.getInt("consumption_index", 3);
+        int savedIndex = prefs.getInt("consumption_index", 0);
         currentModeIndex = savedIndex;
-        isAutoRefillSelected = (savedIndex == 3);
+        isAutoRefillSelected = true; // Beide Modi sind AUTOREFILL
         
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         
@@ -661,7 +656,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION MIT MAXIMALBEGRENZUNG ============
+    // ============ GB-EXTRACTION (ALLE ZAHLENFORMATE) ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -669,9 +664,6 @@ public class OverlayService extends AccessibilityService {
         }
         
         Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
-        
-        // ===== MAXIMALER VERBRAUCH (2.00 GB) =====
-        final double MAX_VOLUME = 2.00;
         
         String[] patterns = {
             "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
@@ -695,11 +687,11 @@ public class OverlayService extends AccessibilityService {
                 try {
                     double val = Double.parseDouble(value);
                     Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
-                    
-                    if (val > 0 && val <= MAX_VOLUME) {
+                    // Begrenzung auf maximal 2.00 GB (sonst wird verfügbares Volumen erkannt)
+                    if (val > 0 && val <= 2.00) {
                         return value;
                     } else {
-                        Log.d(TAG, "⚠️ Wert " + value + " überschreitet MAX_VOLUME (" + MAX_VOLUME + ") → ignoriert");
+                        Log.d(TAG, "⚠️ Wert " + value + " überschreitet 2.00 GB → ignoriert");
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Parse Fehler: " + e.getMessage());
@@ -707,7 +699,7 @@ public class OverlayService extends AccessibilityService {
             }
         }
         
-        Log.d(TAG, "❌ Kein GB-Wert im Bereich 0,01 - " + MAX_VOLUME + " gefunden");
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
         return null;
     }
     
@@ -715,66 +707,66 @@ public class OverlayService extends AccessibilityService {
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
-        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        // ===== PUFFER JE NACH MODUS =====
+        double threshold;
+        switch (currentModeIndex) {
+            case 0: threshold = 0.30; break;
+            case 1: threshold = 0.50; break;
+            default: threshold = 0.30; break;
+        }
         
-        // ===== MEHRSTUFIGE ANPASSUNG (0,50 GB PUFFER) =====
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB (Puffer: " + threshold + " GB)");
+        
+        // ===== MEHRSTUFIGE ANPASSUNG =====
         long waitTime = 0;
         String reason = "";
-        double targetVolume = 0.50;
+        double targetVolume = threshold;
         
         if (volume > 50.0) {
-            // > 50 GB → 12-18 Stunden warten
             long hours = 12 + (long)(random.nextDouble() * 6);
             waitTime = hours * 3600000;
             targetVolume = 50.0;
             reason = "> 50 GB → " + hours + " Std";
             
         } else if (volume > 25.0) {
-            // > 25 GB → 8-12 Stunden
             long hours = 8 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 25.0;
             reason = "> 25 GB → " + hours + " Std";
             
         } else if (volume > 10.0) {
-            // > 10 GB → 4-8 Stunden
             long hours = 4 + (long)(random.nextDouble() * 4);
             waitTime = hours * 3600000;
             targetVolume = 10.0;
             reason = "> 10 GB → " + hours + " Std";
             
         } else if (volume > 5.0) {
-            // > 5 GB → 2-4 Stunden
             long hours = 2 + (long)(random.nextDouble() * 2);
             waitTime = hours * 3600000;
             targetVolume = 5.0;
             reason = "> 5 GB → " + hours + " Std";
             
         } else if (volume > 2.0) {
-            // > 2 GB → 1-2 Stunden
             long hours = 1 + (long)(random.nextDouble());
             waitTime = hours * 3600000;
             targetVolume = 2.0;
             reason = "> 2 GB → " + hours + " Std";
             
         } else if (volume > 1.0) {
-            // > 1 GB → 30-60 Minuten
             long minutes = 30 + (long)(random.nextDouble() * 30);
             waitTime = minutes * 60000;
             targetVolume = 1.0;
             reason = "> 1 GB → " + minutes + " Min";
             
-        } else if (volume > AUTOREFILL_THRESHOLD) {
-            // > 0,50 GB → Adaptive Wartezeit (5-9 Minuten)
-            double diff = volume - AUTOREFILL_THRESHOLD;
+        } else if (volume > threshold) {
+            // > Puffer → Adaptive Wartezeit
+            double diff = volume - threshold;
             
             double consumptionRate = averageConsumptionRate;
             if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
                 switch (currentModeIndex) {
-                    case 0: consumptionRate = 0.025; break;
+                    case 0: consumptionRate = 0.03; break;
                     case 1: consumptionRate = 0.04; break;
-                    case 2: consumptionRate = 0.06; break;
-                    case 3: 
                     default: consumptionRate = 0.03; break;
                 }
             }
@@ -786,13 +778,13 @@ public class OverlayService extends AccessibilityService {
             long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
             waitTime = minutes * 60000;
             waitTime += (long)(random.nextDouble() * 60000);
-            targetVolume = AUTOREFILL_THRESHOLD;
+            targetVolume = threshold;
             reason = "Adaptiv: " + minutes + " Min (auf " + targetVolume + " GB)";
             
         } else {
-            // ≤ 0,50 GB → Refill
-            updateStatus("♻️ Volumen ≤ 0,50 → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ 0,50 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            // ≤ Puffer → Refill
+            updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " GB → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -846,15 +838,14 @@ public class OverlayService extends AccessibilityService {
         
         isAutoRefillMode = true;
         isAutoRefillSelected = true;
-        currentModeIndex = 3;
-        prefs.edit().putInt("consumption_index", 3).apply();
-        spinnerConsumption.setSelection(3);
+        prefs.edit().putInt("consumption_index", currentModeIndex).apply();
         
         volumeHistory.clear();
         timeHistory.clear();
         averageConsumptionRate = 0.03;
         
-        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
+        double threshold = (currentModeIndex == 1) ? 0.50 : 0.30;
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet (Puffer: " + threshold + " GB)!", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
@@ -1002,21 +993,21 @@ public class OverlayService extends AccessibilityService {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerConsumption.setAdapter(adapter);
         
-        spinnerConsumption.setSelection(3);
+        int savedIndex = prefs.getInt("consumption_index", 0);
+        spinnerConsumption.setSelection(savedIndex);
         isAutoRefillSelected = true;
         
         spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 currentModeIndex = position;
-                isAutoRefillSelected = (position == 3);
+                isAutoRefillSelected = true;
                 prefs.edit().putInt("consumption_index", position).apply();
+                
+                double threshold = (position == 1) ? 0.50 : 0.30;
                 Toast.makeText(OverlayService.this, 
-                    "📊 " + CONSUMPTION_LABELS[position], 
+                    "📊 " + CONSUMPTION_LABELS[position] + "\nPuffer: " + threshold + " GB", 
                     Toast.LENGTH_SHORT).show();
-                if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
-                }
             }
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
@@ -1057,7 +1048,6 @@ public class OverlayService extends AccessibilityService {
             performScreenshotAndOcr();
         });
         
-        // ===== SWIPE TEST =====
         btnSwipeTest.setOnClickListener(v -> {
             if (!swipePlaced) {
                 Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_LONG).show();
@@ -1073,7 +1063,6 @@ public class OverlayService extends AccessibilityService {
             }
         });
         
-        // ===== REFILL TEST =====
         btnRefillTest.setOnClickListener(v -> {
             if (!refillPlaced) {
                 Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_LONG).show();
@@ -1090,24 +1079,7 @@ public class OverlayService extends AccessibilityService {
         });
         
         btnStartAuto.setOnClickListener(v -> {
-            if (isAutoRefillSelected) {
-                startAutoRefill();
-            } else {
-                if (isRunning) {
-                    Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (!swipePlaced) {
-                    Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (!refillPlaced) {
-                    Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                isAutoRefillMode = false;
-                startAutomation();
-            }
+            startAutoRefill();
         });
         
         btnClose.setOnClickListener(v -> {
