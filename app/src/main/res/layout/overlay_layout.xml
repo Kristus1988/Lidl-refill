@@ -1,167 +1,194 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="wrap_content"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="320dp"
     android:layout_height="wrap_content"
-    android:background="@android:color/transparent">
+    android:orientation="vertical"
+    android:background="#CC000000"
+    android:padding="14dp"
+    android:elevation="999dp">
 
-    <ScrollView
-        android:id="@+id/scrollView"
-        android:layout_width="320dp"
+    <!-- ===== STATUSZEILE ===== -->
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:maxHeight="600dp"
-        android:background="@android:color/black"
-        android:padding="8dp"
-        android:elevation="16dp">
+        android:text="● Bereit"
+        android:textColor="#4CAF50"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:singleLine="true"/>
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="8dp">
+    <TextView
+        android:id="@+id/tvCountdown"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⏱ Warte: --:--"
+        android:textColor="#FFC107"
+        android:textSize="13sp"
+        android:singleLine="true"/>
 
-            <!-- Status Anzeige -->
-            <TextView
-                android:id="@+id/statusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🟢 Bereit"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:padding="8dp"
-                android:background="#333333"
-                android:gravity="center" />
+    <TextView
+        android:id="@+id/tvCycle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🔄 0 Zyklen | ⬇ 0"
+        android:textColor="#81D4FA"
+        android:textSize="12sp"
+        android:singleLine="true"/>
 
-            <!-- Countdown Anzeige -->
-            <TextView
-                android:id="@+id/countdownText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="⏳ Bereit"
-                android:textColor="#FFC107"
-                android:textSize="14sp"
-                android:padding="8dp"
-                android:gravity="center" />
+    <TextView
+        android:id="@+id/tvOcrResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📸 OCR: --"
+        android:textColor="#FFB74D"
+        android:textSize="12sp"
+        android:singleLine="true"
+        android:layout_marginBottom="6dp"/>
 
-            <!-- OCR Ergebnis -->
-            <TextView
-                android:id="@+id/ocrResultText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="📊 ---"
-                android:textColor="#4CAF50"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:padding="8dp"
-                android:gravity="center"
-                android:background="#1a1a1a" />
+    <!-- ===== SPINNER ===== -->
+    <Spinner
+        android:id="@+id/spinnerConsumption"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/spinner_border"
+        android:popupBackground="#333333"
+        android:textColor="#FFFFFF"
+        android:padding="8dp"/>
 
-            <!-- Mode Spinner -->
-            <Spinner
-                android:id="@+id/modeSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/spinner_border"
-                android:popupBackground="@android:color/black" />
+    <!-- ===== POSITIONIERUNGS-BUTTONS ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="6dp">
 
-            <!-- Button Grid -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="8dp">
+        <Button
+            android:id="@+id/btnSwipePlace"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="⬇ Swipe"
+            android:textSize="12sp"
+            android:backgroundTint="#FFC107"
+            android:textColor="#FFFFFF"
+            android:layout_marginEnd="3dp"
+            android:padding="4dp"/>
 
-                <Button
-                    android:id="@+id/btnSwipe"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="👆 Swipe"
-                    android:textColor="@android:color/white"
-                    android:background="#FFC107"
-                    android:layout_marginEnd="4dp" />
+        <Button
+            android:id="@+id/btnRefillPlace"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="🔵 Refill"
+            android:textSize="12sp"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:padding="4dp"/>
 
-                <Button
-                    android:id="@+id/btnRefill"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="🔄 Refill"
-                    android:textColor="@android:color/white"
-                    android:background="#2196F3"
-                    android:layout_marginStart="4dp" />
-            </LinearLayout>
+        <Button
+            android:id="@+id/btnCrop"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="✂️ Crop"
+            android:textSize="12sp"
+            android:backgroundTint="#FF6F00"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="3dp"
+            android:padding="4dp"/>
+    </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="4dp">
+    <!-- ===== TEST-BUTTONS ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="6dp">
 
-                <Button
-                    android:id="@+id/btnCrop"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="✂️ Crop &amp; OCR"
-                    android:textColor="@android:color/white"
-                    android:background="#FF6F00"
-                    android:layout_marginEnd="4dp" />
+        <Button
+            android:id="@+id/btnSwipeTest"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="S Test"
+            android:textSize="12sp"
+            android:backgroundTint="#FFC107"
+            android:textColor="#FFFFFF"
+            android:layout_marginEnd="3dp"
+            android:padding="4dp"/>
 
-                <Button
-                    android:id="@+id/btnStartStop"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:text="▶️ Start"
-                    android:textColor="@android:color/white"
-                    android:background="#4CAF50"
-                    android:layout_marginStart="4dp" />
-            </LinearLayout>
+        <Button
+            android:id="@+id/btnRefillTest"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="R Test"
+            android:textSize="12sp"
+            android:backgroundTint="#2196F3"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            android:padding="4dp"/>
 
-            <!-- Close Button -->
-            <Button
-                android:id="@+id/btnClose"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="4dp"
-                android:text="❌ Schließen"
-                android:textColor="@android:color/white"
-                android:background="#F44336" />
+        <Button
+            android:id="@+id/btnOcrNow"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="📸 OCR"
+            android:textSize="12sp"
+            android:backgroundTint="#FF6F00"
+            android:textColor="#FFFFFF"
+            android:layout_marginStart="3dp"
+            android:padding="4dp"/>
+    </LinearLayout>
 
-        </LinearLayout>
-    </ScrollView>
+    <!-- ===== AUTOMATIK-BUTTONS ===== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="6dp">
 
-    <!-- Crop Overlay -->
-    <FrameLayout
-        android:id="@+id/cropOverlay"
-        android:layout_width="300dp"
-        android:layout_height="150dp"
-        android:visibility="gone"
-        android:background="#44FF0000"
-        android:clickable="true">
+        <Button
+            android:id="@+id/btnStartAuto"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="▶ Start"
+            android:textSize="12sp"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF"
+            android:layout_marginEnd="3dp"
+            android:padding="4dp"/>
 
-        <!-- Crop Handles -->
-        <ImageButton
-            android:id="@+id/cropHandleTL"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="top|start"
-            android:src="@drawable/ic_crop_handle"
-            android:background="#FFFFFF"
-            android:padding="8dp" />
+        <Button
+            android:id="@+id/btnStopAuto"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:text="⏹ Stop"
+            android:textSize="12sp"
+            android:backgroundTint="#F44336"
+            android:textColor="#FFFFFF"
+            android:enabled="false"
+            android:layout_marginStart="3dp"
+            android:padding="4dp"/>
+    </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/cropHandleBR"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_gravity="bottom|end"
-            android:src="@drawable/ic_crop_handle"
-            android:background="#FFFFFF"
-            android:padding="8dp" />
+    <!-- ===== SCHLIEßEN-BUTTON ===== -->
+    <Button
+        android:id="@+id/btnClose"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:text="✕ Schließen"
+        android:textSize="12sp"
+        android:backgroundTint="#F44336"
+        android:textColor="#FFFFFF"
+        android:padding="4dp"/>
 
-    </FrameLayout>
-
-</FrameLayout>
+</LinearLayout>
