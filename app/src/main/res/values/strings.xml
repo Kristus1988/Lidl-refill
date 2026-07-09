@@ -1,4 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lidl Refill</string>
-    <string name="accessibility_service_description">Ermöglicht Lidl Refill das automatische Erkennen des Datenverbrauchs und Ausführen von Refill-Aktionen</string>
+    <string name="accessibility_service_description">Lidl Refill nutzt diesen Dienst, um:
+• Swipe-Gesten auf dem Bildschirm auszuführen
+• Den Refill-Button automatisch zu klicken
+• OCR-Screenshots für die Datenverbrauchs-Erkennung zu erstellen
+
+Es werden KEINE persönlichen Daten erfasst oder gespeichert.</string>
 </resources>
