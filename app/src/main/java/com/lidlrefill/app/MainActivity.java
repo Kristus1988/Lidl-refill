@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
         btnCheckPermissions = findViewById(R.id.btnCheckPermissions);
         btnRequestStorage = findViewById(R.id.btnRequestStorage);
         
-        // 1. Overlay
+        // ===== 1. OVERLAY =====
         btnRequestPermissions.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (!Settings.canDrawOverlays(this)) {
@@ -53,10 +53,12 @@ public class MainActivity extends AppCompatActivity {
             requestStoragePermission();
         });
         
-        // 2. Speicher
-        btnRequestStorage.setOnClickListener(v -> requestStoragePermission());
+        // ===== 2. SPEICHER =====
+        btnRequestStorage.setOnClickListener(v -> {
+            requestStoragePermission();
+        });
         
-        // 3. Accessibility
+        // ===== 3. ACCESSIBILITY =====
         btnRefreshAccessibility.setOnClickListener(v -> {
             Toast.makeText(this, "🔧 Accessibility wird aktualisiert...", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
