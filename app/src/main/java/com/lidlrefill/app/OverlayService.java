@@ -146,16 +146,35 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
-    private static final long AUTOREFILL_WAIT_MIN = 240000;
-    private static final long AUTOREFILL_WAIT_MAX = 540000;
+    
+    // ============ NEUE WARTEZEITEN FÜR STUFEN ============
+    // Stufe 1: > 50 GB → 1-2 Stunden
+    private static final long STAGE_1_WAIT_MIN = 3600000;  // 1 Stunde
+    private static final long STAGE_1_WAIT_MAX = 7200000;  // 2 Stunden
+    
+    // Stufe 2: > 25 GB → 30-60 Minuten
+    private static final long STAGE_2_WAIT_MIN = 1800000;  // 30 Minuten
+    private static final long STAGE_2_WAIT_MAX = 3600000;  // 60 Minuten
+    
+    // Stufe 3: > 10 GB → 15-30 Minuten
+    private static final long STAGE_3_WAIT_MIN = 900000;   // 15 Minuten
+    private static final long STAGE_3_WAIT_MAX = 1800000;  // 30 Minuten
+    
+    // Stufe 4: > 5 GB → 10-20 Minuten
+    private static final long STAGE_4_WAIT_MIN = 600000;   // 10 Minuten
+    private static final long STAGE_4_WAIT_MAX = 1200000;  // 20 Minuten
+    
+    // Stufe 5: > 1 GB → 5-15 Minuten
+    private static final long STAGE_5_WAIT_MIN = 300000;   // 5 Minuten
+    private static final long STAGE_5_WAIT_MAX = 900000;   // 15 Minuten
     
     // ============ NEUE STUFEN MIT PUFFERN ============
     private static final double[][] STAGES = {
-        {50.00, 25.00},   // Stufe 1: > 50 GB → Ziel 25 GB
-        {25.00, 10.00},   // Stufe 2: > 25 GB → Ziel 10 GB
-        {10.00, 5.00},    // Stufe 3: > 10 GB → Ziel 5 GB
-        {5.00, 1.00},     // Stufe 4: > 5 GB → Ziel 1 GB
-        {1.00, 0.30}      // Stufe 5: > 1 GB → Ziel 0,30 GB
+        {50.00, 25.00},   // Stufe 1: > 50 GB → Ziel 25 GB → 1-2 Std
+        {25.00, 10.00},   // Stufe 2: > 25 GB → Ziel 10 GB → 30-60 Min
+        {10.00, 5.00},    // Stufe 3: > 10 GB → Ziel 5 GB → 15-30 Min
+        {5.00, 1.00},     // Stufe 4: > 5 GB → Ziel 1 GB → 10-20 Min
+        {1.00, 0.30}      // Stufe 5: > 1 GB → Ziel 0,30 GB → 5-15 Min
     };
     
     private static final double REFILL_THRESHOLD_HIGH = 0.50;   // Bei viel Verbrauch → Refill bei ≤ 0,50
@@ -754,38 +773,38 @@ public class OverlayService extends AccessibilityService {
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         
-        // ===== STUFE 1: > 50 GB → Ziel 25 GB =====
+        // ===== STUFE 1: > 50 GB → Ziel 25 GB (1-2 Stunden) =====
         if (volume > 50.00) {
-            calculateWaitTime(volume, 25.00);
+            calculateWaitTime(volume, 25.00, STAGE_1_WAIT_MIN, STAGE_1_WAIT_MAX);
             return;
         }
         
-        // ===== STUFE 2: > 25 GB → Ziel 10 GB =====
+        // ===== STUFE 2: > 25 GB → Ziel 10 GB (30-60 Minuten) =====
         if (volume > 25.00) {
-            calculateWaitTime(volume, 10.00);
+            calculateWaitTime(volume, 10.00, STAGE_2_WAIT_MIN, STAGE_2_WAIT_MAX);
             return;
         }
         
-        // ===== STUFE 3: > 10 GB → Ziel 5 GB =====
+        // ===== STUFE 3: > 10 GB → Ziel 5 GB (15-30 Minuten) =====
         if (volume > 10.00) {
-            calculateWaitTime(volume, 5.00);
+            calculateWaitTime(volume, 5.00, STAGE_3_WAIT_MIN, STAGE_3_WAIT_MAX);
             return;
         }
         
-        // ===== STUFE 4: > 5 GB → Ziel 1 GB =====
+        // ===== STUFE 4: > 5 GB → Ziel 1 GB (10-20 Minuten) =====
         if (volume > 5.00) {
-            calculateWaitTime(volume, 1.00);
+            calculateWaitTime(volume, 1.00, STAGE_4_WAIT_MIN, STAGE_4_WAIT_MAX);
             return;
         }
         
-        // ===== STUFE 5: > 1 GB → Ziel 0,30 GB =====
+        // ===== STUFE 5: > 1 GB → Ziel 0,30 GB (5-15 Minuten) =====
         if (volume > 1.00) {
             // Bei viel Verbrauch (Rate > 0,04 GB/Min) → Refill bei 0,50
             // Bei wenig Verbrauch (Rate ≤ 0,04 GB/Min) → Refill bei 0,30
             double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
             
             if (volume > threshold) {
-                calculateWaitTime(volume, threshold);
+                calculateWaitTime(volume, threshold, STAGE_5_WAIT_MIN, STAGE_5_WAIT_MAX);
             } else {
                 // Volume ist unterhalb der Schwelle → Refill
                 updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -811,12 +830,12 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            // Zwischen 0,30 und 1,00 → warten bis 0,30
-            calculateWaitTime(volume, 0.30);
+            // Zwischen 0,30 und 1,00 → warten bis 0,30 (5-15 Minuten)
+            calculateWaitTime(volume, 0.30, STAGE_5_WAIT_MIN, STAGE_5_WAIT_MAX);
         }
     }
     
-    private void calculateWaitTime(double currentVolume, double targetVolume) {
+    private void calculateWaitTime(double currentVolume, double targetVolume, long minWait, long maxWait) {
         double diff = currentVolume - targetVolume;
         double consumptionRate = averageConsumptionRate;
         
@@ -835,14 +854,31 @@ public class OverlayService extends AccessibilityService {
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        long minutes = Math.round(Math.max(4, Math.min(9, minutesDouble)));
+        // Berechne Minuten, aber begrenze auf min/max
+        long minutes = Math.round(minutesDouble);
+        
+        // Begrenzung auf min/max (in Minuten)
+        long minMinutes = minWait / 60000;
+        long maxMinutes = maxWait / 60000;
+        minutes = Math.max(minMinutes, Math.min(maxMinutes, minutes));
+        
         long waitTime = minutes * 60000;
         waitTime += (long)(random.nextDouble() * 60000);
         
-        updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
+        // Stunden/Minuten für Anzeige
+        String timeDisplay;
+        if (minutes >= 60) {
+            long hours = minutes / 60;
+            long remainingMinutes = minutes % 60;
+            timeDisplay = hours + " Std " + remainingMinutes + " Min";
+        } else {
+            timeDisplay = minutes + " Min";
+        }
+        
+        updateStatus("♻️ Adaptiv: " + timeDisplay + " (Rate: " + 
             String.format("%.3f", consumptionRate) + " GB/Min)");
         Toast.makeText(this, 
-            "♻️ Bis " + targetVolume + " GB: " + minutes + " Min (aktuell " + currentVolume + " GB)", 
+            "♻️ Bis " + targetVolume + " GB: " + timeDisplay + " (aktuell " + currentVolume + " GB)", 
             Toast.LENGTH_SHORT).show();
         
         currentPhase = Phase.WAIT_AFTER_OCR;
