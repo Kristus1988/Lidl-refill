@@ -1,911 +1,1544 @@
 package com.lidlrefill.app;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.accessibilityservice.GestureDescription;
-import android.content.Intent;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
-import android.media.projection.MediaProjection;
-import android.media.projection.MediaProjectionManager;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.util.DisplayMetrics;
+import android.provider.Settings;
 import android.util.Log;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
-import android.view.animation.Animation;
-import android.view.animation.AnimationUtils;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
+import android.widget.FrameLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.view.GestureDetectorCompat;
-
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
 import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class OverlayService extends AccessibilityService {
-
     private static final String TAG = "LidlRefill";
-    private static final String PREFS_NAME = "LidlRefillPrefs";
-    private static final String KEY_AUTO_REFILL = "auto_refill";
-    private static final String KEY_REMAINING_DATA = "remaining_data";
-    private static final String KEY_LAST_REMAINING_DATA = "last_remaining_data";
-    private static final String KEY_LAST_UPDATE_TIME = "last_update_time";
-    private static final String KEY_CURRENT_STAGE = "current_stage";
-    private static final String KEY_TOTAL_REFILLS = "total_refills";
-    private static final String KEY_LAST_REFILL_TIME = "last_refill_time";
-    private static final String KEY_IS_REFILLING = "is_refilling";
-    private static final String KEY_VERIFICATION_ATTEMPTS = "verification_attempts";
-    private static final String KEY_CONSUMPTION_RATE = "consumption_rate";
-    private static final String KEY_LAST_VERIFICATION_TIME = "last_verification_time";
-
-    // UI Komponenten
+    
+    // ============ UI ============
     private WindowManager windowManager;
-    private View overlayView;
-    private LinearLayout mainLayout, statusLayout, controlsLayout;
-    private ScrollView scrollView;
-    private TextView statusText, dataText, stageText, statsText, timeText, consumptionText;
-    private Button refillButton, autoRefillToggle, verifyButton, screenshotButton, settingsButton;
-    private ImageButton closeButton;
-    private View colorIndicator;
-
-    // Service Komponenten
-    private Handler mainHandler;
-    private Handler backgroundHandler;
-    private ExecutorService executorService;
-    private TextRecognizer textRecognizer;
-    private SharedPreferences sharedPreferences;
-    private GestureDetectorCompat gestureDetector;
-
-    // State Variablen
-    private boolean isAutoRefillEnabled = false;
-    private boolean isRefilling = false;
-    private double currentRemainingData = 0.0;
-    private double lastRemainingData = 0.0;
-    private int currentStage = 1;
-    private int totalRefills = 0;
-    private long lastUpdateTime = 0;
-    private long lastRefillTime = 0;
-    private long lastVerificationTime = 0;
-    private int verificationAttempts = 0;
-    private double consumptionRate = 0.0;
-    private Runnable autoRefillRunnable;
-    private Runnable stageUpdateRunnable;
-
-    // Refill Konfiguration
-    private static final long MIN_REFILL_INTERVAL = 30000; // 30 Sekunden
-    private static final long MAX_REFILL_ATTEMPTS = 3;
-    private static final long VERIFICATION_TIMEOUT = 30000; // 30 Sekunden
-
-    // MediaProjection für Screenshots
-    private MediaProjectionManager projectionManager;
-    private MediaProjection mediaProjection;
-    private VirtualDisplay virtualDisplay;
-    private ImageReader imageReader;
+    private FrameLayout floatingView;
+    private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
+    private Spinner spinnerConsumption;
+    private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
+    private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
+    private Button btnClose, btnCrop;
+    
+    // ============ PREFERENCES ============
+    private SharedPreferences prefs;
+    private static final String PREF_SWIPE_START_X = "swipe_start_x";
+    private static final String PREF_SWIPE_START_Y = "swipe_start_y";
+    private static final String PREF_SWIPE_END_X = "swipe_end_x";
+    private static final String PREF_SWIPE_END_Y = "swipe_end_y";
+    private static final String PREF_REFILL_X = "refill_x";
+    private static final String PREF_REFILL_Y = "refill_y";
+    private static final String PREF_SWIPE_PLACED = "swipe_placed";
+    private static final String PREF_REFILL_PLACED = "refill_placed";
+    private static final String PREF_CROP_LEFT = "crop_left";
+    private static final String PREF_CROP_TOP = "crop_top";
+    private static final String PREF_CROP_RIGHT = "crop_right";
+    private static final String PREF_CROP_BOTTOM = "crop_bottom";
+    
+    // ============ VERBRAUCHS-HISTORIE ============
+    private ArrayList<Double> volumeHistory = new ArrayList<>();
+    private ArrayList<Long> timeHistory = new ArrayList<>();
+    private static final int MAX_HISTORY = 10;
+    private double averageConsumptionRate = 0.03;
+    
+    // ============ SCREEN ============
     private int screenWidth, screenHeight;
-    private int screenDensity;
-
+    
+    // ============ STATE ============
+    private boolean isScreenshotReady = false;
+    private boolean isProcessing = false;
+    private boolean isRunning = false;
+    private boolean isAutoRefillMode = false;
+    private boolean isAutoRefillSelected = false;
+    private boolean isWaiting = false;
+    private boolean isCropMode = false;
+    private boolean cropSet = false;
+    private int cycleCount = 0;
+    private int totalSwipes = 0;
+    private File lastScreenshotFile = null;
+    private String lastOcrText = "";
+    private long screenshotTime = 0;
+    private double lastDetectedVolume = 0.0;
+    private long countdownStartTime = 0;
+    private long currentWaitTime = 0;
+    
+    // ============ CROP ============
+    private int cropLeft = 0, cropTop = 0, cropRight = 0, cropBottom = 0;
+    private View cropOverlayView = null;
+    private float cropStartX = 0, cropStartY = 0;
+    private float cropEndX = 0, cropEndY = 0;
+    private boolean isDrawingCrop = false;
+    
+    // ============ POSITIONEN ============
+    private Point swipeStart = new Point(0, 0);
+    private Point swipeEnd = new Point(0, 0);
+    private Point refillButton = new Point(500, 500);
+    private boolean swipePlaced = false;
+    private boolean refillPlaced = false;
+    
+    // ============ VISUAL HELPERS ============
+    private View swipeVisual, refillVisual;
+    private View activeVisual = null;
+    private float lastX, lastY, dragOffsetX, dragOffsetY;
+    
+    // ============ OVERLAY DRAGGING ============
+    private boolean isOverlayDragging = false;
+    private float overlayDragX = 0, overlayDragY = 0;
+    
+    // ============ HANDLER & RANDOM ============
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private Random random = new Random();
+    
+    // ============ OCR ============
+    private TextRecognizer textRecognizer;
+    private String ocrResult = "📸 OCR: --";
+    
+    // ============ SCREENSHOT FOLDERS ============
+    private File[] screenshotFolders = null;
+    private String foundFolderPath = "";
+    
+    // ============ MODES ============
+    private enum Mode { NONE, SWIPE_PLACE, REFILL_PLACE }
+    private Mode currentMode = Mode.NONE;
+    
+    // ============ ZEITEN ============
+    private static final long WAIT_AFTER_SWIPE_MIN = 8000;
+    private static final long WAIT_AFTER_SWIPE_MAX = 14000;
+    private static final long WAIT_AFTER_REFILL_MIN = 8000;
+    private static final long WAIT_AFTER_REFILL_MAX = 14000;
+    
+    // ============ OPTIMIERTE STUFEN MIT SEHR LANGEN WARTEZEITEN ============
+    // Stufe 1: > 50 GB → Ziel 25 GB (2-6 Stunden zufällig)
+    // Stufe 2: > 25 GB → Ziel 10 GB (1-3 Stunden zufällig)
+    // Stufe 3: > 10 GB → Ziel 5 GB (30-90 Minuten zufällig)
+    // Stufe 4: > 5 GB → Ziel 1 GB (15-45 Minuten zufällig)
+    // Stufe 5: > 1 GB → Ziel 0,30 GB (5-15 Minuten zufällig)
+    
+    private static final double REFILL_THRESHOLD_HIGH = 0.50;
+    private static final double REFILL_THRESHOLD_LOW = 0.30;
+    
+    // ============ CONSUMPTION OPTIONS ============
+    private static final String[] CONSUMPTION_LABELS = {
+        "📱 Surfen (18-22 Min)",
+        "📺 FullHD (11-14 Min)",
+        "🎬 4K (6-9 Min)",
+        "♻️ AUTOREFILL (0,30 GB)"
+    };
+    private int currentModeIndex = 0;
+    
+    // ============ PHASES ============
+    private enum Phase { IDLE, SWIPE, WAIT_AFTER_SWIPE, OCR, WAIT_AFTER_OCR, REFILL, WAIT_AFTER_REFILL }
+    private Phase currentPhase = Phase.IDLE;
+    private Runnable countdownCallback = null;
+    
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
-        // Process accessibility events if needed
+    public void onCreate() {
+        super.onCreate();
+        Log.d(TAG, "onCreate - Service wird initialisiert");
+        
+        prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        
+        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+        Display display = wm.getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        screenWidth = size.x;
+        screenHeight = size.y;
+        
+        loadCropCoordinates();
+        loadPositions();
+        
+        int savedIndex = prefs.getInt("consumption_index", 3);
+        currentModeIndex = savedIndex;
+        isAutoRefillSelected = (savedIndex == 3);
+        
+        textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        
+        screenshotFolders = new File[]{
+            new File(Environment.getExternalStorageDirectory(), "Pictures/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "DCIM/Screenshots"),
+            new File(Environment.getExternalStorageDirectory(), "Download"),
+            new File(Environment.getExternalStorageDirectory(), "Pictures"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            new File(Environment.getExternalStorageDirectory(), "DCIM")
+        };
+        
+        for (File folder : screenshotFolders) {
+            if (folder != null && folder.exists()) {
+                foundFolderPath = folder.getAbsolutePath();
+                Log.d(TAG, "📁 Screenshot-Ordner gefunden: " + foundFolderPath);
+                break;
+            }
+        }
+        
+        createOverlay();
+        createVisualHelpers();
+        
+        updateStatus("● Bereit");
+        updateCountdown("⏱ Warte: --:--");
+        updateCycle();
+        updateOcrResult("📸 OCR: --");
     }
-
+    
+    // ============ CROP ============
+    private void loadCropCoordinates() {
+        cropLeft = prefs.getInt(PREF_CROP_LEFT, -1);
+        cropTop = prefs.getInt(PREF_CROP_TOP, -1);
+        cropRight = prefs.getInt(PREF_CROP_RIGHT, -1);
+        cropBottom = prefs.getInt(PREF_CROP_BOTTOM, -1);
+        
+        if (cropLeft >= 0 && cropTop >= 0 && cropRight >= 0 && cropBottom >= 0) {
+            cropSet = true;
+        } else {
+            cropSet = false;
+            cropLeft = screenWidth / 4;
+            cropTop = screenHeight / 4;
+            cropRight = screenWidth * 3 / 4;
+            cropBottom = screenHeight * 2 / 3;
+        }
+    }
+    
+    private void saveCropCoordinates() {
+        prefs.edit()
+            .putInt(PREF_CROP_LEFT, cropLeft)
+            .putInt(PREF_CROP_TOP, cropTop)
+            .putInt(PREF_CROP_RIGHT, cropRight)
+            .putInt(PREF_CROP_BOTTOM, cropBottom)
+            .apply();
+        cropSet = true;
+        Toast.makeText(this, "✅ Crop gespeichert!", Toast.LENGTH_SHORT).show();
+    }
+    
     @Override
-    public void onInterrupt() {
-        Log.d(TAG, "Service interrupted");
-    }
-
+    public void onAccessibilityEvent(AccessibilityEvent event) {}
+    
+    @Override
+    public void onInterrupt() {}
+    
     @Override
     public void onServiceConnected() {
-        Log.d(TAG, "Accessibility Service connected");
-        setupService();
-        initializeComponents();
-        createOverlay();
-        loadSavedState();
-        setupAutoRefill();
-        startPeriodicUpdates();
-        Log.d(TAG, "OverlayService fully initialized");
-    }
-
-    private void setupService() {
+        super.onServiceConnected();
+        Log.d(TAG, "onServiceConnected - Accessibility verbunden");
+        
         AccessibilityServiceInfo info = new AccessibilityServiceInfo();
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS |
-                AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE |
-                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS |
-                AccessibilityServiceInfo.DEFAULT;
+                    AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
         info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK;
-        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_ALL_MASK;
-        info.notificationTimeout = 100;
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+        info.packageNames = null;
         setServiceInfo(info);
-    }
-
-    private void initializeComponents() {
-        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        mainHandler = new Handler(Looper.getMainLooper());
-        backgroundHandler = new Handler(Looper.getMainLooper());
-        executorService = Executors.newSingleThreadExecutor();
-        textRecognizer = TextRecognition.getClient(new TextRecognizerOptions.Builder().build());
-        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        gestureDetector = new GestureDetectorCompat(this, new SwipeGestureListener());
-
-        // Screen metrics für Screenshots
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getMetrics(metrics);
-        screenWidth = metrics.widthPixels;
-        screenHeight = metrics.heightPixels;
-        screenDensity = metrics.densityDpi;
-
-        projectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-    }
-
-    private void createOverlay() {
-        LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
-        overlayView = inflater.inflate(R.layout.overlay_layout, null);
-
-        // UI Elemente initialisieren
-        mainLayout = overlayView.findViewById(R.id.main_layout);
-        statusLayout = overlayView.findViewById(R.id.status_layout);
-        controlsLayout = overlayView.findViewById(R.id.controls_layout);
-        scrollView = overlayView.findViewById(R.id.scroll_view);
         
-        statusText = overlayView.findViewById(R.id.status_text);
-        dataText = overlayView.findViewById(R.id.data_text);
-        stageText = overlayView.findViewById(R.id.stage_text);
-        statsText = overlayView.findViewById(R.id.stats_text);
-        timeText = overlayView.findViewById(R.id.time_text);
-        consumptionText = overlayView.findViewById(R.id.consumption_text);
-        
-        refillButton = overlayView.findViewById(R.id.refill_button);
-        autoRefillToggle = overlayView.findViewById(R.id.auto_refill_toggle);
-        verifyButton = overlayView.findViewById(R.id.verify_button);
-        screenshotButton = overlayView.findViewById(R.id.screenshot_button);
-        settingsButton = overlayView.findViewById(R.id.settings_button);
-        closeButton = overlayView.findViewById(R.id.close_button);
-        
-        colorIndicator = overlayView.findViewById(R.id.color_indicator);
-
-        // Setup UI
-        setupUIListeners();
-        setupAnimations();
-
-        // WindowManager Parameter
-        WindowManager.LayoutParams params = getOverlayParams();
-        windowManager.addView(overlayView, params);
-
-        // Animation beim Einblenden
-        Animation fadeIn = AnimationUtils.loadAnimation(this, android.R.anim.fade_in);
-        overlayView.startAnimation(fadeIn);
+        isScreenshotReady = true;
+        updateStatus("✅ Screenshot bereit");
+        Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
-
-    private WindowManager.LayoutParams getOverlayParams() {
-        int layoutFlag;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            layoutFlag = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-        } else {
-            layoutFlag = WindowManager.LayoutParams.TYPE_PHONE;
+    
+    // ============ CROP-MODUS ============
+    private void startCropMode() {
+        if (isCropMode) {
+            isCropMode = false;
+            if (cropOverlayView != null) {
+                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+                cropOverlayView = null;
+            }
+            updateStatus("● Crop-Modus beendet");
+            Toast.makeText(this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
+            return;
         }
-
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "❌ Overlay-Berechtigung fehlt!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        
+        isCropMode = true;
+        updateStatus("✂️ Ziehe Bereich für OCR");
+        Toast.makeText(this, "✂️ Ziehe den Bereich für den Teilscreenshot", Toast.LENGTH_LONG).show();
+        createCropOverlay();
+    }
+    
+    private void createCropOverlay() {
+        FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(Color.TRANSPARENT);
+        
+        cropOverlayView = new View(this) {
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                if (isDrawingCrop) {
+                    float left = Math.min(cropStartX, cropEndX);
+                    float top = Math.min(cropStartY, cropEndY);
+                    float right = Math.max(cropStartX, cropEndX);
+                    float bottom = Math.max(cropStartY, cropEndY);
+                    
+                    Paint textPaint = new Paint();
+                    textPaint.setColor(Color.WHITE);
+                    textPaint.setTextSize(30);
+                    textPaint.setStyle(Paint.Style.FILL);
+                    textPaint.setShadowLayer(5, 0, 0, Color.BLACK);
+                    
+                    String coords = (int)left + "," + (int)top + " - " + (int)right + "," + (int)bottom;
+                    String size = "Größe: " + (int)(right-left) + "x" + (int)(bottom-top);
+                    canvas.drawText(coords, left + 10, top + 50, textPaint);
+                    canvas.drawText(size, left + 10, top + 100, textPaint);
+                    
+                    Paint borderPaint = new Paint();
+                    borderPaint.setColor(Color.argb(100, 255, 255, 255));
+                    borderPaint.setStrokeWidth(2);
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    canvas.drawRect(left, top, right, bottom, borderPaint);
+                }
+            }
+        };
+        
+        cropOverlayView.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    cropStartX = event.getRawX();
+                    cropStartY = event.getRawY();
+                    cropEndX = event.getRawX();
+                    cropEndY = event.getRawY();
+                    isDrawingCrop = true;
+                    cropOverlayView.invalidate();
+                    return true;
+                    
+                case MotionEvent.ACTION_MOVE:
+                    cropEndX = event.getRawX();
+                    cropEndY = event.getRawY();
+                    cropOverlayView.invalidate();
+                    return true;
+                    
+                case MotionEvent.ACTION_UP:
+                    cropEndX = event.getRawX();
+                    cropEndY = event.getRawY();
+                    isDrawingCrop = false;
+                    cropOverlayView.invalidate();
+                    
+                    int left = (int)Math.min(cropStartX, cropEndX);
+                    int top = (int)Math.min(cropStartY, cropEndY);
+                    int right = (int)Math.max(cropStartX, cropEndX);
+                    int bottom = (int)Math.max(cropStartY, cropEndY);
+                    
+                    if (right - left > 50 && bottom - top > 50) {
+                        cropLeft = left;
+                        cropTop = top;
+                        cropRight = right;
+                        cropBottom = bottom;
+                        saveCropCoordinates();
+                        Toast.makeText(OverlayService.this, 
+                            "✅ Crop gespeichert!\n" + left + "," + top + " - " + right + "," + bottom, 
+                            Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_LONG).show();
+                        return true;
+                    }
+                    
+                    handler.postDelayed(() -> {
+                        isCropMode = false;
+                        if (cropOverlayView != null) {
+                            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+                            cropOverlayView = null;
+                        }
+                        updateStatus("● Crop-Modus beendet");
+                    }, 500);
+                    return true;
+            }
+            return false;
+        });
+        
+        container.addView(cropOverlayView, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
+        
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = 0;
+        params.y = 0;
+        
+        try {
+            windowManager.addView(container, params);
+            cropOverlayView = container;
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler beim Crop-Overlay: " + e.getMessage());
+            Toast.makeText(this, "❌ Crop-Overlay konnte nicht erstellt werden!", Toast.LENGTH_LONG).show();
+            isCropMode = false;
+            cropOverlayView = null;
+        }
+    }
+    
+    // ============ SCREENSHOT & OCR ============
+    private void performScreenshotAndOcr() {
+        if (isProcessing) {
+            Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!isScreenshotReady) {
+            Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            Toast.makeText(this, "❌ Benötigt Android 9+ für Screenshot", Toast.LENGTH_LONG).show();
+            updateStatus("❌ Android 9+ benötigt");
+            return;
+        }
+        
+        if (isCropMode) {
+            isCropMode = false;
+            if (cropOverlayView != null) {
+                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+                cropOverlayView = null;
+            }
+            handler.postDelayed(() -> performScreenshotAndOcr(), 300);
+            return;
+        }
+        
+        isProcessing = true;
+        screenshotTime = System.currentTimeMillis();
+        
+        updateStatus("📸 Native Screenshot wird ausgelöst...");
+        updateOcrResult("📸 Screenshot...");
+        
+        performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
+        Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
+        
+        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
+        
+        handler.postDelayed(() -> {
+            findScreenshotInAllFolders(1);
+        }, 5000);
+    }
+    
+    // ============ SCREENSHOT FINDEN ============
+    private void findScreenshotInAllFolders(int attempt) {
+        if (attempt > 20) {
+            updateStatus("❌ Screenshot nicht gefunden (25s)");
+            updateOcrResult("❌ Zeitüberschreitung");
+            Toast.makeText(this, "❌ Screenshot nicht gefunden nach 25 Sekunden!", Toast.LENGTH_LONG).show();
+            isProcessing = false;
+            return;
+        }
+        
+        Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/20)");
+        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/20)...");
+        
+        File latestFile = null;
+        long latestTime = 0;
+        
+        for (File folder : screenshotFolders) {
+            if (folder == null || !folder.exists()) continue;
+            
+            File[] files = folder.listFiles((dir, name) -> 
+                name.toLowerCase().endsWith(".png") || name.toLowerCase().endsWith(".jpg"));
+            
+            if (files == null || files.length == 0) continue;
+            
+            for (File file : files) {
+                if (file.lastModified() > latestTime) {
+                    latestTime = file.lastModified();
+                    latestFile = file;
+                }
+            }
+        }
+        
+        if (latestFile == null) {
+            handler.postDelayed(() -> {
+                findScreenshotInAllFolders(attempt + 1);
+            }, 1000);
+            return;
+        }
+        
+        lastScreenshotFile = latestFile;
+        long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
+        Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
+        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
+        
+        Bitmap fullBitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
+        if (fullBitmap == null) {
+            updateStatus("❌ Screenshot konnte nicht geladen werden");
+            updateOcrResult("❌ Laden fehlgeschlagen");
+            Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
+            isProcessing = false;
+            return;
+        }
+        
+        Bitmap croppedBitmap = createPartialScreenshot(fullBitmap);
+        fullBitmap.recycle();
+        
+        if (croppedBitmap == null) {
+            updateStatus("❌ Teilscreenshot fehlgeschlagen");
+            updateOcrResult("❌ Cropping fehlgeschlagen");
+            Toast.makeText(this, "❌ Teilscreenshot fehlgeschlagen!", Toast.LENGTH_LONG).show();
+            isProcessing = false;
+            return;
+        }
+        
+        performOcrOnBitmap(croppedBitmap);
+    }
+    
+    private Bitmap createPartialScreenshot(Bitmap fullScreenshot) {
+        try {
+            if (!cropSet || cropLeft < 0 || cropTop < 0 || cropRight < 0 || cropBottom < 0) {
+                cropLeft = screenWidth / 4;
+                cropTop = screenHeight / 4;
+                cropRight = screenWidth * 3 / 4;
+                cropBottom = screenHeight * 2 / 3;
+                cropSet = true;
+            }
+            
+            int left = Math.max(0, Math.min(cropLeft, fullScreenshot.getWidth() - 10));
+            int top = Math.max(0, Math.min(cropTop, fullScreenshot.getHeight() - 10));
+            int right = Math.min(fullScreenshot.getWidth(), Math.max(cropRight, left + 50));
+            int bottom = Math.min(fullScreenshot.getHeight(), Math.max(cropBottom, top + 50));
+            
+            if (right - left < 50 || bottom - top < 50) {
+                Log.e(TAG, "❌ Teilscreenshot zu klein");
+                return null;
+            }
+            
+            return Bitmap.createBitmap(fullScreenshot, left, top, right - left, bottom - top);
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Teilscreenshot Fehler: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    // ============ OCR ============
+    private void performOcrOnBitmap(Bitmap screenshot) {
+        if (screenshot == null) {
+            updateStatus("❌ Bitmap ist null");
+            updateOcrResult("❌ Bitmap null");
+            isProcessing = false;
+            return;
+        }
+        
+        updateStatus("📸 OCR wird ausgeführt...");
+        updateOcrResult("📸 OCR...");
+        
+        Bitmap scaledBitmap = Bitmap.createScaledBitmap(screenshot, screenshot.getWidth() * 2, screenshot.getHeight() * 2, true);
+        
+        InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
+        textRecognizer.process(image)
+            .addOnSuccessListener(visionText -> {
+                String resultText = visionText.getText();
+                lastOcrText = resultText;
+                Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
+                
+                String volume = extractVolumeImproved(resultText);
+                isProcessing = false;
+                
+                if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+                    lastScreenshotFile.delete();
+                    lastScreenshotFile = null;
+                }
+                
+                if (volume != null) {
+                    double currentVolume = Double.parseDouble(volume.replace(",", "."));
+                    lastDetectedVolume = currentVolume;
+                    
+                    updateConsumptionHistory(currentVolume);
+                    
+                    ocrResult = "📸 " + volume + " GB";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 OCR: " + volume + " GB");
+                    Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        handleAutoRefillLogic(currentVolume);
+                    }
+                } else {
+                    lastDetectedVolume = 0.0;
+                    ocrResult = "📸 Kein GB-Wert";
+                    updateOcrResult(ocrResult);
+                    updateStatus("📸 Kein GB-Wert");
+                    Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
+                        handler.postDelayed(() -> {
+                            if (isRunning) {
+                                clickRefillButton();
+                            }
+                        }, 1000);
+                    }
+                }
+                scaledBitmap.recycle();
+                screenshot.recycle();
+            })
+            .addOnFailureListener(e -> {
+                isProcessing = false;
+                updateStatus("❌ OCR Fehler: " + e.getMessage());
+                updateOcrResult("❌ OCR Fehler");
+                Toast.makeText(OverlayService.this, "❌ OCR Fehler: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                scaledBitmap.recycle();
+                screenshot.recycle();
+            });
+    }
+    
+    // ============ VERBRAUCHS-HISTORIE ============
+    private void updateConsumptionHistory(double currentVolume) {
+        long currentTime = System.currentTimeMillis();
+        
+        volumeHistory.add(currentVolume);
+        timeHistory.add(currentTime);
+        
+        if (volumeHistory.size() > MAX_HISTORY) {
+            volumeHistory.remove(0);
+            timeHistory.remove(0);
+        }
+        
+        if (volumeHistory.size() >= 2) {
+            calculateAverageConsumption();
+        }
+        
+        Log.d(TAG, "📊 Verbrauchshistorie: " + volumeHistory.size() + " Werte");
+        Log.d(TAG, "📊 Durchschnittlicher Verbrauch: " + averageConsumptionRate + " GB/Min");
+    }
+    
+    private void calculateAverageConsumption() {
+        if (volumeHistory.size() < 2 || timeHistory.size() < 2) return;
+        
+        double totalConsumption = 0;
+        long totalTimeMinutes = 0;
+        
+        for (int i = 1; i < volumeHistory.size(); i++) {
+            double diff = volumeHistory.get(i - 1) - volumeHistory.get(i);
+            if (diff > 0) {
+                totalConsumption += diff;
+                long timeDiff = timeHistory.get(i) - timeHistory.get(i - 1);
+                totalTimeMinutes += timeDiff / 60000;
+            }
+        }
+        
+        if (totalTimeMinutes > 0 && totalConsumption > 0) {
+            averageConsumptionRate = totalConsumption / totalTimeMinutes;
+            averageConsumptionRate = Math.max(0.005, Math.min(0.15, averageConsumptionRate));
+            Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+        }
+    }
+    
+    // ============ GB-EXTRACTION ============
+    private String extractVolumeImproved(String text) {
+        if (text == null || text.isEmpty()) {
+            Log.d(TAG, "OCR Text ist leer");
+            return null;
+        }
+        
+        Log.d(TAG, "🔍 Suche nach GB-Wert in:\n" + text);
+        
+        String[] patterns = {
+            "(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            "(\\d+[\\.,]?\\d*)(GB|Gb|gB|gb)",
+            "(\\d+[\\.,]\\d+)",
+            "(\\d+)",
+            "Verfügbares Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            "Volumen[\\s\\S]*?(\\d+[\\.,]?\\d*)\\s*(GB|Gb|gB|gb)",
+            "Gesamtvolumen[\\s\\S]*?(\\d+[\\.,]?\\d*)",
+            "(\\d+[\\.,]\\d+)\\s*(GB|Gb|gB|gb)",
+            "(0[\\.,]\\d{2})",
+            "(\\d{2}[\\.,]\\d{2})",
+            "(\\d{3}[\\.,]\\d{2})"
+        };
+        
+        for (String patternStr : patterns) {
+            Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                String value = matcher.group(1).replace(",", ".");
+                try {
+                    double val = Double.parseDouble(value);
+                    Log.d(TAG, "🔍 Pattern gefunden: " + value + " (aus: " + patternStr + ")");
+                    if (val > 0 && val < 1000) {
+                        return value;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Parse Fehler: " + e.getMessage());
+                }
+            }
+        }
+        
+        Pattern specialPattern = Pattern.compile(
+            "(\\d+[\\.,]\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher specialMatcher = specialPattern.matcher(text);
+        if (specialMatcher.find()) {
+            String value = specialMatcher.group(1).replace(",", ".");
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Spezialfall gefunden: " + value + " GB");
+                if (val > 0 && val < 1000) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Pattern wholePattern = Pattern.compile(
+            "(\\d+)\\s*GB",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher wholeMatcher = wholePattern.matcher(text);
+        if (wholeMatcher.find()) {
+            String value = wholeMatcher.group(1);
+            try {
+                double val = Double.parseDouble(value);
+                Log.d(TAG, "🔍 Ganze Zahl gefunden: " + value + " GB");
+                if (val > 0 && val < 1000) {
+                    return value;
+                }
+            } catch (Exception e) {}
+        }
+        
+        Log.d(TAG, "❌ Kein GB-Wert gefunden");
+        return null;
+    }
+    
+    // ============ OPTIMIERTE ADAPTIVE AUTOREFILL LOGIK MIT SEHR LANGEN WARTEZEITEN ============
+    private void handleAutoRefillLogic(double volume) {
+        if (!isRunning) return;
+        
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        
+        // ===== STUFE 1: > 50 GB → Ziel 25 GB (2-6 Stunden ZUFÄLLIG) =====
+        if (volume > 50.00) {
+            long minWait = 2 * 60 * 60 * 1000;   // 2 Stunden
+            long maxWait = 6 * 60 * 60 * 1000;   // 6 Stunden
+            calculateWaitTimeWithStage(volume, 25.00, minWait, maxWait);
+            return;
+        }
+        
+        // ===== STUFE 2: > 25 GB → Ziel 10 GB (1-3 Stunden ZUFÄLLIG) =====
+        if (volume > 25.00) {
+            long minWait = 1 * 60 * 60 * 1000;   // 1 Stunde
+            long maxWait = 3 * 60 * 60 * 1000;   // 3 Stunden
+            calculateWaitTimeWithStage(volume, 10.00, minWait, maxWait);
+            return;
+        }
+        
+        // ===== STUFE 3: > 10 GB → Ziel 5 GB (30-90 Minuten ZUFÄLLIG) =====
+        if (volume > 10.00) {
+            long minWait = 30 * 60 * 1000;       // 30 Minuten
+            long maxWait = 90 * 60 * 1000;       // 90 Minuten
+            calculateWaitTimeWithStage(volume, 5.00, minWait, maxWait);
+            return;
+        }
+        
+        // ===== STUFE 4: > 5 GB → Ziel 1 GB (15-45 Minuten ZUFÄLLIG) =====
+        if (volume > 5.00) {
+            long minWait = 15 * 60 * 1000;       // 15 Minuten
+            long maxWait = 45 * 60 * 1000;       // 45 Minuten
+            calculateWaitTimeWithStage(volume, 1.00, minWait, maxWait);
+            return;
+        }
+        
+        // ===== STUFE 5: > 1 GB → Ziel 0,30 GB (5-15 Minuten ZUFÄLLIG) =====
+        if (volume > 1.00) {
+            double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
+            
+            if (volume > threshold) {
+                long minWait = 5 * 60 * 1000;     // 5 Minuten
+                long maxWait = 15 * 60 * 1000;    // 15 Minuten
+                calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
+            } else {
+                updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
+                Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+                currentPhase = Phase.REFILL;
+                handler.postDelayed(() -> {
+                    if (isRunning) {
+                        clickRefillButton();
+                    }
+                }, 1000);
+            }
+            return;
+        }
+        
+        // ===== ≤ 1 GB → Refill bei ≤ 0,30 (5-15 Minuten ZUFÄLLIG) =====
+        if (volume <= 0.30) {
+            updateStatus("♻️ Volumen ≤ 0,30 → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+            currentPhase = Phase.REFILL;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    clickRefillButton();
+                }
+            }, 1000);
+        } else {
+            long minWait = 5 * 60 * 1000;         // 5 Minuten
+            long maxWait = 15 * 60 * 1000;        // 15 Minuten
+            calculateWaitTimeWithStage(volume, 0.30, minWait, maxWait);
+        }
+    }
+    
+    private void calculateWaitTimeWithStage(double currentVolume, double targetVolume, long minWait, long maxWait) {
+        double consumptionRate = averageConsumptionRate;
+        
+        if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
+            switch (currentModeIndex) {
+                case 0: consumptionRate = 0.025; break;
+                case 1: consumptionRate = 0.04; break;
+                case 2: consumptionRate = 0.06; break;
+                case 3: 
+                default: consumptionRate = 0.03; break;
+            }
+            Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
+        }
+        
+        double diff = currentVolume - targetVolume;
+        double minutesDouble = diff / consumptionRate;
+        
+        // Zufälliger Faktor zwischen 0,70 und 1,30 für menschliche Varianz
+        double randomFactor = 0.70 + (random.nextDouble() * 0.60);
+        minutesDouble = minutesDouble * randomFactor;
+        
+        // Begrenzung auf min/max Bereich
+        long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
+        long waitTime = minutes * 60000;
+        
+        // Zusätzlicher zufälliger Offset für mehr Varianz (±30 Sekunden)
+        waitTime += (long)((random.nextDouble() - 0.5) * 60000);
+        waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
+        
+        updateStatus("♻️ Adaptiv: " + minutes + " Min (Rate: " + 
+            String.format("%.3f", consumptionRate) + " GB/Min)");
+        Toast.makeText(this, 
+            "♻️ Bis " + targetVolume + " GB: " + minutes + " Min (aktuell " + currentVolume + " GB)", 
+            Toast.LENGTH_SHORT).show();
+        
+        currentPhase = Phase.WAIT_AFTER_OCR;
+        startCountdown(waitTime, () -> {
+            if (isRunning) {
+                currentPhase = Phase.SWIPE;
+                performSwipeGesture();
+            }
+        });
+    }
+    
+    private void startAutoRefill() {
+        if (isRunning) {
+            Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!swipePlaced) {
+            Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (!refillPlaced) {
+            Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        isAutoRefillMode = true;
+        isAutoRefillSelected = true;
+        currentModeIndex = 3;
+        prefs.edit().putInt("consumption_index", 3).apply();
+        spinnerConsumption.setSelection(3);
+        
+        volumeHistory.clear();
+        timeHistory.clear();
+        averageConsumptionRate = 0.03;
+        
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
+        startAutomation();
+    }
+    
+    // ============ POSITIONEN ============
+    private void loadPositions() {
+        swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
+        swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 10);
+        swipeEnd.x = prefs.getInt(PREF_SWIPE_END_X, screenWidth / 2);
+        swipeEnd.y = prefs.getInt(PREF_SWIPE_END_Y, screenHeight - 10);
+        swipePlaced = prefs.getBoolean(PREF_SWIPE_PLACED, true);
+        
+        refillButton.x = prefs.getInt(PREF_REFILL_X, 500);
+        refillButton.y = prefs.getInt(PREF_REFILL_Y, 500);
+        refillPlaced = prefs.getBoolean(PREF_REFILL_PLACED, false);
+    }
+    
+    private void savePositions() {
+        prefs.edit()
+            .putInt(PREF_SWIPE_START_X, swipeStart.x)
+            .putInt(PREF_SWIPE_START_Y, swipeStart.y)
+            .putInt(PREF_SWIPE_END_X, swipeEnd.x)
+            .putInt(PREF_SWIPE_END_Y, swipeEnd.y)
+            .putBoolean(PREF_SWIPE_PLACED, swipePlaced)
+            .putInt(PREF_REFILL_X, refillButton.x)
+            .putInt(PREF_REFILL_Y, refillButton.y)
+            .putBoolean(PREF_REFILL_PLACED, refillPlaced)
+            .apply();
+    }
+    
+    // ============ SWIPE TEST (JE NACH MODUS) ============
+    private void performSwipeTestGesture() {
+        if (!swipePlaced) {
+            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (isRunning) {
+            updateStatus("🔄 Automatik-Swipe Test...");
+            performSwipeGesture();
+            return;
+        }
+        
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
+        long randomDuration = 400 + (long)(random.nextDouble() * 400);
+        
+        int startX = swipeStart.x + randomOffsetX;
+        int startY = swipeStart.y + randomOffsetY;
+        int endX = swipeEnd.x + randomOffsetX;
+        int endY = swipeEnd.y + randomOffsetY;
+        
+        Path path = new Path();
+        path.moveTo(startX, startY);
+        path.quadTo(
+            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
+            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50),
+            endX,
+            endY
+        );
+        
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
+        
+        dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
+            @Override
+            public void onCompleted(GestureDescription gestureDescription) {
+                super.onCompleted(gestureDescription);
+                updateStatus("✅ Swipe Test ausgeführt");
+                Toast.makeText(OverlayService.this, "✅ Swipe Test erfolgreich!", Toast.LENGTH_SHORT).show();
+            }
+        }, null);
+    }
+    
+    // ============ SWIPE GESTE (FÜR AUTOMATIK) ============
+    private void performSwipeGesture() {
+        if (!swipePlaced) {
+            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        totalSwipes++;
+        
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
+        long randomDuration = 400 + (long)(random.nextDouble() * 400);
+        long randomDelay = (long)(random.nextDouble() * 500);
+        
+        int startX = swipeStart.x + randomOffsetX;
+        int startY = swipeStart.y + randomOffsetY;
+        int endX = swipeEnd.x + randomOffsetX;
+        int endY = swipeEnd.y + randomOffsetY;
+        
+        Path path = new Path();
+        path.moveTo(startX, startY);
+        path.quadTo(
+            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
+            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50),
+            endX,
+            endY
+        );
+        
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
+        
+        handler.postDelayed(() -> {
+            dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    updateStatus("✅ Swipe #" + totalSwipes);
+                    updateCycle();
+                    
+                    if (!isRunning) return;
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        currentPhase = Phase.WAIT_AFTER_SWIPE;
+                        long waitTime = WAIT_AFTER_SWIPE_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
+                        updateStatus("⏳ Warte nach Swipe");
+                        startCountdown(waitTime, () -> {
+                            if (isRunning) {
+                                currentPhase = Phase.OCR;
+                                updateStatus("♻️ OCR wird ausgeführt...");
+                                performScreenshotAndOcr();
+                            }
+                        });
+                    } else {
+                        currentPhase = Phase.OCR;
+                        performScreenshotAndOcr();
+                    }
+                }
+            }, null);
+        }, randomDelay);
+    }
+    
+    // ============ CLICK REFILL BUTTON ============
+    private void clickRefillButton() {
+        if (!refillPlaced) {
+            Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 30);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 30);
+        long clickDuration = 50 + (long)(random.nextDouble() * 150);
+        long randomDelay = 100 + (long)(random.nextDouble() * 400);
+        
+        int clickX = refillButton.x + randomOffsetX;
+        int clickY = refillButton.y + randomOffsetY;
+        
+        Path clickPath = new Path();
+        clickPath.moveTo(clickX, clickY);
+        
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(clickPath, 0, clickDuration));
+        
+        handler.postDelayed(() -> {
+            dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    updateStatus("✅ Refill geklickt!");
+                    Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
+                    
+                    if (!isRunning) return;
+                    
+                    if (isAutoRefillSelected || isAutoRefillMode) {
+                        currentPhase = Phase.WAIT_AFTER_REFILL;
+                        long waitTime = WAIT_AFTER_REFILL_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
+                        updateStatus("⏳ Warte nach Refill");
+                        startCountdown(waitTime, () -> {
+                            if (isRunning) {
+                                currentPhase = Phase.SWIPE;
+                                updateStatus("🔄 Swipe...");
+                                performSwipeGesture();
+                            }
+                        });
+                    } else {
+                        currentPhase = Phase.SWIPE;
+                        performSwipeGesture();
+                    }
+                }
+            }, null);
+        }, randomDelay);
+    }
+    
+    // ============ COUNTDOWN ============
+    private void startCountdown(long waitTime, Runnable onFinish) {
+        isWaiting = true;
+        countdownStartTime = System.currentTimeMillis();
+        currentWaitTime = waitTime;
+        countdownCallback = onFinish;
+        
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!isWaiting || !isRunning) {
+                    isWaiting = false;
+                    return;
+                }
+                
+                long elapsed = System.currentTimeMillis() - countdownStartTime;
+                long remaining = Math.max(0, currentWaitTime - elapsed);
+                
+                if (remaining <= 0) {
+                    updateCountdown("⏱ Warte: 00:00");
+                    isWaiting = false;
+                    if (isRunning && countdownCallback != null) {
+                        Runnable callback = countdownCallback;
+                        countdownCallback = null;
+                        callback.run();
+                    }
+                    return;
+                }
+                
+                long seconds = remaining / 1000;
+                long minutes = seconds / 60;
+                seconds = seconds % 60;
+                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
+                handler.postDelayed(this, 1000);
+            }
+        });
+    }
+    
+    private void startCountdown(long waitTime) {
+        startCountdown(waitTime, null);
+    }
+    
+    // ============ AUTOMATIK ============
+    private void startAutomation() {
+        isRunning = true;
+        cycleCount = 0;
+        totalSwipes = 0;
+        btnStartAuto.setText("▶ Läuft");
+        btnStartAuto.setEnabled(false);
+        btnStopAuto.setEnabled(true);
+        updateStatus("🟢 Automatik läuft" + (isAutoRefillMode ? " ♻️" : ""));
+        updateCycle();
+        
+        if (isAutoRefillSelected || isAutoRefillMode) {
+            currentPhase = Phase.SWIPE;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    updateStatus("🔄 Starte mit Swipe...");
+                    performSwipeGesture();
+                }
+            }, 2000);
+        } else {
+            currentPhase = Phase.SWIPE;
+            handler.postDelayed(() -> {
+                if (isRunning) {
+                    updateStatus("🔄 Swipe...");
+                    performSwipeGesture();
+                }
+            }, 2000);
+        }
+    }
+    
+    private void stopAutomation() {
+        isRunning = false;
+        isWaiting = false;
+        isAutoRefillMode = false;
+        currentPhase = Phase.IDLE;
+        btnStartAuto.setText("▶ Start");
+        btnStartAuto.setEnabled(true);
+        btnStopAuto.setEnabled(false);
+        updateStatus("● Gestoppt");
+        updateCountdown("⏱ Warte: --:--");
+        handler.removeCallbacksAndMessages(null);
+    }
+    
+    // ============ UI HELPERS ============
+    private void updateStatus(String text) { if (tvStatus != null) tvStatus.setText(text); }
+    private void updateCountdown(String text) { if (tvCountdown != null) tvCountdown.setText(text); }
+    private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
+    private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
+    
+    // ============ OVERLAY ============
+    private void createOverlay() {
+        if (floatingView != null) {
+            try { windowManager.removeView(floatingView); } catch (Exception e) {}
+            floatingView = null;
+        }
+        
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        
+        FrameLayout mainContainer = new FrameLayout(this);
+        mainContainer.setClickable(true);
+        mainContainer.setFocusable(true);
+        
+        LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
+        View controlView = inflater.inflate(R.layout.overlay_layout, null);
+        
+        tvStatus = controlView.findViewById(R.id.tvStatus);
+        tvCountdown = controlView.findViewById(R.id.tvCountdown);
+        tvCycle = controlView.findViewById(R.id.tvCycle);
+        tvOcrResult = controlView.findViewById(R.id.tvOcrResult);
+        spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
+        btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
+        btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
+        btnOcrNow = controlView.findViewById(R.id.btnOcrNow);
+        btnSwipeTest = controlView.findViewById(R.id.btnSwipeTest);
+        btnRefillTest = controlView.findViewById(R.id.btnRefillTest);
+        btnStopAuto = controlView.findViewById(R.id.btnStopAuto);
+        btnStartAuto = controlView.findViewById(R.id.btnStartAuto);
+        btnClose = controlView.findViewById(R.id.btnClose);
+        btnCrop = controlView.findViewById(R.id.btnCrop);
+        
+        btnCrop.setOnClickListener(v -> startCropMode());
+        
+        // ============ SPINNER ============
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            CONSUMPTION_LABELS
+        ) {
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View view = super.getView(position, convertView, parent);
+                TextView text = (TextView) view;
+                text.setTextColor(Color.WHITE);
+                text.setTextSize(14);
+                return view;
+            }
+            
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View view = super.getDropDownView(position, convertView, parent);
+                TextView text = (TextView) view;
+                text.setTextColor(Color.WHITE);
+                text.setBackgroundColor(Color.parseColor("#333333"));
+                text.setTextSize(14);
+                return view;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerConsumption.setAdapter(adapter);
+        
+        spinnerConsumption.setSelection(3);
+        isAutoRefillSelected = true;
+        
+        spinnerConsumption.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                currentModeIndex = position;
+                isAutoRefillSelected = (position == 3);
+                prefs.edit().putInt("consumption_index", position).apply();
+                Toast.makeText(OverlayService.this, 
+                    "📊 " + CONSUMPTION_LABELS[position], 
+                    Toast.LENGTH_SHORT).show();
+                if (isAutoRefillSelected) {
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        
+        // ============ BUTTONS ============
+        btnSwipePlace.setOnClickListener(v -> {
+            if (currentMode == Mode.SWIPE_PLACE) {
+                currentMode = Mode.NONE;
+                hideVisuals();
+                updateStatus("● Swipe-Modus beendet");
+                return;
+            }
+            currentMode = Mode.SWIPE_PLACE;
+            updateStatus("🟡 S: Pfeil auf Swipe-Bereich ziehen");
+            showSwipeVisual();
+            activeVisual = swipeVisual;
+        });
+        
+        btnRefillPlace.setOnClickListener(v -> {
+            if (currentMode == Mode.REFILL_PLACE) {
+                currentMode = Mode.NONE;
+                hideVisuals();
+                updateStatus("● Refill-Modus beendet");
+                return;
+            }
+            currentMode = Mode.REFILL_PLACE;
+            updateStatus("🟡 R: Kreis auf Refill-Button ziehen");
+            showRefillVisual();
+            activeVisual = refillVisual;
+        });
+        
+        btnOcrNow.setOnClickListener(v -> {
+            if (!isScreenshotReady) {
+                Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            performScreenshotAndOcr();
+        });
+        
+        btnSwipeTest.setOnClickListener(v -> {
+            if (!swipePlaced) {
+                Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_LONG).show();
+                return;
+            }
+            updateStatus("🔄 Swipe Test...");
+            performSwipeTestGesture();
+        });
+        
+        btnRefillTest.setOnClickListener(v -> {
+            if (!refillPlaced) {
+                Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_LONG).show();
+                return;
+            }
+            updateStatus("🔄 Refill Test...");
+            clickRefillButton();
+        });
+        
+        btnStopAuto.setOnClickListener(v -> {
+            if (isRunning) {
+                stopAutomation();
+            }
+        });
+        
+        btnStartAuto.setOnClickListener(v -> {
+            if (isAutoRefillSelected) {
+                startAutoRefill();
+            } else {
+                if (isRunning) {
+                    Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!swipePlaced) {
+                    Toast.makeText(this, "⚠️ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!refillPlaced) {
+                    Toast.makeText(this, "⚠️ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                isAutoRefillMode = false;
+                startAutomation();
+            }
+        });
+        
+        btnClose.setOnClickListener(v -> {
+            stopAutomation();
+            hideVisuals();
+            savePositions();
+            if (floatingView != null && windowManager != null) {
+                try { windowManager.removeView(floatingView); } catch (Exception e) {}
+            }
+            stopSelf();
+        });
+        
+        mainContainer.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    overlayDragX = event.getRawX();
+                    overlayDragY = event.getRawY();
+                    isOverlayDragging = true;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (isOverlayDragging && floatingView != null) {
+                        WindowManager.LayoutParams params = (WindowManager.LayoutParams) floatingView.getLayoutParams();
+                        float deltaX = event.getRawX() - overlayDragX;
+                        float deltaY = event.getRawY() - overlayDragY;
+                        params.x += deltaX;
+                        params.y += deltaY;
+                        windowManager.updateViewLayout(floatingView, params);
+                        overlayDragX = event.getRawX();
+                        overlayDragY = event.getRawY();
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    isOverlayDragging = false;
+                    return true;
+            }
+            return false;
+        });
+        
+        FrameLayout controlPanel = new FrameLayout(this);
+        controlPanel.addView(controlView);
+        mainContainer.addView(controlPanel);
+        
+        int layoutFlag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+        
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                        WindowManager.LayoutParams.TYPE_PHONE,
                 layoutFlag,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
-                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 PixelFormat.TRANSLUCENT
         );
-
-        params.gravity = Gravity.TOP | Gravity.END;
+        params.gravity = Gravity.BOTTOM | Gravity.END;
         params.x = 20;
-        params.y = 80;
-        params.width = WindowManager.LayoutParams.WRAP_CONTENT;
-        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
-        return params;
-    }
-
-    private void setupUIListeners() {
-        // Refill Button
-        refillButton.setOnClickListener(v -> performManualRefill());
-
-        // Auto-Refill Toggle
-        updateAutoRefillButton();
-        autoRefillToggle.setOnClickListener(v -> toggleAutoRefill());
-
-        // Verify Button
-        verifyButton.setOnClickListener(v -> performVerification());
-
-        // Screenshot Button
-        screenshotButton.setOnClickListener(v -> takeScreenshot());
-
-        // Settings Button
-        settingsButton.setOnClickListener(v -> openSettings());
-
-        // Close Button
-        closeButton.setOnClickListener(v -> {
-            Animation fadeOut = AnimationUtils.loadAnimation(this, android.R.anim.fade_out);
-            overlayView.startAnimation(fadeOut);
-            mainHandler.postDelayed(() -> {
-                if (overlayView != null && windowManager != null) {
-                    windowManager.removeView(overlayView);
-                }
-                stopSelf();
-            }, 500);
-        });
-
-        // Swipe Gestures für Overlay
-        overlayView.setOnTouchListener((v, event) -> {
-            gestureDetector.onTouchEvent(event);
-            return true;
-        });
-    }
-
-    private void setupAnimations() {
-        // Animation für Status-Änderungen
-        Animation pulseAnimation = AnimationUtils.loadAnimation(this, R.anim.pulse);
-        colorIndicator.startAnimation(pulseAnimation);
-    }
-
-    private void loadSavedState() {
-        isAutoRefillEnabled = sharedPreferences.getBoolean(KEY_AUTO_REFILL, false);
-        currentRemainingData = Double.longBitsToDouble(sharedPreferences.getLong(KEY_REMAINING_DATA, Double.doubleToLongBits(0.0)));
-        lastRemainingData = Double.longBitsToDouble(sharedPreferences.getLong(KEY_LAST_REMAINING_DATA, Double.doubleToLongBits(0.0)));
-        currentStage = sharedPreferences.getInt(KEY_CURRENT_STAGE, 1);
-        totalRefills = sharedPreferences.getInt(KEY_TOTAL_REFILLS, 0);
-        lastRefillTime = sharedPreferences.getLong(KEY_LAST_REFILL_TIME, 0);
-        lastUpdateTime = sharedPreferences.getLong(KEY_LAST_UPDATE_TIME, 0);
-        isRefilling = sharedPreferences.getBoolean(KEY_IS_REFILLING, false);
-        verificationAttempts = sharedPreferences.getInt(KEY_VERIFICATION_ATTEMPTS, 0);
-        consumptionRate = Double.longBitsToDouble(sharedPreferences.getLong(KEY_CONSUMPTION_RATE, Double.doubleToLongBits(0.0)));
-        lastVerificationTime = sharedPreferences.getLong(KEY_LAST_VERIFICATION_TIME, 0);
-
-        // Aktuelle Stage berechnen falls nötig
-        if (lastUpdateTime > 0) {
-            updateStage();
+        params.y = 40;
+        params.alpha = 0.92f;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
         }
-        
-        updateDisplay();
-        Log.d(TAG, "Loaded state: Data=" + currentRemainingData + "GB, Stage=" + currentStage + 
-              ", AutoRefill=" + isAutoRefillEnabled + ", Refills=" + totalRefills);
+        floatingView = mainContainer;
+        floatingView.setElevation(999);
+        windowManager.addView(floatingView, params);
     }
-
-    private void saveState() {
-        sharedPreferences.edit()
-                .putBoolean(KEY_AUTO_REFILL, isAutoRefillEnabled)
-                .putLong(KEY_REMAINING_DATA, Double.doubleToLongBits(currentRemainingData))
-                .putLong(KEY_LAST_REMAINING_DATA, Double.doubleToLongBits(lastRemainingData))
-                .putInt(KEY_CURRENT_STAGE, currentStage)
-                .putInt(KEY_TOTAL_REFILLS, totalRefills)
-                .putLong(KEY_LAST_REFILL_TIME, lastRefillTime)
-                .putLong(KEY_LAST_UPDATE_TIME, lastUpdateTime)
-                .putBoolean(KEY_IS_REFILLING, isRefilling)
-                .putInt(KEY_VERIFICATION_ATTEMPTS, verificationAttempts)
-                .putLong(KEY_CONSUMPTION_RATE, Double.doubleToLongBits(consumptionRate))
-                .putLong(KEY_LAST_VERIFICATION_TIME, lastVerificationTime)
-                .apply();
-    }
-
-    private void setupAutoRefill() {
-        if (isAutoRefillEnabled) {
-            startAutoRefill();
-        }
-    }
-
-    private void startPeriodicUpdates() {
-        // Periodische UI-Updates
-        if (stageUpdateRunnable != null) {
-            mainHandler.removeCallbacks(stageUpdateRunnable);
-        }
-        
-        stageUpdateRunnable = new Runnable() {
+    
+    // ============ VISUAL HELPERS ============
+    private void createVisualHelpers() {
+        swipeVisual = new View(this) {
             @Override
-            public void run() {
-                updateDisplay();
-                updateTimeDisplay();
-                updateConsumptionRate();
-                mainHandler.postDelayed(this, 60000); // Jede Minute updaten
-            }
-        };
-        mainHandler.post(stageUpdateRunnable);
-    }
-
-    private void toggleAutoRefill() {
-        isAutoRefillEnabled = !isAutoRefillEnabled;
-        updateAutoRefillButton();
-        
-        if (isAutoRefillEnabled) {
-            startAutoRefill();
-            Toast.makeText(this, "🔄 AUTOREFILL aktiviert", Toast.LENGTH_SHORT).show();
-            showStatus("🔄 AUTOREFILL aktiviert", Color.GREEN);
-        } else {
-            stopAutoRefill();
-            Toast.makeText(this, "⏸️ AUTOREFILL deaktiviert", Toast.LENGTH_SHORT).show();
-            showStatus("⏸️ AUTOREFILL deaktiviert", Color.YELLOW);
-        }
-        
-        saveState();
-    }
-
-    private void startAutoRefill() {
-        if (autoRefillRunnable != null) {
-            mainHandler.removeCallbacks(autoRefillRunnable);
-        }
-        
-        autoRefillRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (isAutoRefillEnabled && !isRefilling) {
-                    Log.d(TAG, "Auto-Refill check starting");
-                    performVerification();
-                    // Nächsten Check planen
-                    long waitTime = calculateWaitTime(currentRemainingData);
-                    mainHandler.postDelayed(this, waitTime);
-                } else if (isAutoRefillEnabled) {
-                    // Falls Refilling läuft, später nochmal versuchen
-                    mainHandler.postDelayed(this, 30000);
-                }
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                int w = getWidth(), h = getHeight();
+                Paint paint = new Paint();
+                paint.setColor(Color.YELLOW);
+                paint.setStrokeWidth(8);
+                paint.setStyle(Paint.Style.STROKE);
+                canvas.drawLine(w/2, 20, w/2, h - 40, paint);
+                Paint arrowPaint = new Paint();
+                arrowPaint.setColor(Color.YELLOW);
+                arrowPaint.setStyle(Paint.Style.FILL);
+                Path arrowPath = new Path();
+                arrowPath.moveTo(w/2, h - 10);
+                arrowPath.lineTo(w/2 - 30, h - 45);
+                arrowPath.lineTo(w/2 + 30, h - 45);
+                arrowPath.close();
+                canvas.drawPath(arrowPath, arrowPaint);
+                Paint textPaint = new Paint();
+                textPaint.setColor(Color.YELLOW);
+                textPaint.setTextSize(35);
+                textPaint.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText("⬇", w/2, h/2 + 12, textPaint);
             }
         };
         
-        // Ersten Check nach kurzer Verzögerung starten
-        mainHandler.postDelayed(autoRefillRunnable, 5000);
-        Log.d(TAG, "Auto-Refill started");
-    }
-
-    private void stopAutoRefill() {
-        if (autoRefillRunnable != null) {
-            mainHandler.removeCallbacks(autoRefillRunnable);
-            autoRefillRunnable = null;
-        }
-        Log.d(TAG, "Auto-Refill stopped");
-    }
-
-    private void performVerification() {
-        if (isRefilling) {
-            Log.d(TAG, "Verification skipped - refill in progress");
-            return;
-        }
-
-        // Aktuelle Daten prüfen - hier würde OCR oder andere Methode den Verbrauch prüfen
-        // Simuliere Verbrauchsprüfung
-        double newData = simulateDataCheck();
-        
-        if (newData >= 0) {
-            lastRemainingData = currentRemainingData;
-            setRemainingData(newData);
-            
-            // Prüfen ob Refill nötig ist
-            if (shouldRefill(currentRemainingData)) {
-                performRefill();
-            } else {
-                String status = String.format("✅ Daten ausreichend: %.2f GB", currentRemainingData);
-                showStatus(status, Color.GREEN);
+        refillVisual = new View(this) {
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                int size = Math.min(getWidth(), getHeight());
+                Paint paint = new Paint();
+                paint.setColor(Color.RED);
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(size/2, size/2, size/2 - 4, paint);
+                Paint borderPaint = new Paint();
+                borderPaint.setColor(Color.WHITE);
+                borderPaint.setStrokeWidth(4);
+                borderPaint.setStyle(Paint.Style.STROKE);
+                canvas.drawCircle(size/2, size/2, size/2 - 4, borderPaint);
+                Paint textPaint = new Paint();
+                textPaint.setColor(Color.WHITE);
+                textPaint.setTextSize(size * 0.5f);
+                textPaint.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText("R", size/2, size/2 + size * 0.18f, textPaint);
             }
-        } else {
-            // Fehler bei der Überprüfung - später wiederholen
-            verificationAttempts++;
-            if (verificationAttempts > 3) {
-                verificationAttempts = 0;
-                showStatus("⚠️ Überprüfung fehlgeschlagen", Color.YELLOW);
+        };
+        
+        hideVisuals();
+    }
+    
+    private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); }
+    private void showRefillVisual() { addVisual(refillVisual, 100, 100); }
+    
+    private void addVisual(View visual, int width, int height) {
+        if (visual == swipeVisual) { removeVisual(refillVisual); }
+        else if (visual == refillVisual) { removeVisual(swipeVisual); }
+        else { hideVisuals(); }
+        
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(width, height,
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+                PixelFormat.TRANSLUCENT);
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = screenWidth / 2 - width / 2;
+        params.y = screenHeight / 2 - height / 2;
+        
+        visual.setElevation(1000);
+        visual.setLayoutParams(params);
+        windowManager.addView(visual, params);
+        
+        visual.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    lastX = event.getRawX();
+                    lastY = event.getRawY();
+                    dragOffsetX = event.getRawX() - params.x;
+                    dragOffsetY = event.getRawY() - params.y;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    params.x = (int)(event.getRawX() - dragOffsetX);
+                    params.y = (int)(event.getRawY() - dragOffsetY);
+                    windowManager.updateViewLayout(visual, params);
+                    updateStatus("📌 (" + params.x + ", " + params.y + ")");
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (currentMode != Mode.NONE) {
+                        switch (currentMode) {
+                            case SWIPE_PLACE:
+                                swipeStart.set(params.x + 50, params.y + 10);
+                                swipeEnd.set(params.x + 50, params.y + 250);
+                                swipePlaced = true;
+                                currentMode = Mode.NONE;
+                                activeVisual = null;
+                                hideVisuals();
+                                savePositions();
+                                updateStatus("● Swipe gespeichert");
+                                Toast.makeText(OverlayService.this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
+                                break;
+                            case REFILL_PLACE:
+                                refillButton.set(params.x + 50, params.y + 50);
+                                refillPlaced = true;
+                                currentMode = Mode.NONE;
+                                activeVisual = null;
+                                hideVisuals();
+                                savePositions();
+                                updateStatus("● Refill gespeichert");
+                                Toast.makeText(OverlayService.this, "✅ Refill platziert!", Toast.LENGTH_SHORT).show();
+                                break;
+                        }
+                    }
+                    return true;
             }
-        }
-        
-        lastVerificationTime = System.currentTimeMillis();
-        saveState();
-    }
-
-    private double simulateDataCheck() {
-        // Simuliert den aktuellen Datenverbrauch - in Realität würde hier OCR kommen
-        // Hier könnte tatsächlicher Verbrauch aus der Lidl App extrahiert werden
-        Random random = new Random();
-        
-        // Simuliere leichten Verbrauch (0.01 - 0.1 GB pro Check)
-        double usage = 0.01 + (random.nextDouble() * 0.09);
-        double newData = Math.max(0, currentRemainingData - usage);
-        
-        Log.d(TAG, "Simulated data check: " + currentRemainingData + " -> " + newData + " GB");
-        return newData;
-    }
-
-    private boolean shouldRefill(double remainingData) {
-        // Verschiedene Schwellwerte je nach Stufe
-        switch (currentStage) {
-            case 1: return remainingData <= 25.0;  // 50 GB -> 25 GB
-            case 2: return remainingData <= 10.0;  // 25 GB -> 10 GB
-            case 3: return remainingData <= 5.0;   // 10 GB -> 5 GB
-            case 4: return remainingData <= 1.0;   // 5 GB -> 1 GB
-            case 5: return remainingData <= 0.5;   // 1 GB -> 0.5 GB
-            case 6: return remainingData <= 0.3;   // < 1 GB -> 0.3 GB
-            default: return false;
-        }
-    }
-
-    private void performRefill() {
-        if (isRefilling) {
-            Log.d(TAG, "Refill already in progress");
-            return;
-        }
-
-        if (System.currentTimeMillis() - lastRefillTime < MIN_REFILL_INTERVAL) {
-            Log.d(TAG, "Minimum refill interval not reached");
-            showStatus("⏳ Bitte warten...", Color.YELLOW);
-            return;
-        }
-
-        Log.d(TAG, "Starting refill process");
-        isRefilling = true;
-        showStatus("🔄 Refill wird durchgeführt...", Color.BLUE);
-        saveState();
-
-        // Accessibility Action für Refill ausführen
-        boolean success = performAccessibilityRefill();
-        
-        if (success) {
-            // Refill erfolgreich
-            mainHandler.postDelayed(() -> {
-                currentRemainingData += 1.0;
-                totalRefills++;
-                lastRefillTime = System.currentTimeMillis();
-                isRefilling = false;
-                
-                // Animation für erfolgreichen Refill
-                animateSuccessfulRefill();
-                
-                showStatus("✅ +1 GB aufgeladen! Neuer Stand: " + String.format("%.2f", currentRemainingData) + " GB", Color.GREEN);
-                Toast.makeText(this, "✅ 1 GB erfolgreich aufgeladen!", Toast.LENGTH_LONG).show();
-                
-                updateDisplay();
-                saveState();
-                Log.d(TAG, "Refill completed successfully. New data: " + currentRemainingData + "GB, Total refills: " + totalRefills);
-            }, 5000);
-        } else {
-            // Refill fehlgeschlagen
-            isRefilling = false;
-            showStatus("❌ Refill fehlgeschlagen", Color.RED);
-            Toast.makeText(this, "❌ Refill konnte nicht durchgeführt werden", Toast.LENGTH_SHORT).show();
-            saveState();
-        }
-    }
-
-    private void performManualRefill() {
-        if (!isRefilling) {
-            performRefill();
-        } else {
-            Toast.makeText(this, "⏳ Refill läuft bereits", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private boolean performAccessibilityRefill() {
-        try {
-            Log.d(TAG, "Performing accessibility refill action");
-            
-            // Hier würde die tatsächliche Interaktion mit der Lidl App stattfinden
-            // Beispiel: Finde den Refill-Button in der App und klicke ihn
-            
-            // Simulierte Refill-Aktion
-            Thread.sleep(2000);
-            
-            // Suche nach dem Refill-Button in der aktuellen App
-            // In der Praxis müsste hier die Lidl App erkannt werden
-            // und der passende Button gefunden werden
-            
-            // Test: Simuliere erfolgreichen Refill
-            return true;
-            
-        } catch (Exception e) {
-            Log.e(TAG, "Error performing accessibility refill", e);
             return false;
-        }
+        });
     }
-
-    private void setRemainingData(double data) {
-        if (data >= 0) {
-            // Vorherige Daten speichern für Verbrauchsberechnung
-            lastRemainingData = currentRemainingData;
-            currentRemainingData = Math.round(data * 100.0) / 100.0; // Auf 2 Dezimalstellen runden
-            lastUpdateTime = System.currentTimeMillis();
-            
-            // Stage aktualisieren
-            updateStage();
-            
-            // Verbrauchsrate berechnen
-            updateConsumptionRate();
-            
-            // UI aktualisieren
-            updateDisplay();
-            
-            // State speichern
-            saveState();
-            
-            Log.d(TAG, "Data updated: " + currentRemainingData + " GB, Stage: " + currentStage);
-        }
-    }
-
-    private void updateStage() {
-        if (currentRemainingData >= 50.0) {
-            currentStage = 1;
-        } else if (currentRemainingData >= 25.0) {
-            currentStage = 2;
-        } else if (currentRemainingData >= 10.0) {
-            currentStage = 3;
-        } else if (currentRemainingData >= 5.0) {
-            currentStage = 4;
-        } else if (currentRemainingData >= 1.0) {
-            currentStage = 5;
-        } else {
-            currentStage = 6;
-        }
-    }
-
-    private void updateConsumptionRate() {
-        if (lastUpdateTime > 0 && lastRemainingData > 0 && currentRemainingData >= 0) {
-            long timeDiff = System.currentTimeMillis() - lastUpdateTime;
-            if (timeDiff > 0) {
-                double dataDiff = lastRemainingData - currentRemainingData;
-                if (dataDiff > 0) {
-                    // Verbrauch pro Minute
-                    consumptionRate = (dataDiff / timeDiff) * 60 * 60 * 1000;
-                    if (consumptionRate < 0) consumptionRate = 0;
-                }
-            }
-        }
-    }
-
-    private long calculateWaitTime(double currentUsage) {
-        Random random = new Random();
-        long baseWait;
-        int variation;
-        
-        if (currentUsage >= 50.0) {
-            // Stufe 1: 50 GB → 25 GB
-            baseWait = 2 * 60 * 60 * 1000; // 2 Stunden Basis
-            variation = random.nextInt(4 * 60 * 60 * 1000); // +0-4 Stunden
-            return baseWait + variation; // 2-6 Stunden
-        } else if (currentUsage >= 25.0) {
-            // Stufe 2: 25 GB → 10 GB
-            baseWait = 1 * 60 * 60 * 1000; // 1 Stunde Basis
-            variation = random.nextInt(2 * 60 * 60 * 1000); // +0-2 Stunden
-            return baseWait + variation; // 1-3 Stunden
-        } else if (currentUsage >= 10.0) {
-            // Stufe 3: 10 GB → 5 GB
-            baseWait = 30 * 60 * 1000; // 30 Minuten Basis
-            variation = random.nextInt(60 * 60 * 1000); // +0-60 Minuten
-            return baseWait + variation; // 30-90 Minuten
-        } else if (currentUsage >= 5.0) {
-            // Stufe 4: 5 GB → 1 GB
-            baseWait = 15 * 60 * 1000; // 15 Minuten Basis
-            variation = random.nextInt(30 * 60 * 1000); // +0-30 Minuten
-            return baseWait + variation; // 15-45 Minuten
-        } else if (currentUsage >= 1.0) {
-            // Stufe 5: 1 GB → 0,50 GB
-            baseWait = 5 * 60 * 1000; // 5 Minuten Basis
-            variation = random.nextInt(10 * 60 * 1000); // +0-10 Minuten
-            return baseWait + variation; // 5-15 Minuten
-        } else {
-            // Stufe 6: Unter 1 GB
-            if (consumptionRate > 0.1) { // Hoher Verbrauch
-                baseWait = 5 * 60 * 1000;
-                variation = random.nextInt(10 * 60 * 1000);
-                return baseWait + variation; // 5-15 Minuten
-            } else { // Niedriger Verbrauch
-                baseWait = 10 * 60 * 1000;
-                variation = random.nextInt(20 * 60 * 1000);
-                return baseWait + variation; // 10-30 Minuten
-            }
-        }
-    }
-
-    private void updateDisplay() {
-        if (dataText != null) {
-            dataText.setText(String.format("📊 %.2f GB", currentRemainingData));
-        }
-        if (stageText != null) {
-            String stageInfo = String.format("📈 Stufe %d", currentStage);
-            if (currentStage == 5) {
-                stageInfo += " ⚠️ KRITISCH";
-            } else if (currentStage == 6) {
-                stageInfo += " 🚨 SEHR KRITISCH";
-            }
-            stageText.setText(stageInfo);
-        }
-        if (statsText != null) {
-            statsText.setText(String.format("🔄 %d Refills", totalRefills));
-        }
-        if (consumptionText != null) {
-            consumptionText.setText(String.format("⚡ %.2f GB/h", consumptionRate));
-        }
-        
-        updateColorIndicator();
-    }
-
-    private void updateColorIndicator() {
-        if (colorIndicator != null) {
-            int color;
-            switch (currentStage) {
-                case 1: color = Color.GREEN; break;
-                case 2: color = Color.parseColor("#4CAF50"); break;
-                case 3: color = Color.parseColor("#8BC34A"); break;
-                case 4: color = Color.parseColor("#FFC107"); break;
-                case 5: color = Color.parseColor("#FF9800"); break;
-                case 6: color = Color.RED; break;
-                default: color = Color.GRAY;
-            }
-            colorIndicator.setBackgroundColor(color);
-        }
-    }
-
-    private void updateTimeDisplay() {
-        if (timeText != null) {
-            String timeStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
-            timeText.setText("🕐 " + timeStr);
-        }
-    }
-
-    private void updateAutoRefillButton() {
-        if (autoRefillToggle != null) {
-            autoRefillToggle.setText(isAutoRefillEnabled ? "🔄 AUTOREFILL AN" : "⏸️ AUTOREFILL AUS");
-            autoRefillToggle.setBackgroundColor(isAutoRefillEnabled ? 
-                    Color.parseColor("#4CAF50") : Color.parseColor("#FF5722"));
-        }
-    }
-
-    private void showStatus(String message, int color) {
-        if (statusText != null) {
-            statusText.setText(message);
-            statusText.setTextColor(color);
-            // Animation für Statusänderung
-            Animation fadeOut = AnimationUtils.loadAnimation(this, android.R.anim.fade_in);
-            statusText.startAnimation(fadeOut);
-        }
-        // Kurzzeitiger Toast für wichtige Meldungen
-        if (color == Color.RED || color == Color.GREEN) {
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void animateSuccessfulRefill() {
-        // Animation für erfolgreichen Refill
-        Animation pulse = AnimationUtils.loadAnimation(this, R.anim.pulse);
-        if (dataText != null) {
-            dataText.startAnimation(pulse);
-        }
-        if (colorIndicator != null) {
-            colorIndicator.startAnimation(pulse);
-        }
-    }
-
-    private void takeScreenshot() {
-        // Screenshot-Funktionalität für Debugging
-        try {
-            // Hier müsste die Screenshot-Funktionalität implementiert werden
-            // Über MediaProjection oder andere Methoden
-            Toast.makeText(this, "📸 Screenshot-Funktion in Entwicklung", Toast.LENGTH_SHORT).show();
-            Log.d(TAG, "Screenshot functionality requested");
-        } catch (Exception e) {
-            Log.e(TAG, "Error taking screenshot", e);
-            Toast.makeText(this, "❌ Screenshot fehlgeschlagen", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void openSettings() {
-        // Öffnet die Einstellungen der App
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
-        Toast.makeText(this, "⚙️ Einstellungen geöffnet", Toast.LENGTH_SHORT).show();
-    }
-
+    
+    private void hideVisuals() { removeVisual(swipeVisual); removeVisual(refillVisual); activeVisual = null; }
+    private void removeVisual(View visual) { if (visual != null && visual.getParent() != null) { try { windowManager.removeView(visual); } catch (Exception e) {} } }
+    
     @Override
     public void onDestroy() {
         super.onDestroy();
-        stopAutoRefill();
-        
-        if (stageUpdateRunnable != null) {
-            mainHandler.removeCallbacks(stageUpdateRunnable);
+        savePositions();
+        hideVisuals();
+        if (floatingView != null && windowManager != null) {
+            try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
-        
+        if (cropOverlayView != null) {
+            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+            cropOverlayView = null;
+        }
+        handler.removeCallbacksAndMessages(null);
         if (textRecognizer != null) {
             textRecognizer.close();
         }
-        
-        if (executorService != null) {
-            executorService.shutdown();
+        if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
+            lastScreenshotFile.delete();
         }
-        
-        if (overlayView != null && windowManager != null) {
-            try {
-                windowManager.removeView(overlayView);
-            } catch (Exception e) {
-                Log.e(TAG, "Error removing overlay view", e);
-            }
-        }
-        
-        saveState();
-        Log.d(TAG, "Service destroyed");
-    }
-
-    // Swipe Gesture Listener
-    private class SwipeGestureListener extends android.view.GestureDetector.SimpleOnGestureListener {
-        private static final int SWIPE_THRESHOLD = 100;
-        private static final int SWIPE_VELOCITY_THRESHOLD = 100;
-
-        @Override
-        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-            if (e1 == null || e2 == null) return false;
-
-            float diffX = e2.getX() - e1.getX();
-            float diffY = e2.getY() - e1.getY();
-
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                // Horizontales Swipe
-                if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
-                    if (diffX > 0) {
-                        // Rechts-Swipe: Refill
-                        performManualRefill();
-                    } else {
-                        // Links-Swipe: Verifizierung
-                        performVerification();
-                    }
-                    return true;
-                }
-            } else {
-                // Vertikales Swipe
-                if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
-                    if (diffY > 0) {
-                        // Abwärts: Auto-Refill toggeln
-                        toggleAutoRefill();
-                    } else {
-                        // Aufwärts: Status anzeigen
-                        showStatus("📊 " + String.format("%.2f", currentRemainingData) + " GB", Color.WHITE);
-                    }
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        @Override
-        public boolean onSingleTapConfirmed(MotionEvent e) {
-            // Einfacher Tap: Details anzeigen
-            String details = String.format("📊 %.2f GB\n📈 Stufe %d\n🔄 %d Refills\n⚡ %.2f GB/h", 
-                    currentRemainingData, currentStage, totalRefills, consumptionRate);
-            Toast.makeText(OverlayService.this, details, Toast.LENGTH_LONG).show();
-            return true;
-        }
-
-        @Override
-        public boolean onDoubleTap(MotionEvent e) {
-            // Doppel-Tap: Maximieren/Minimieren des Overlays
-            if (scrollView != null) {
-                if (scrollView.getVisibility() == View.VISIBLE) {
-                    scrollView.setVisibility(View.GONE);
-                    Toast.makeText(OverlayService.this, "Overlay minimiert", Toast.LENGTH_SHORT).show();
-                } else {
-                    scrollView.setVisibility(View.VISIBLE);
-                    Toast.makeText(OverlayService.this, "Overlay maximiert", Toast.LENGTH_SHORT).show();
-                }
-            }
-            return true;
-        }
-    }
-
-    // OCR-Funktionalität (für echte Verbrauchserkennung)
-    private void performOCR(byte[] imageData) {
-        if (imageData == null || textRecognizer == null) return;
-        
-        try {
-            InputImage image = InputImage.fromByteArray(imageData, screenWidth, screenHeight, 0, null);
-            textRecognizer.process(image)
-                    .addOnSuccessListener(this::handleOCRResult)
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "OCR failed", e);
-                        showStatus("❌ OCR fehlgeschlagen", Color.RED);
-                    });
-        } catch (Exception e) {
-            Log.e(TAG, "Error performing OCR", e);
-        }
-    }
-
-    private void handleOCRResult(Text result) {
-        String fullText = result.getText();
-        if (fullText == null || fullText.isEmpty()) {
-            Log.d(TAG, "No text found in OCR result");
-            return;
-        }
-        
-        Log.d(TAG, "OCR Result: " + fullText);
-        
-        // Extrahiere Datenvolumen aus OCR-Text
-        double extractedData = extractDataFromText(fullText);
-        if (extractedData >= 0) {
-            setRemainingData(extractedData);
-            showStatus("✅ OCR: " + String.format("%.2f", extractedData) + " GB", Color.GREEN);
-        } else {
-            showStatus("⚠️ Kein Datenvolumen gefunden", Color.YELLOW);
-        }
-    }
-
-    private double extractDataFromText(String text) {
-        // Verschiedene Muster für Datenvolumen erkennen
-        String[] patterns = {
-            "(\\d+[.,]?\\d*)\\s*GB",
-            "(\\d+[.,]?\\d*)\\s*GByte",
-            "(\\d+[.,]?\\d*)\\s*Giga",
-            "Verbleibend[\\s:]+(\\d+[.,]?\\d*)\\s*GB",
-            "Rest[\\s:]+(\\d+[.,]?\\d*)\\s*GB",
-            "Datenvolumen[\\s:]+(\\d+[.,]?\\d*)\\s*GB",
-            "(\\d+[.,]?\\d*)\\s*GB\\s*(?:verbleibend|rest)",
-            "noch\\s+(\\d+[.,]?\\d*)\\s*GB"
-        };
-        
-        try {
-            java.util.regex.Pattern pattern;
-            java.util.regex.Matcher matcher;
-            
-            for (String patternStr : patterns) {
-                pattern = java.util.regex.Pattern.compile(patternStr, java.util.regex.Pattern.CASE_INSENSITIVE);
-                matcher = pattern.matcher(text);
-                if (matcher.find()) {
-                    String numberStr = matcher.group(1).replace(",", ".");
-                    double value = Double.parseDouble(numberStr);
-                    if (value > 0 && value < 1000) { // Plausibilitätsprüfung
-                        return value;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error extracting data from text", e);
-        }
-        
-        return -1; // Kein gültiges Datenvolumen gefunden
-    }
-
-    // Screenshot-Funktionalität (für Debugging und OCR)
-    private void setupMediaProjection() {
-        // Hier müsste die MediaProjection eingerichtet werden
-        // Dies erfordert zusätzliche Berechtigungen und Intent-Start
-        Log.d(TAG, "MediaProjection setup would go here");
-    }
-
-    private void captureScreen() {
-        // Hier würde der tatsächliche Screenshot-Capture stattfinden
-        // Benötigt MediaProjection und ImageReader
-        Log.d(TAG, "Screen capture would go here");
     }
 }
