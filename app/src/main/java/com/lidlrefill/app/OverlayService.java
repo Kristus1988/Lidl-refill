@@ -108,7 +108,6 @@ public class OverlayService extends AccessibilityService {
     private float cropStartX = 0, cropStartY = 0;
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
-    private FrameLayout cropContainer = null;
     
     // ============ POSITIONEN ============
     private Point swipeStart = new Point(0, 0);
@@ -242,6 +241,9 @@ public class OverlayService extends AccessibilityService {
             .apply();
         cropSet = true;
         Toast.makeText(this, "✅ Crop gespeichert!", Toast.LENGTH_SHORT).show();
+        if (cropOverlayView != null) {
+            cropOverlayView.invalidate();
+        }
     }
     
     @Override
@@ -268,13 +270,12 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS - MIT SOFORT SICHTBAREM RECHECK ============
+    // ============ CROP-MODUS - KORREKTE POSITIONIERUNG ============
     private void startCropMode() {
         if (isCropMode) {
             isCropMode = false;
-            if (cropContainer != null) {
-                try { windowManager.removeView(cropContainer); } catch (Exception e) {}
-                cropContainer = null;
+            if (cropOverlayView != null) {
+                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                 cropOverlayView = null;
             }
             updateStatus("● Crop-Modus beendet");
@@ -294,80 +295,85 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void createCropOverlay() {
-        // Container für das Crop-Overlay
-        cropContainer = new FrameLayout(this);
-        cropContainer.setBackgroundColor(Color.TRANSPARENT);
+        if (cropOverlayView != null) {
+            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+            cropOverlayView = null;
+        }
         
-        // Das eigentliche Zeichen-View
+        FrameLayout container = new FrameLayout(this);
+        container.setBackgroundColor(Color.TRANSPARENT);
+        
+        // Crop-Overlay View - FULLSCREEN mit korrekter Koordinaten-Erfassung
         cropOverlayView = new View(this) {
-            private Paint borderPaint = new Paint();
-            private Paint fillPaint = new Paint();
-            
-            {
-                // Rahmen: Schwarz, 4px, durchgezogen
-                borderPaint.setColor(Color.BLACK);
-                borderPaint.setStrokeWidth(6);
-                borderPaint.setStyle(Paint.Style.STROKE);
-                borderPaint.setAntiAlias(true);
-                
-                // Leichte Füllung für bessere Sichtbarkeit (sehr transparent)
-                fillPaint.setColor(Color.argb(30, 0, 0, 0));
-                fillPaint.setStyle(Paint.Style.FILL);
-                fillPaint.setAntiAlias(true);
-            }
-            
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
+                
+                // ===== GESPEICHERTEN CROP-BEREICH ZEICHNEN =====
+                if (cropSet && cropLeft >= 0 && cropTop >= 0 && cropRight >= 0 && cropBottom >= 0) {
+                    Paint borderPaint = new Paint();
+                    borderPaint.setColor(Color.BLACK);
+                    borderPaint.setStrokeWidth(4);
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    borderPaint.setAntiAlias(true);
+                    canvas.drawRect(cropLeft, cropTop, cropRight, cropBottom, borderPaint);
+                }
+                
+                // ===== AKTUELL GEZEICHNETER BEREICH =====
                 if (isDrawingCrop) {
                     float left = Math.min(cropStartX, cropEndX);
                     float top = Math.min(cropStartY, cropEndY);
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
-                    // Rechteck mit leichter Füllung
-                    canvas.drawRect(left, top, right, bottom, fillPaint);
-                    
-                    // Schwarze Rahmenlinie
-                    canvas.drawRect(left, top, right, bottom, borderPaint);
-                    
-                    Log.d(TAG, "✂️ Rechteck gezeichnet: " + left + "," + top + " - " + right + "," + bottom);
+                    Paint drawPaint = new Paint();
+                    drawPaint.setColor(Color.BLACK);
+                    drawPaint.setStrokeWidth(4);
+                    drawPaint.setStyle(Paint.Style.STROKE);
+                    drawPaint.setAntiAlias(true);
+                    canvas.drawRect(left, top, right, bottom, drawPaint);
                 }
             }
         };
         
-        // Touch-Listener für das Ziehen
+        // Touch-Listener mit KORREKTEN Raw-Koordinaten
         cropOverlayView.setOnTouchListener((v, event) -> {
+            // Raw-Koordinaten für exakte Position auf dem Display
+            float rawX = event.getRawX();
+            float rawY = event.getRawY();
+            
+            // Begrenzung auf Bildschirmgröße
+            rawX = Math.max(0, Math.min(screenWidth, rawX));
+            rawY = Math.max(0, Math.min(screenHeight, rawY));
+            
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    cropStartX = event.getRawX();
-                    cropStartY = event.getRawY();
-                    cropEndX = event.getRawX();
-                    cropEndY = event.getRawY();
+                    cropStartX = rawX;
+                    cropStartY = rawY;
+                    cropEndX = rawX;
+                    cropEndY = rawY;
                     isDrawingCrop = true;
                     cropOverlayView.invalidate();
-                    Log.d(TAG, "✂️ Touch DOWN: " + cropStartX + "," + cropStartY);
+                    Log.d(TAG, "✂️ Crop START: " + cropStartX + ", " + cropStartY);
                     return true;
                     
                 case MotionEvent.ACTION_MOVE:
-                    cropEndX = event.getRawX();
-                    cropEndY = event.getRawY();
+                    cropEndX = rawX;
+                    cropEndY = rawY;
                     cropOverlayView.invalidate();
-                    Log.d(TAG, "✂️ Touch MOVE: " + cropEndX + "," + cropEndY);
                     return true;
                     
                 case MotionEvent.ACTION_UP:
-                    cropEndX = event.getRawX();
-                    cropEndY = event.getRawY();
+                    cropEndX = rawX;
+                    cropEndY = rawY;
                     isDrawingCrop = false;
-                    cropOverlayView.invalidate();
                     
                     int left = (int)Math.min(cropStartX, cropEndX);
                     int top = (int)Math.min(cropStartY, cropEndY);
                     int right = (int)Math.max(cropStartX, cropEndX);
                     int bottom = (int)Math.max(cropStartY, cropEndY);
                     
-                    Log.d(TAG, "✂️ Touch UP: Bereich " + left + "," + top + " - " + right + "," + bottom);
+                    Log.d(TAG, "✂️ Crop ENDE: " + left + "," + top + " - " + right + "," + bottom);
                     
                     if (right - left > 50 && bottom - top > 50) {
                         cropLeft = left;
@@ -378,31 +384,33 @@ public class OverlayService extends AccessibilityService {
                         Toast.makeText(OverlayService.this, 
                             "✅ Crop Bereich gespeichert!", 
                             Toast.LENGTH_SHORT).show();
+                        cropOverlayView.invalidate();
                     } else {
                         Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_SHORT).show();
+                        cropOverlayView.invalidate();
                         return true;
                     }
                     
-                    // Crop-Modus beenden nach 500ms
+                    // Crop-Modus nach 2 Sekunden beenden
                     handler.postDelayed(() -> {
                         isCropMode = false;
-                        if (cropContainer != null) {
-                            try { windowManager.removeView(cropContainer); } catch (Exception e) {}
-                            cropContainer = null;
+                        if (cropOverlayView != null) {
+                            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                             cropOverlayView = null;
                         }
                         updateStatus("● Crop-Modus beendet");
-                    }, 500);
+                        Toast.makeText(OverlayService.this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
+                    }, 2000);
                     return true;
             }
             return false;
         });
         
-        cropContainer.addView(cropOverlayView, new FrameLayout.LayoutParams(
+        container.addView(cropOverlayView, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT));
         
-        // WindowManager Parameter
+        // FULLSCREEN Overlay - keine Abweichungen
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -411,8 +419,8 @@ public class OverlayService extends AccessibilityService {
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
             PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
@@ -420,18 +428,18 @@ public class OverlayService extends AccessibilityService {
         params.y = 0;
         
         try {
-            windowManager.addView(cropContainer, params);
-            Log.d(TAG, "✅ Crop-Overlay wurde hinzugefügt");
+            windowManager.addView(container, params);
+            cropOverlayView = container;
+            cropOverlayView.invalidate();
         } catch (Exception e) {
-            Log.e(TAG, "❌ Fehler beim Crop-Overlay: " + e.getMessage());
+            Log.e(TAG, "Fehler beim Crop-Overlay: " + e.getMessage());
             Toast.makeText(this, "❌ Crop-Overlay konnte nicht erstellt werden!", Toast.LENGTH_LONG).show();
             isCropMode = false;
-            cropContainer = null;
             cropOverlayView = null;
         }
     }
     
-    // ============ SCREENSHOT & OCR ============
+    // ============ REST DES CODES (unverändert) ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -451,9 +459,8 @@ public class OverlayService extends AccessibilityService {
         
         if (isCropMode) {
             isCropMode = false;
-            if (cropContainer != null) {
-                try { windowManager.removeView(cropContainer); } catch (Exception e) {}
-                cropContainer = null;
+            if (cropOverlayView != null) {
+                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                 cropOverlayView = null;
             }
             handler.postDelayed(() -> performScreenshotAndOcr(), 300);
@@ -476,7 +483,6 @@ public class OverlayService extends AccessibilityService {
         }, 5000);
     }
     
-    // ============ SCREENSHOT FINDEN ============
     private void findScreenshotInAllFolders(int attempt) {
         if (attempt > 20) {
             updateStatus("❌ Screenshot nicht gefunden (25s)");
@@ -570,7 +576,6 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ OCR ============
     private void performOcrOnBitmap(Bitmap screenshot) {
         if (screenshot == null) {
             updateStatus("❌ Bitmap ist null");
@@ -642,7 +647,6 @@ public class OverlayService extends AccessibilityService {
             });
     }
     
-    // ============ VERBRAUCHS-HISTORIE ============
     private void updateConsumptionHistory(double currentVolume) {
         long currentTime = System.currentTimeMillis();
         
@@ -684,7 +688,6 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ GB-EXTRACTION ============
     private String extractVolumeImproved(String text) {
         if (text == null || text.isEmpty()) {
             Log.d(TAG, "OCR Text ist leer");
@@ -760,51 +763,46 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ OPTIMIERTE ADAPTIVE AUTOREFILL LOGIK MIT SEHR LANGEN WARTEZEITEN ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== STUFE 1: > 50 GB → Ziel 25 GB (2-6 Stunden ZUFÄLLIG) =====
         if (volume > 50.00) {
-            long minWait = 2 * 60 * 60 * 1000;   // 2 Stunden
-            long maxWait = 6 * 60 * 60 * 1000;   // 6 Stunden
+            long minWait = 2 * 60 * 60 * 1000;
+            long maxWait = 6 * 60 * 60 * 1000;
             calculateWaitTimeWithStage(volume, 25.00, minWait, maxWait);
             return;
         }
         
-        // ===== STUFE 2: > 25 GB → Ziel 10 GB (1-3 Stunden ZUFÄLLIG) =====
         if (volume > 25.00) {
-            long minWait = 1 * 60 * 60 * 1000;   // 1 Stunde
-            long maxWait = 3 * 60 * 60 * 1000;   // 3 Stunden
+            long minWait = 1 * 60 * 60 * 1000;
+            long maxWait = 3 * 60 * 60 * 1000;
             calculateWaitTimeWithStage(volume, 10.00, minWait, maxWait);
             return;
         }
         
-        // ===== STUFE 3: > 10 GB → Ziel 5 GB (30-90 Minuten ZUFÄLLIG) =====
         if (volume > 10.00) {
-            long minWait = 30 * 60 * 1000;       // 30 Minuten
-            long maxWait = 90 * 60 * 1000;       // 90 Minuten
+            long minWait = 30 * 60 * 1000;
+            long maxWait = 90 * 60 * 1000;
             calculateWaitTimeWithStage(volume, 5.00, minWait, maxWait);
             return;
         }
         
-        // ===== STUFE 4: > 5 GB → Ziel 1 GB (15-45 Minuten ZUFÄLLIG) =====
         if (volume > 5.00) {
-            long minWait = 15 * 60 * 1000;       // 15 Minuten
-            long maxWait = 45 * 60 * 1000;       // 45 Minuten
+            long minWait = 15 * 60 * 1000;
+            long maxWait = 45 * 60 * 1000;
             calculateWaitTimeWithStage(volume, 1.00, minWait, maxWait);
             return;
         }
         
-        // ===== STUFE 5: > 1 GB → Ziel 0,30 GB (5-15 Minuten ZUFÄLLIG) =====
         if (volume > 1.00) {
             double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
             
             if (volume > threshold) {
-                long minWait = 5 * 60 * 1000;     // 5 Minuten
-                long maxWait = 15 * 60 * 1000;    // 15 Minuten
+                long minWait = 5 * 60 * 1000;
+                long maxWait = 15 * 60 * 1000;
                 calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
             } else {
                 updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -819,10 +817,10 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== ≤ 1 GB → Refill bei ≤ 0,30 (5-15 Minuten ZUFÄLLIG) =====
-        if (volume <= 0.30) {
-            updateStatus("♻️ Volumen ≤ 0,30 → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ 0,30 → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
+        double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
+        if (volume <= threshold) {
+            updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
+            Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
             handler.postDelayed(() -> {
                 if (isRunning) {
@@ -830,9 +828,9 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            long minWait = 5 * 60 * 1000;         // 5 Minuten
-            long maxWait = 15 * 60 * 1000;        // 15 Minuten
-            calculateWaitTimeWithStage(volume, 0.30, minWait, maxWait);
+            long minWait = 5 * 60 * 1000;
+            long maxWait = 15 * 60 * 1000;
+            calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
         }
     }
     
@@ -852,16 +850,11 @@ public class OverlayService extends AccessibilityService {
         
         double diff = currentVolume - targetVolume;
         double minutesDouble = diff / consumptionRate;
-        
-        // Zufälliger Faktor zwischen 0,70 und 1,30 für menschliche Varianz
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // Begrenzung auf min/max Bereich
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
-        
-        // Zusätzlicher zufälliger Offset für mehr Varianz (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -910,7 +903,6 @@ public class OverlayService extends AccessibilityService {
         startAutomation();
     }
     
-    // ============ POSITIONEN ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 10);
@@ -936,7 +928,6 @@ public class OverlayService extends AccessibilityService {
             .apply();
     }
     
-    // ============ SWIPE TEST (JE NACH MODUS) ============
     private void performSwipeTestGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -980,7 +971,6 @@ public class OverlayService extends AccessibilityService {
         }, null);
     }
     
-    // ============ SWIPE GESTE (FÜR AUTOMATIK) ============
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1042,7 +1032,6 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ============ CLICK REFILL BUTTON ============
     private void clickRefillButton() {
         if (!refillPlaced) {
             Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1094,7 +1083,6 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ============ COUNTDOWN ============
     private void startCountdown(long waitTime, Runnable onFinish) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
@@ -1136,7 +1124,6 @@ public class OverlayService extends AccessibilityService {
         startCountdown(waitTime, null);
     }
     
-    // ============ AUTOMATIK ============
     private void startAutomation() {
         isRunning = true;
         cycleCount = 0;
@@ -1179,13 +1166,11 @@ public class OverlayService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
     }
     
-    // ============ UI HELPERS ============
     private void updateStatus(String text) { if (tvStatus != null) tvStatus.setText(text); }
     private void updateCountdown(String text) { if (tvCountdown != null) tvCountdown.setText(text); }
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ============ OVERLAY ============
     private void createOverlay() {
         if (floatingView != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
@@ -1218,7 +1203,6 @@ public class OverlayService extends AccessibilityService {
         
         btnCrop.setOnClickListener(v -> startCropMode());
         
-        // ============ SPINNER ============
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this,
             android.R.layout.simple_spinner_dropdown_item,
@@ -1266,7 +1250,6 @@ public class OverlayService extends AccessibilityService {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         
-        // ============ BUTTONS ============
         btnSwipePlace.setOnClickListener(v -> {
             if (currentMode == Mode.SWIPE_PLACE) {
                 currentMode = Mode.NONE;
@@ -1414,7 +1397,6 @@ public class OverlayService extends AccessibilityService {
         windowManager.addView(floatingView, params);
     }
     
-    // ============ VISUAL HELPERS ============
     private void createVisualHelpers() {
         swipeVisual = new View(this) {
             @Override
@@ -1545,9 +1527,8 @@ public class OverlayService extends AccessibilityService {
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
-        if (cropContainer != null) {
-            try { windowManager.removeView(cropContainer); } catch (Exception e) {}
-            cropContainer = null;
+        if (cropOverlayView != null) {
+            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
             cropOverlayView = null;
         }
         handler.removeCallbacksAndMessages(null);
