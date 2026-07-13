@@ -311,6 +311,15 @@ public class OverlayService extends AccessibilityService {
                     float right = Math.max(cropStartX, cropEndX);
                     float bottom = Math.max(cropStartY, cropEndY);
                     
+                    // ===== SCHWARZE RAHMENLINIE - NUR LINIE, KEINE TRANSPARENZ =====
+                    Paint borderPaint = new Paint();
+                    borderPaint.setColor(Color.BLACK);  // Komplett schwarz
+                    borderPaint.setStrokeWidth(4);       // 4 Pixel dick
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    borderPaint.setAntiAlias(true);
+                    canvas.drawRect(left, top, right, bottom, borderPaint);
+                    
+                    // Koordinaten und Größe in Weiß für bessere Lesbarkeit
                     Paint textPaint = new Paint();
                     textPaint.setColor(Color.WHITE);
                     textPaint.setTextSize(30);
@@ -321,12 +330,6 @@ public class OverlayService extends AccessibilityService {
                     String size = "Größe: " + (int)(right-left) + "x" + (int)(bottom-top);
                     canvas.drawText(coords, left + 10, top + 50, textPaint);
                     canvas.drawText(size, left + 10, top + 100, textPaint);
-                    
-                    Paint borderPaint = new Paint();
-                    borderPaint.setColor(Color.argb(100, 255, 255, 255));
-                    borderPaint.setStrokeWidth(2);
-                    borderPaint.setStyle(Paint.Style.STROKE);
-                    canvas.drawRect(left, top, right, bottom, borderPaint);
                 }
             }
         };
