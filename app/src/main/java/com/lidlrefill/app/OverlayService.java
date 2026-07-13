@@ -109,6 +109,9 @@ public class OverlayService extends AccessibilityService {
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
     
+    // ============ CROP RAHMEN (SEPARATES VIEW) ============
+    private View cropFrameView = null;
+    
     // ============ POSITIONEN ============
     private Point swipeStart = new Point(0, 0);
     private Point swipeEnd = new Point(0, 0);
@@ -267,10 +270,11 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS - RAHMEN NUR BEIM ZIEHEN (WIE SWIPE-PFEIL) ============
+    // ============ CROP-MODUS - MIT SEPARATEM FRAME VIEW (WIE SWIPE-PFEIL) ============
     private void startCropMode() {
         if (isCropMode) {
             isCropMode = false;
+            removeCropFrame();
             if (cropOverlayView != null) {
                 try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                 cropOverlayView = null;
@@ -291,6 +295,52 @@ public class OverlayService extends AccessibilityService {
         createCropOverlay();
     }
     
+    // ===== SEPARATER FRAME VIEW (WIE SWIPE-PFEIL) =====
+    private void showCropFrame(float left, float top, float right, float bottom) {
+        removeCropFrame();
+        
+        cropFrameView = new View(this) {
+            @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                Paint paint = new Paint();
+                paint.setColor(Color.BLACK);
+                paint.setStrokeWidth(4);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setAntiAlias(true);
+                canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
+            }
+        };
+        
+        int width = (int)(right - left);
+        int height = (int)(bottom - top);
+        
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+            Math.max(10, width),
+            Math.max(10, height),
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = (int)left;
+        params.y = (int)top;
+        
+        cropFrameView.setElevation(1000);
+        windowManager.addView(cropFrameView, params);
+    }
+    
+    private void removeCropFrame() {
+        if (cropFrameView != null) {
+            try { windowManager.removeView(cropFrameView); } catch (Exception e) {}
+            cropFrameView = null;
+        }
+    }
+    
     private void createCropOverlay() {
         if (cropOverlayView != null) {
             try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
@@ -304,21 +354,7 @@ public class OverlayService extends AccessibilityService {
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                
-                // ===== NUR BEIM ZIEHEN WIRD DER RAHMEN GEZEICHNET =====
-                if (isDrawingCrop) {
-                    float left = Math.min(cropStartX, cropEndX);
-                    float top = Math.min(cropStartY, cropEndY);
-                    float right = Math.max(cropStartX, cropEndX);
-                    float bottom = Math.max(cropStartY, cropEndY);
-                    
-                    Paint drawPaint = new Paint();
-                    drawPaint.setColor(Color.BLACK);
-                    drawPaint.setStrokeWidth(4);
-                    drawPaint.setStyle(Paint.Style.STROKE);
-                    drawPaint.setAntiAlias(true);
-                    canvas.drawRect(left, top, right, bottom, drawPaint);
-                }
+                // Nichts - wir zeichnen den Frame separat
             }
         };
         
@@ -336,21 +372,26 @@ public class OverlayService extends AccessibilityService {
                     cropEndX = rawX;
                     cropEndY = rawY;
                     isDrawingCrop = true;
-                    cropOverlayView.invalidate();
+                    showCropFrame(cropStartX, cropStartY, cropEndX, cropEndY);
                     Log.d(TAG, "✂️ Crop START: " + cropStartX + ", " + cropStartY);
                     return true;
                     
                 case MotionEvent.ACTION_MOVE:
                     cropEndX = rawX;
                     cropEndY = rawY;
-                    cropOverlayView.invalidate();
+                    showCropFrame(
+                        Math.min(cropStartX, cropEndX),
+                        Math.min(cropStartY, cropEndY),
+                        Math.max(cropStartX, cropEndX),
+                        Math.max(cropStartY, cropEndY)
+                    );
                     return true;
                     
                 case MotionEvent.ACTION_UP:
                     cropEndX = rawX;
                     cropEndY = rawY;
                     isDrawingCrop = false;
-                    cropOverlayView.invalidate();
+                    removeCropFrame();
                     
                     int left = (int)Math.min(cropStartX, cropEndX);
                     int top = (int)Math.min(cropStartY, cropEndY);
@@ -418,7 +459,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ REST DES CODES (unverändert) ============
+    // ============ REST DES CODES ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -438,6 +479,7 @@ public class OverlayService extends AccessibilityService {
         
         if (isCropMode) {
             isCropMode = false;
+            removeCropFrame();
             if (cropOverlayView != null) {
                 try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                 cropOverlayView = null;
@@ -1311,6 +1353,7 @@ public class OverlayService extends AccessibilityService {
         btnClose.setOnClickListener(v -> {
             stopAutomation();
             hideVisuals();
+            removeCropFrame();
             savePositions();
             if (floatingView != null && windowManager != null) {
                 try { windowManager.removeView(floatingView); } catch (Exception e) {}
@@ -1503,6 +1546,7 @@ public class OverlayService extends AccessibilityService {
         super.onDestroy();
         savePositions();
         hideVisuals();
+        removeCropFrame();
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
