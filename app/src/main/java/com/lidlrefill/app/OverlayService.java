@@ -155,13 +155,10 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
     // ============ OPTIMIERTE STUFEN ============
-    private static final double REFILL_THRESHOLD_HIGH = 0.50;
-    private static final double REFILL_THRESHOLD_LOW = 0.30;
-    
-    // ===== NEUE SCHWELLE FÜR "HOHEN VERBRAUCH" =====
-    // Bei Verbrauch > 0,026 GB/min gilt als "hoher Verbrauch" → Refill bei 0,50 GB
-    // Bei Verbrauch ≤ 0,026 GB/min gilt als "niedriger Verbrauch" → Refill bei 0,30 GB
-    private static final double HIGH_USAGE_THRESHOLD = 0.026;
+    // Dynamischer Schwellwert basierend auf Verbrauchsrate
+    private static final double CONSUMPTION_THRESHOLD = 0.015; // 0,015 GB/Min ≈ 0,9 GB/Stunde
+    private static final double REFILL_BUFFER_HIGH = 0.50;     // Bei hohem Verbrauch
+    private static final double REFILL_BUFFER_LOW = 0.30;      // Bei niedrigem Verbrauch
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -836,19 +833,25 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ OPTIMIERTE LOGIK: NEUE SCHWELLE 0,026 GB/min ============
+    // ============ OPTIMIERTE LOGIK: DYNAMISCHER SCHWELLWERT ============
+    private double getRefillThreshold() {
+        // Bei Verbrauch >= 0,015 GB/Min → 0,50 GB Puffer
+        // Bei Verbrauch < 0,015 GB/Min → 0,30 GB Puffer
+        if (averageConsumptionRate >= CONSUMPTION_THRESHOLD) {
+            return REFILL_BUFFER_HIGH; // 0,50 GB
+        } else {
+            return REFILL_BUFFER_LOW;  // 0,30 GB
+        }
+    }
+    
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
-        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
-        Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+        double threshold = getRefillThreshold();
+        boolean isHighUsage = averageConsumptionRate >= CONSUMPTION_THRESHOLD;
         
-        // ===== NEUE SCHWELLE: Bei Verbrauch > 0,026 GB/min = hoher Verbrauch =====
-        boolean isHighUsage = averageConsumptionRate > HIGH_USAGE_THRESHOLD;
-        double threshold = isHighUsage ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
-        
-        Log.d(TAG, "📊 Verbrauch: " + (isHighUsage ? "HOCH (> 0,026 GB/min)" : "NIEDRIG (≤ 0,026 GB/min)"));
-        Log.d(TAG, "📊 Refill-Schwelle: " + threshold + " GB");
+        Log.d(TAG, "♻️ AUTOREFILL: Volumen = " + volume + " GB, Rate = " + 
+            String.format("%.3f", averageConsumptionRate) + " GB/Min, Threshold = " + threshold + " GB");
         
         // ===== STUFE 1: > 10 GB → Sehr selten prüfen (2-6 Stunden) =====
         if (volume > 10.00) {
@@ -874,18 +877,16 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== STUFE 4: 1-2 GB → Häufiger prüfen =====
+        // ===== STUFE 4: 1-2 GB → Häufiger prüfen (15-45 Minuten) =====
         if (volume > 1.00) {
             long minWait, maxWait;
             
             if (isHighUsage) {
-                // Bei hohem Verbrauch: schnellere Checks
-                minWait = 10 * 60 * 1000;        // 10 Minuten
-                maxWait = 20 * 60 * 1000;        // 20 Minuten
-            } else {
-                // Bei niedrigem Verbrauch: entspannter
                 minWait = 15 * 60 * 1000;        // 15 Minuten
                 maxWait = 30 * 60 * 1000;        // 30 Minuten
+            } else {
+                minWait = 20 * 60 * 1000;        // 20 Minuten
+                maxWait = 45 * 60 * 1000;        // 45 Minuten
             }
             
             if (volume > threshold) {
@@ -904,7 +905,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== UNTER 1 GB =====
+        // ===== UNTER 1 GB → Kritische Phase =====
         if (volume <= threshold) {
             // Kritisch → Sofort Refill
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -916,17 +917,17 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            // Unter 1 GB aber noch über Schwelle
+            // Unter 1 GB aber noch über Schwelle → Sanft prüfen
             long minWait, maxWait;
             
             if (isHighUsage) {
-                // Hoher Verbrauch: 5-12 Minuten
+                // Bei hohem Verbrauch: 5-15 Minuten
                 minWait = 5 * 60 * 1000;
-                maxWait = 12 * 60 * 1000;
+                maxWait = 15 * 60 * 1000;
             } else {
-                // Niedriger Verbrauch: 8-20 Minuten
-                minWait = 8 * 60 * 1000;
-                maxWait = 20 * 60 * 1000;
+                // Bei niedrigem Verbrauch: 10-25 Minuten
+                minWait = 10 * 60 * 1000;
+                maxWait = 25 * 60 * 1000;
             }
             
             // Je näher an der Schwelle, desto kürzer die Wartezeit
@@ -961,7 +962,6 @@ public class OverlayService extends AccessibilityService {
         double diff = currentVolume - targetVolume;
         double minutesDouble = diff / consumptionRate;
         
-        // Zufälliger Faktor zwischen 0,70 und 1,30
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
@@ -980,13 +980,10 @@ public class OverlayService extends AccessibilityService {
             timeStr = minutes + " Min";
         }
         
-        boolean isHighUsage = averageConsumptionRate > HIGH_USAGE_THRESHOLD;
-        String thresholdStr = isHighUsage ? "0,50 GB" : "0,30 GB";
-        
         updateStatus("♻️ Adaptiv: " + timeStr + " (Rate: " + 
             String.format("%.3f", consumptionRate) + " GB/Min)");
         Toast.makeText(this, 
-            "♻️ Bis " + thresholdStr + ": " + timeStr + " (aktuell " + currentVolume + " GB)", 
+            "♻️ Bis " + targetVolume + " GB: " + timeStr + " (aktuell " + currentVolume + " GB)", 
             Toast.LENGTH_SHORT).show();
         
         currentPhase = Phase.WAIT_AFTER_OCR;
