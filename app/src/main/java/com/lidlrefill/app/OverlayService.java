@@ -154,9 +154,10 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
-    // ============ OPTIMIERTE STUFEN ============
-    private static final double REFILL_THRESHOLD_HIGH = 0.50;
-    private static final double REFILL_THRESHOLD_LOW = 0.30;
+    // ============ SCHWELLEN ============
+    private static final double REFILL_THRESHOLD_HIGH = 0.50;   // Bei hohem Verbrauch
+    private static final double REFILL_THRESHOLD_LOW = 0.30;    // Bei niedrigem Verbrauch
+    private static final double HIGH_USAGE_THRESHOLD = 0.03;    // = 0,03 GB/min (angepasst von 0,04)
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -831,12 +832,13 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ OPTIMIERTE LOGIK: "SO WENIG WIE MÖGLICH, SO VIEL WIE NÖTIG" ============
+    // ============ OPTIMIERTE LOGIK MIT 0,03 GB/min SCHWELLE ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+        Log.d(TAG, "📊 Schwelle für hohen Verbrauch: " + HIGH_USAGE_THRESHOLD + " GB/Min");
         
         // ===== STUFE 1: > 10 GB → Sehr selten prüfen (2-6 Stunden) =====
         if (volume > 10.00) {
@@ -864,15 +866,18 @@ public class OverlayService extends AccessibilityService {
         
         // ===== STUFE 4: 1-2 GB → Häufiger prüfen (15-45 Minuten) =====
         if (volume > 1.00) {
-            boolean isHighUsage = averageConsumptionRate > 0.04;
+            // NEU: Schwelle von 0,03 GB/min (statt 0,04)
+            boolean isHighUsage = averageConsumptionRate > HIGH_USAGE_THRESHOLD;
             long minWait, maxWait;
             
             if (isHighUsage) {
+                // Bei hohem Verbrauch (Streaming): schneller prüfen
+                minWait = 10 * 60 * 1000;        // 10 Minuten
+                maxWait = 20 * 60 * 1000;        // 20 Minuten
+            } else {
+                // Bei niedrigem Verbrauch: entspannter
                 minWait = 15 * 60 * 1000;        // 15 Minuten
                 maxWait = 30 * 60 * 1000;        // 30 Minuten
-            } else {
-                minWait = 20 * 60 * 1000;        // 20 Minuten
-                maxWait = 45 * 60 * 1000;        // 45 Minuten
             }
             
             double threshold = isHighUsage ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
@@ -893,8 +898,8 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== UNTER 1 GB → Nur hier wirklich aktiv prüfen =====
-        boolean isHighUsage = averageConsumptionRate > 0.04;
+        // ===== UNTER 1 GB =====
+        boolean isHighUsage = averageConsumptionRate > HIGH_USAGE_THRESHOLD;
         double threshold = isHighUsage ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
         
         if (volume <= threshold) {
@@ -908,25 +913,23 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            // Unter 1 GB aber noch über Schwelle → Sanft prüfen
+            // Unter 1 GB aber noch über Schwelle → Kurze Wartezeiten
             long minWait, maxWait;
             
             if (isHighUsage) {
-                // Bei hohem Verbrauch: 5-15 Minuten
+                // Bei hohem Verbrauch: 3-8 Minuten
+                minWait = 3 * 60 * 1000;         // 3 Minuten
+                maxWait = 8 * 60 * 1000;         // 8 Minuten
+            } else {
+                // Bei niedrigem Verbrauch: 5-15 Minuten
                 minWait = 5 * 60 * 1000;         // 5 Minuten
                 maxWait = 15 * 60 * 1000;        // 15 Minuten
-            } else {
-                // Bei niedrigem Verbrauch: 10-25 Minuten
-                minWait = 10 * 60 * 1000;        // 10 Minuten
-                maxWait = 25 * 60 * 1000;        // 25 Minuten
             }
             
             // Je näher an der Schwelle, desto kürzer die Wartezeit
             double diff = volume - threshold;
-            double maxDiff = 1.0; // Maximal 1 GB Abstand
+            double maxDiff = 1.0;
             double progress = Math.min(1.0, diff / maxDiff);
-            // progress = 0 (sehr nah) → kürzere Wartezeit
-            // progress = 1 (weit weg) → längere Wartezeit
             
             long adjustedMin = (long)(minWait + (maxWait - minWait) * progress * 0.5);
             long adjustedMax = (long)(maxWait - (maxWait - minWait) * progress * 0.3);
