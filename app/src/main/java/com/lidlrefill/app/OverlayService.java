@@ -155,10 +155,11 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
     // ============ OPTIMIERTE STUFEN ============
-    // Dynamischer Schwellwert basierend auf Verbrauchsrate
-    private static final double CONSUMPTION_THRESHOLD = 0.015; // 0,015 GB/Min ≈ 0,9 GB/Stunde
-    private static final double REFILL_BUFFER_HIGH = 0.50;     // Bei hohem Verbrauch
-    private static final double REFILL_BUFFER_LOW = 0.30;      // Bei niedrigem Verbrauch
+    // Surfen (≤ 0,015 GB/Min) → Puffer 0,30 GB (langsamer Verbrauch, später nachladen)
+    // Streaming (> 0,015 GB/Min) → Puffer 0,50 GB (schneller Verbrauch, früher nachladen)
+    private static final double USAGE_THRESHOLD = 0.015;
+    private static final double REFILL_THRESHOLD_SURFING = 0.30;
+    private static final double REFILL_THRESHOLD_STREAMING = 0.50;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -833,25 +834,21 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ OPTIMIERTE LOGIK: DYNAMISCHER SCHWELLWERT ============
-    private double getRefillThreshold() {
-        // Bei Verbrauch >= 0,015 GB/Min → 0,50 GB Puffer
-        // Bei Verbrauch < 0,015 GB/Min → 0,30 GB Puffer
-        if (averageConsumptionRate >= CONSUMPTION_THRESHOLD) {
-            return REFILL_BUFFER_HIGH; // 0,50 GB
-        } else {
-            return REFILL_BUFFER_LOW;  // 0,30 GB
-        }
-    }
-    
+    // ============ OPTIMIERTE LOGIK: KORREKT VERTAUSCHT ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
-        double threshold = getRefillThreshold();
-        boolean isHighUsage = averageConsumptionRate >= CONSUMPTION_THRESHOLD;
+        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
+        Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        Log.d(TAG, "♻️ AUTOREFILL: Volumen = " + volume + " GB, Rate = " + 
-            String.format("%.3f", averageConsumptionRate) + " GB/Min, Threshold = " + threshold + " GB");
+        // ===== KORREKT: =====
+        // Surfen (≤ 0,015 GB/Min) → Puffer 0,30 GB (langsamer Verbrauch = später nachladen)
+        // Streaming (> 0,015 GB/Min) → Puffer 0,50 GB (schneller Verbrauch = früher nachladen)
+        boolean isLowUsage = averageConsumptionRate <= USAGE_THRESHOLD;
+        double threshold = isLowUsage ? REFILL_THRESHOLD_SURFING : REFILL_THRESHOLD_STREAMING;
+        
+        Log.d(TAG, "📊 Verbrauch: " + (isLowUsage ? "Niedrig (Surfen)" : "Hoch (Streaming)") + 
+            " → Puffer: " + threshold + " GB");
         
         // ===== STUFE 1: > 10 GB → Sehr selten prüfen (2-6 Stunden) =====
         if (volume > 10.00) {
@@ -881,12 +878,14 @@ public class OverlayService extends AccessibilityService {
         if (volume > 1.00) {
             long minWait, maxWait;
             
-            if (isHighUsage) {
-                minWait = 15 * 60 * 1000;        // 15 Minuten
-                maxWait = 30 * 60 * 1000;        // 30 Minuten
-            } else {
+            if (isLowUsage) {
+                // Surfen: entspannter (langsamer Verbrauch)
                 minWait = 20 * 60 * 1000;        // 20 Minuten
                 maxWait = 45 * 60 * 1000;        // 45 Minuten
+            } else {
+                // Streaming: etwas häufiger (schneller Verbrauch)
+                minWait = 15 * 60 * 1000;        // 15 Minuten
+                maxWait = 30 * 60 * 1000;        // 30 Minuten
             }
             
             if (volume > threshold) {
@@ -905,7 +904,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== UNTER 1 GB → Kritische Phase =====
+        // ===== UNTER 1 GB → Nur hier wirklich aktiv prüfen =====
         if (volume <= threshold) {
             // Kritisch → Sofort Refill
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -920,14 +919,14 @@ public class OverlayService extends AccessibilityService {
             // Unter 1 GB aber noch über Schwelle → Sanft prüfen
             long minWait, maxWait;
             
-            if (isHighUsage) {
-                // Bei hohem Verbrauch: 5-15 Minuten
-                minWait = 5 * 60 * 1000;
-                maxWait = 15 * 60 * 1000;
-            } else {
-                // Bei niedrigem Verbrauch: 10-25 Minuten
+            if (isLowUsage) {
+                // Surfen: 10-25 Minuten
                 minWait = 10 * 60 * 1000;
                 maxWait = 25 * 60 * 1000;
+            } else {
+                // Streaming: 5-15 Minuten
+                minWait = 5 * 60 * 1000;
+                maxWait = 15 * 60 * 1000;
             }
             
             // Je näher an der Schwelle, desto kürzer die Wartezeit
@@ -962,15 +961,19 @@ public class OverlayService extends AccessibilityService {
         double diff = currentVolume - targetVolume;
         double minutesDouble = diff / consumptionRate;
         
+        // Zufälliger Faktor zwischen 0,70 und 1,30 für menschliche Varianz
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
+        // Begrenzung auf min/max Bereich
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
+        // Zusätzlicher zufälliger Offset für mehr Varianz (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
+        // Wartezeit in lesbare Form umwandeln
         String timeStr;
         if (minutes >= 60) {
             long hours = minutes / 60;
