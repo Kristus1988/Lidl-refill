@@ -276,7 +276,6 @@ public class OverlayService extends AccessibilityService {
     
     // ============ CROP-MODUS - MIT AUTOMATISCHER SCHLIESSUNG ============
     private void startCropMode() {
-        // Wenn schon im Crop-Modus, dann beenden (Button-Klick)
         if (isCropMode) {
             closeCropMode();
             return;
@@ -303,7 +302,6 @@ public class OverlayService extends AccessibilityService {
             try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
             cropOverlayView = null;
         }
-        // Auto-Close Timer entfernen
         cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
         cropAutoCloseRunnable = null;
         updateStatus("● Crop-Modus beendet");
@@ -311,7 +309,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void scheduleAutoClose() {
-        // Vorherigen Timer entfernen
         cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
         cropAutoCloseRunnable = () -> {
             if (isCropMode && !isDrawingCrop) {
@@ -319,12 +316,11 @@ public class OverlayService extends AccessibilityService {
                 closeCropMode();
             }
         };
-        cropAutoCloseHandler.postDelayed(cropAutoCloseRunnable, 3000); // 3 Sekunden
+        cropAutoCloseHandler.postDelayed(cropAutoCloseRunnable, 3000);
     }
     
     // ===== SEPARATER FRAME VIEW =====
     private void showCropFrame(float left, float top, float right, float bottom) {
-        // Wenn Frame schon sichtbar, Position aktualisieren
         if (cropFrameView != null && cropFrameVisible) {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) cropFrameView.getLayoutParams();
             params.x = (int)left;
@@ -339,7 +335,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Neuen Frame erstellen
         removeCropFrame();
         
         int width = Math.max(10, (int)(right - left));
@@ -409,12 +404,10 @@ public class OverlayService extends AccessibilityService {
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                // Nichts - Frame wird separat gezeichnet
             }
         };
         
         cropOverlayView.setOnTouchListener((v, event) -> {
-            // Wenn Button geklickt wurde, ignoriere Touch-Events
             if (cropButtonClicked) {
                 return false;
             }
@@ -433,7 +426,6 @@ public class OverlayService extends AccessibilityService {
                     cropEndY = rawY;
                     isDrawingCrop = true;
                     showCropFrame(cropStartX, cropStartY, cropEndX, cropEndY);
-                    // Auto-Close Timer zurücksetzen
                     cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
                     Log.d(TAG, "✂️ Crop START: " + cropStartX + ", " + cropStartY);
                     return true;
@@ -476,7 +468,6 @@ public class OverlayService extends AccessibilityService {
                         Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_SHORT).show();
                     }
                     
-                    // Frame nach 500ms entfernen
                     handler.postDelayed(() -> {
                         removeCropFrame();
                         if (isCropMode) {
@@ -484,7 +475,6 @@ public class OverlayService extends AccessibilityService {
                         }
                     }, 500);
                     
-                    // Auto-Close Timer starten (3 Sekunden nach Loslassen)
                     scheduleAutoClose();
                     return true;
             }
@@ -522,7 +512,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ REST DES CODES ============
+    // ============ SCREENSHOT & OCR ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -841,12 +831,14 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
+    // ============ OPTIMIERTE ADAPTIVE AUTOREFILL LOGIK MIT DYNAMISCHEN WARTEZEITEN ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
+        // ===== STUFE 1: > 50 GB → Ziel 25 GB (2-6 Stunden) =====
         if (volume > 50.00) {
             long minWait = 2 * 60 * 60 * 1000;
             long maxWait = 6 * 60 * 60 * 1000;
@@ -854,6 +846,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // ===== STUFE 2: > 25 GB → Ziel 10 GB (1-3 Stunden) =====
         if (volume > 25.00) {
             long minWait = 1 * 60 * 60 * 1000;
             long maxWait = 3 * 60 * 60 * 1000;
@@ -861,6 +854,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // ===== STUFE 3: > 10 GB → Ziel 5 GB (30-90 Minuten) =====
         if (volume > 10.00) {
             long minWait = 30 * 60 * 1000;
             long maxWait = 90 * 60 * 1000;
@@ -868,6 +862,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // ===== STUFE 4: > 5 GB → Ziel 1 GB (15-45 Minuten) =====
         if (volume > 5.00) {
             long minWait = 15 * 60 * 1000;
             long maxWait = 45 * 60 * 1000;
@@ -875,14 +870,50 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // ===== STUFE 5: 1 GB - 5 GB → DYNAMISCHE WARTEZEIT je nach Nähe zur Schwelle =====
         if (volume > 1.00) {
-            double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
+            boolean isHighUsage = averageConsumptionRate > 0.04;
+            double threshold = isHighUsage ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
             
             if (volume > threshold) {
-                long minWait = 5 * 60 * 1000;
-                long maxWait = 15 * 60 * 1000;
+                long minWait, maxWait;
+                
+                if (isHighUsage) {
+                    // Bei hohem Verbrauch: schnellere Checks
+                    if (volume <= 2.0) {
+                        // Sehr nah an 0,50 GB (0,50 - 2,0 GB)
+                        minWait = 60 * 1000;   // 1 Minute
+                        maxWait = 3 * 60 * 1000; // 3 Minuten
+                    } else if (volume <= 3.0) {
+                        minWait = 2 * 60 * 1000; // 2 Minuten
+                        maxWait = 5 * 60 * 1000; // 5 Minuten
+                    } else {
+                        minWait = 3 * 60 * 1000; // 3 Minuten
+                        maxWait = 8 * 60 * 1000; // 8 Minuten
+                    }
+                } else {
+                    // Bei niedrigem Verbrauch: entspanntere Checks
+                    if (volume <= 2.0) {
+                        // Sehr nah an 0,30 GB (0,30 - 2,0 GB)
+                        minWait = 2 * 60 * 1000;   // 2 Minuten
+                        maxWait = 5 * 60 * 1000;   // 5 Minuten
+                    } else if (volume <= 3.0) {
+                        minWait = 4 * 60 * 1000;   // 4 Minuten
+                        maxWait = 8 * 60 * 1000;   // 8 Minuten
+                    } else {
+                        minWait = 5 * 60 * 1000;   // 5 Minuten
+                        maxWait = 12 * 60 * 1000;  // 12 Minuten
+                    }
+                }
+                
+                // Zusätzliche Zufallsvariation für menschliches Verhalten
+                long randomOffset = (long)((random.nextDouble() - 0.5) * 60 * 1000); // ±30 Sekunden
+                minWait = Math.max(minWait, minWait + randomOffset);
+                maxWait = Math.max(maxWait, minWait + 30 * 1000);
+                
                 calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
             } else {
+                // Volumen ist unter der Schwelle → Sofort Refill
                 updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
                 Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
                 currentPhase = Phase.REFILL;
@@ -895,6 +926,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // ===== UNTER 1 GB → Refill bei ≤ 0,30 (oder 0,50 bei hohem Verbrauch) =====
         double threshold = (averageConsumptionRate > 0.04) ? REFILL_THRESHOLD_HIGH : REFILL_THRESHOLD_LOW;
         if (volume <= threshold) {
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -906,8 +938,16 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            long minWait = 5 * 60 * 1000;
-            long maxWait = 15 * 60 * 1000;
+            // Unter 1 GB aber noch über Schwelle → Sehr kurze Wartezeiten
+            long minWait, maxWait;
+            if (averageConsumptionRate > 0.04) {
+                // Hoher Verbrauch: sehr häufig checken
+                minWait = 1 * 60 * 1000;  // 1 Minute
+                maxWait = 3 * 60 * 1000;  // 3 Minuten
+            } else {
+                minWait = 2 * 60 * 1000;  // 2 Minuten
+                maxWait = 5 * 60 * 1000;  // 5 Minuten
+            }
             calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
         }
     }
@@ -928,11 +968,16 @@ public class OverlayService extends AccessibilityService {
         
         double diff = currentVolume - targetVolume;
         double minutesDouble = diff / consumptionRate;
+        
+        // Zufälliger Faktor zwischen 0,70 und 1,30 für menschliche Varianz
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
+        // Begrenzung auf min/max Bereich
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
+        
+        // Zusätzlicher zufälliger Offset für mehr Varianz (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -1280,13 +1325,11 @@ public class OverlayService extends AccessibilityService {
         btnCrop = controlView.findViewById(R.id.btnCrop);
         
         btnCrop.setOnClickListener(v -> {
-            // Entprellung: Verhindert mehrfaches Klicken
             if (cropButtonClicked) {
                 return;
             }
             cropButtonClicked = true;
             startCropMode();
-            // Nach 500ms zurücksetzen
             handler.postDelayed(() -> {
                 cropButtonClicked = false;
             }, 500);
