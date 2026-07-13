@@ -270,7 +270,7 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS - KORREKTE POSITIONIERUNG ============
+    // ============ CROP-MODUS - KORREKT MIT SOFORTIGER ANZEIGE ============
     private void startCropMode() {
         if (isCropMode) {
             isCropMode = false;
@@ -295,6 +295,7 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void createCropOverlay() {
+        // Altes Overlay entfernen
         if (cropOverlayView != null) {
             try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
             cropOverlayView = null;
@@ -302,8 +303,11 @@ public class OverlayService extends AccessibilityService {
         
         FrameLayout container = new FrameLayout(this);
         container.setBackgroundColor(Color.TRANSPARENT);
+        container.setLayoutParams(new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
         
-        // Crop-Overlay View - FULLSCREEN mit korrekter Koordinaten-Erfassung
+        // Crop-Overlay View - FULLSCREEN
         cropOverlayView = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -338,11 +342,10 @@ public class OverlayService extends AccessibilityService {
         
         // Touch-Listener mit KORREKTEN Raw-Koordinaten
         cropOverlayView.setOnTouchListener((v, event) -> {
-            // Raw-Koordinaten für exakte Position auf dem Display
             float rawX = event.getRawX();
             float rawY = event.getRawY();
             
-            // Begrenzung auf Bildschirmgröße
+            // Auf Bildschirmgröße begrenzen
             rawX = Math.max(0, Math.min(screenWidth, rawX));
             rawY = Math.max(0, Math.min(screenHeight, rawY));
             
@@ -406,11 +409,12 @@ public class OverlayService extends AccessibilityService {
             return false;
         });
         
+        // View zum Container hinzufügen - FULLSCREEN
         container.addView(cropOverlayView, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT));
         
-        // FULLSCREEN Overlay - keine Abweichungen
+        // FULLSCREEN Overlay - KEINE ABWEICHUNGEN
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -430,9 +434,11 @@ public class OverlayService extends AccessibilityService {
         try {
             windowManager.addView(container, params);
             cropOverlayView = container;
+            // Sofort neu zeichnen
             cropOverlayView.invalidate();
+            Log.d(TAG, "✅ Crop-Overlay erfolgreich erstellt");
         } catch (Exception e) {
-            Log.e(TAG, "Fehler beim Crop-Overlay: " + e.getMessage());
+            Log.e(TAG, "❌ Fehler beim Crop-Overlay: " + e.getMessage());
             Toast.makeText(this, "❌ Crop-Overlay konnte nicht erstellt werden!", Toast.LENGTH_LONG).show();
             isCropMode = false;
             cropOverlayView = null;
