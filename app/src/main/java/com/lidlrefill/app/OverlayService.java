@@ -111,6 +111,7 @@ public class OverlayService extends AccessibilityService {
     
     // ============ CROP RAHMEN (SEPARATES VIEW) ============
     private View cropFrameView = null;
+    private boolean cropFrameVisible = false;
     
     // ============ POSITIONEN ============
     private Point swipeStart = new Point(0, 0);
@@ -270,8 +271,9 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS - MIT SEPARATEM FRAME VIEW (WIE SWIPE-PFEIL) ============
+    // ============ CROP-MODUS - STABILISIERT ============
     private void startCropMode() {
+        // Wenn schon im Crop-Modus, einfach beenden
         if (isCropMode) {
             isCropMode = false;
             removeCropFrame();
@@ -290,14 +292,35 @@ public class OverlayService extends AccessibilityService {
         }
         
         isCropMode = true;
+        cropFrameVisible = false;
         updateStatus("✂️ Ziehe Bereich für OCR");
         Toast.makeText(this, "✂️ Ziehe Bereich auf dem Display", Toast.LENGTH_LONG).show();
         createCropOverlay();
     }
     
-    // ===== SEPARATER FRAME VIEW (WIE SWIPE-PFEIL) =====
+    // ===== SEPARATER FRAME VIEW (STABIL) =====
     private void showCropFrame(float left, float top, float right, float bottom) {
+        // Wenn Frame schon sichtbar und Position gleich, nichts tun
+        if (cropFrameView != null && cropFrameVisible) {
+            // Position aktualisieren
+            WindowManager.LayoutParams params = (WindowManager.LayoutParams) cropFrameView.getLayoutParams();
+            params.x = (int)left;
+            params.y = (int)top;
+            params.width = Math.max(10, (int)(right - left));
+            params.height = Math.max(10, (int)(bottom - top));
+            try {
+                windowManager.updateViewLayout(cropFrameView, params);
+            } catch (Exception e) {
+                Log.e(TAG, "Frame aktualisieren fehlgeschlagen", e);
+            }
+            return;
+        }
+        
+        // Neuen Frame erstellen
         removeCropFrame();
+        
+        int width = Math.max(10, (int)(right - left));
+        int height = Math.max(10, (int)(bottom - top));
         
         cropFrameView = new View(this) {
             @Override
@@ -312,12 +335,9 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        int width = (int)(right - left);
-        int height = (int)(bottom - top);
-        
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-            Math.max(10, width),
-            Math.max(10, height),
+            width,
+            height,
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ?
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY :
                 WindowManager.LayoutParams.TYPE_PHONE,
@@ -331,14 +351,26 @@ public class OverlayService extends AccessibilityService {
         params.y = (int)top;
         
         cropFrameView.setElevation(1000);
-        windowManager.addView(cropFrameView, params);
+        try {
+            windowManager.addView(cropFrameView, params);
+            cropFrameVisible = true;
+        } catch (Exception e) {
+            Log.e(TAG, "Frame hinzufügen fehlgeschlagen", e);
+            cropFrameView = null;
+            cropFrameVisible = false;
+        }
     }
     
     private void removeCropFrame() {
         if (cropFrameView != null) {
-            try { windowManager.removeView(cropFrameView); } catch (Exception e) {}
+            try { 
+                windowManager.removeView(cropFrameView); 
+            } catch (Exception e) {
+                Log.e(TAG, "Frame entfernen fehlgeschlagen", e);
+            }
             cropFrameView = null;
         }
+        cropFrameVisible = false;
     }
     
     private void createCropOverlay() {
@@ -354,7 +386,7 @@ public class OverlayService extends AccessibilityService {
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                // Nichts - wir zeichnen den Frame separat
+                // Nichts - Frame wird separat gezeichnet
             }
         };
         
@@ -379,19 +411,20 @@ public class OverlayService extends AccessibilityService {
                 case MotionEvent.ACTION_MOVE:
                     cropEndX = rawX;
                     cropEndY = rawY;
-                    showCropFrame(
-                        Math.min(cropStartX, cropEndX),
-                        Math.min(cropStartY, cropEndY),
-                        Math.max(cropStartX, cropEndX),
-                        Math.max(cropStartY, cropEndY)
-                    );
+                    if (isDrawingCrop) {
+                        showCropFrame(
+                            Math.min(cropStartX, cropEndX),
+                            Math.min(cropStartY, cropEndY),
+                            Math.max(cropStartX, cropEndX),
+                            Math.max(cropStartY, cropEndY)
+                        );
+                    }
                     return true;
                     
                 case MotionEvent.ACTION_UP:
                     cropEndX = rawX;
                     cropEndY = rawY;
                     isDrawingCrop = false;
-                    removeCropFrame();
                     
                     int left = (int)Math.min(cropStartX, cropEndX);
                     int top = (int)Math.min(cropStartY, cropEndY);
@@ -411,18 +444,16 @@ public class OverlayService extends AccessibilityService {
                             Toast.LENGTH_SHORT).show();
                     } else {
                         Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_SHORT).show();
-                        return true;
                     }
                     
+                    // Frame entfernen nach kurzer Verzögerung (aber Overlay bleibt)
                     handler.postDelayed(() -> {
-                        isCropMode = false;
-                        if (cropOverlayView != null) {
-                            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-                            cropOverlayView = null;
+                        removeCropFrame();
+                        // Crop-Modus bleibt aktiv bis zum manuellen Beenden
+                        if (isCropMode) {
+                            updateStatus("✂️ Crop-Modus aktiv - erneut ziehen oder beenden");
                         }
-                        updateStatus("● Crop-Modus beendet");
-                        Toast.makeText(OverlayService.this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
-                    }, 1500);
+                    }, 500);
                     return true;
             }
             return false;
@@ -478,13 +509,7 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (isCropMode) {
-            isCropMode = false;
-            removeCropFrame();
-            if (cropOverlayView != null) {
-                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-                cropOverlayView = null;
-            }
-            handler.postDelayed(() -> performScreenshotAndOcr(), 300);
+            Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst den Crop", Toast.LENGTH_SHORT).show();
             return;
         }
         
@@ -1302,6 +1327,10 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "⚠️ Screenshot noch nicht bereit", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (isCropMode) {
+                Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst", Toast.LENGTH_SHORT).show();
+                return;
+            }
             performScreenshotAndOcr();
         });
         
@@ -1330,6 +1359,10 @@ public class OverlayService extends AccessibilityService {
         });
         
         btnStartAuto.setOnClickListener(v -> {
+            if (isCropMode) {
+                Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (isAutoRefillSelected) {
                 startAutoRefill();
             } else {
@@ -1354,6 +1387,13 @@ public class OverlayService extends AccessibilityService {
             stopAutomation();
             hideVisuals();
             removeCropFrame();
+            if (isCropMode) {
+                isCropMode = false;
+                if (cropOverlayView != null) {
+                    try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+                    cropOverlayView = null;
+                }
+            }
             savePositions();
             if (floatingView != null && windowManager != null) {
                 try { windowManager.removeView(floatingView); } catch (Exception e) {}
