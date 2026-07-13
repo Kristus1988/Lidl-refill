@@ -108,6 +108,9 @@ public class OverlayService extends AccessibilityService {
     private float cropStartX = 0, cropStartY = 0;
     private float cropEndX = 0, cropEndY = 0;
     private boolean isDrawingCrop = false;
+    private boolean cropButtonClicked = false;
+    private Handler cropAutoCloseHandler = new Handler(Looper.getMainLooper());
+    private Runnable cropAutoCloseRunnable = null;
     
     // ============ CROP RAHMEN (SEPARATES VIEW) ============
     private View cropFrameView = null;
@@ -271,18 +274,11 @@ public class OverlayService extends AccessibilityService {
         Toast.makeText(this, "✅ Native Screenshot aktiv!", Toast.LENGTH_SHORT).show();
     }
     
-    // ============ CROP-MODUS - STABILISIERT ============
+    // ============ CROP-MODUS - MIT AUTOMATISCHER SCHLIESSUNG ============
     private void startCropMode() {
-        // Wenn schon im Crop-Modus, einfach beenden
+        // Wenn schon im Crop-Modus, dann beenden (Button-Klick)
         if (isCropMode) {
-            isCropMode = false;
-            removeCropFrame();
-            if (cropOverlayView != null) {
-                try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
-                cropOverlayView = null;
-            }
-            updateStatus("● Crop-Modus beendet");
-            Toast.makeText(this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
+            closeCropMode();
             return;
         }
         
@@ -292,17 +288,44 @@ public class OverlayService extends AccessibilityService {
         }
         
         isCropMode = true;
+        cropButtonClicked = false;
         cropFrameVisible = false;
-        updateStatus("✂️ Ziehe Bereich für OCR");
+        updateStatus("✂️ Ziehe Bereich für OCR (3s Auto-Close)");
         Toast.makeText(this, "✂️ Ziehe Bereich auf dem Display", Toast.LENGTH_LONG).show();
         createCropOverlay();
     }
     
-    // ===== SEPARATER FRAME VIEW (STABIL) =====
+    private void closeCropMode() {
+        isCropMode = false;
+        cropButtonClicked = false;
+        removeCropFrame();
+        if (cropOverlayView != null) {
+            try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
+            cropOverlayView = null;
+        }
+        // Auto-Close Timer entfernen
+        cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
+        cropAutoCloseRunnable = null;
+        updateStatus("● Crop-Modus beendet");
+        Toast.makeText(this, "✂️ Crop-Modus beendet", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void scheduleAutoClose() {
+        // Vorherigen Timer entfernen
+        cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
+        cropAutoCloseRunnable = () -> {
+            if (isCropMode && !isDrawingCrop) {
+                Log.d(TAG, "⏰ Auto-Close: Crop-Modus wird geschlossen");
+                closeCropMode();
+            }
+        };
+        cropAutoCloseHandler.postDelayed(cropAutoCloseRunnable, 3000); // 3 Sekunden
+    }
+    
+    // ===== SEPARATER FRAME VIEW =====
     private void showCropFrame(float left, float top, float right, float bottom) {
-        // Wenn Frame schon sichtbar und Position gleich, nichts tun
+        // Wenn Frame schon sichtbar, Position aktualisieren
         if (cropFrameView != null && cropFrameVisible) {
-            // Position aktualisieren
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) cropFrameView.getLayoutParams();
             params.x = (int)left;
             params.y = (int)top;
@@ -391,6 +414,11 @@ public class OverlayService extends AccessibilityService {
         };
         
         cropOverlayView.setOnTouchListener((v, event) -> {
+            // Wenn Button geklickt wurde, ignoriere Touch-Events
+            if (cropButtonClicked) {
+                return false;
+            }
+            
             float rawX = event.getRawX();
             float rawY = event.getRawY();
             
@@ -405,6 +433,8 @@ public class OverlayService extends AccessibilityService {
                     cropEndY = rawY;
                     isDrawingCrop = true;
                     showCropFrame(cropStartX, cropStartY, cropEndX, cropEndY);
+                    // Auto-Close Timer zurücksetzen
+                    cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
                     Log.d(TAG, "✂️ Crop START: " + cropStartX + ", " + cropStartY);
                     return true;
                     
@@ -446,14 +476,16 @@ public class OverlayService extends AccessibilityService {
                         Toast.makeText(OverlayService.this, "⚠️ Bereich zu klein!", Toast.LENGTH_SHORT).show();
                     }
                     
-                    // Frame entfernen nach kurzer Verzögerung (aber Overlay bleibt)
+                    // Frame nach 500ms entfernen
                     handler.postDelayed(() -> {
                         removeCropFrame();
-                        // Crop-Modus bleibt aktiv bis zum manuellen Beenden
                         if (isCropMode) {
-                            updateStatus("✂️ Crop-Modus aktiv - erneut ziehen oder beenden");
+                            updateStatus("✂️ Crop-Modus aktiv - 3s Auto-Close");
                         }
                     }, 500);
+                    
+                    // Auto-Close Timer starten (3 Sekunden nach Loslassen)
+                    scheduleAutoClose();
                     return true;
             }
             return false;
@@ -509,7 +541,7 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (isCropMode) {
-            Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst den Crop", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst", Toast.LENGTH_SHORT).show();
             return;
         }
         
@@ -1247,7 +1279,18 @@ public class OverlayService extends AccessibilityService {
         btnClose = controlView.findViewById(R.id.btnClose);
         btnCrop = controlView.findViewById(R.id.btnCrop);
         
-        btnCrop.setOnClickListener(v -> startCropMode());
+        btnCrop.setOnClickListener(v -> {
+            // Entprellung: Verhindert mehrfaches Klicken
+            if (cropButtonClicked) {
+                return;
+            }
+            cropButtonClicked = true;
+            startCropMode();
+            // Nach 500ms zurücksetzen
+            handler.postDelayed(() -> {
+                cropButtonClicked = false;
+            }, 500);
+        });
         
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
             this,
@@ -1389,6 +1432,7 @@ public class OverlayService extends AccessibilityService {
             removeCropFrame();
             if (isCropMode) {
                 isCropMode = false;
+                cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
                 if (cropOverlayView != null) {
                     try { windowManager.removeView(cropOverlayView); } catch (Exception e) {}
                     cropOverlayView = null;
@@ -1587,6 +1631,7 @@ public class OverlayService extends AccessibilityService {
         savePositions();
         hideVisuals();
         removeCropFrame();
+        cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
         if (floatingView != null && windowManager != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
         }
