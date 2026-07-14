@@ -154,12 +154,12 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
-    // ============ OPTIMIERTE STUFEN ============
-    // SURFEN (≤ 0,010 GB/Min) → Puffer 0,30 GB
-    // STREAMING (> 0,010 GB/Min) → Puffer 0,50 GB
-    private static final double USAGE_THRESHOLD = 0.010;
-    private static final double REFILL_THRESHOLD_LOW_USAGE = 0.30;   // Surfen
-    private static final double REFILL_THRESHOLD_HIGH_USAGE = 0.50;  // Streaming
+    // ============ KORREKTE SCHWELLWERTE ============
+    // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
+    // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
+    private static final double USAGE_THRESHOLD = 0.008;
+    private static final double REFILL_THRESHOLD_SURF = 0.30;
+    private static final double REFILL_THRESHOLD_STREAM = 0.50;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -834,79 +834,24 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ KORREKTE LOGIK: Surfen → 0,30 GB, Streaming → 0,50 GB ============
+    // ============ KORREKTE LOGIK: Surfen ≤ 0,008 → 0,30 GB, Streaming > 0,008 → 0,50 GB ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== KORREKTE LOGIK =====
-        // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB (später nachladen)
-        // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB (früher nachladen)
-        boolean isLowUsage = averageConsumptionRate <= USAGE_THRESHOLD;
-        double threshold = isLowUsage ? REFILL_THRESHOLD_LOW_USAGE : REFILL_THRESHOLD_HIGH_USAGE;
+        // ===== KORREKTER SCHWELLWERT: 0,008 GB/Min =====
+        // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
+        // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
+        boolean isSurfing = averageConsumptionRate <= USAGE_THRESHOLD;
+        double threshold = isSurfing ? REFILL_THRESHOLD_SURF : REFILL_THRESHOLD_STREAM;
         
-        Log.d(TAG, "📊 Verbrauch: " + (isLowUsage ? "Niedrig (Surfen)" : "Hoch (Streaming)") + 
+        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,008)" : "Streaming (> 0,008)") + 
             " → Puffer: " + threshold + " GB");
         
-        // ===== STUFE 1: > 10 GB → Sehr selten prüfen (2-6 Stunden) =====
-        if (volume > 10.00) {
-            long minWait = 2 * 60 * 60 * 1000;
-            long maxWait = 6 * 60 * 60 * 1000;
-            calculateWaitTimeWithStage(volume, 5.00, minWait, maxWait);
-            return;
-        }
-        
-        // ===== STUFE 2: 5-10 GB → Selten prüfen (1-3 Stunden) =====
-        if (volume > 5.00) {
-            long minWait = 1 * 60 * 60 * 1000;
-            long maxWait = 3 * 60 * 60 * 1000;
-            calculateWaitTimeWithStage(volume, 2.00, minWait, maxWait);
-            return;
-        }
-        
-        // ===== STUFE 3: 2-5 GB → Mäßig prüfen (30-90 Minuten) =====
-        if (volume > 2.00) {
-            long minWait = 30 * 60 * 1000;
-            long maxWait = 90 * 60 * 1000;
-            calculateWaitTimeWithStage(volume, 1.00, minWait, maxWait);
-            return;
-        }
-        
-        // ===== STUFE 4: 1-2 GB → Häufiger prüfen =====
-        if (volume > 1.00) {
-            long minWait, maxWait;
-            
-            if (isLowUsage) {
-                // Surfen: entspannter (20-45 Minuten)
-                minWait = 20 * 60 * 1000;
-                maxWait = 45 * 60 * 1000;
-            } else {
-                // Streaming: häufiger (15-30 Minuten)
-                minWait = 15 * 60 * 1000;
-                maxWait = 30 * 60 * 1000;
-            }
-            
-            if (volume > threshold) {
-                calculateWaitTimeWithStage(volume, threshold, minWait, maxWait);
-            } else {
-                // Unter Schwelle → Refill
-                updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
-                Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
-                currentPhase = Phase.REFILL;
-                handler.postDelayed(() -> {
-                    if (isRunning) {
-                        clickRefillButton();
-                    }
-                }, 1000);
-            }
-            return;
-        }
-        
-        // ===== UNTER 1 GB =====
+        // ===== WENN VOLUMEN UNTER PUFFER → SOFORT REFILL =====
         if (volume <= threshold) {
-            // Kritisch → Sofort Refill
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
             Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
@@ -915,78 +860,26 @@ public class OverlayService extends AccessibilityService {
                     clickRefillButton();
                 }
             }, 1000);
-        } else {
-            // Unter 1 GB aber noch über Schwelle
-            long minWait, maxWait;
-            
-            if (isLowUsage) {
-                // Surfen: 10-25 Minuten
-                minWait = 10 * 60 * 1000;
-                maxWait = 25 * 60 * 1000;
-            } else {
-                // Streaming: 5-15 Minuten
-                minWait = 5 * 60 * 1000;
-                maxWait = 15 * 60 * 1000;
-            }
-            
-            // Je näher an der Schwelle, desto kürzer die Wartezeit
-            double diff = volume - threshold;
-            double maxDiff = 1.0;
-            double progress = Math.min(1.0, diff / maxDiff);
-            
-            long adjustedMin = (long)(minWait + (maxWait - minWait) * progress * 0.5);
-            long adjustedMax = (long)(maxWait - (maxWait - minWait) * progress * 0.3);
-            
-            adjustedMin = Math.max(minWait, adjustedMin);
-            adjustedMax = Math.max(adjustedMax, adjustedMin + 30 * 1000);
-            
-            calculateWaitTimeWithStage(volume, threshold, adjustedMin, adjustedMax);
-        }
-    }
-    
-    private void calculateWaitTimeWithStage(double currentVolume, double targetVolume, long minWait, long maxWait) {
-        double consumptionRate = averageConsumptionRate;
-        
-        if (consumptionRate <= 0.001 || consumptionRate > 0.2) {
-            switch (currentModeIndex) {
-                case 0: consumptionRate = 0.025; break;
-                case 1: consumptionRate = 0.04; break;
-                case 2: consumptionRate = 0.06; break;
-                case 3: 
-                default: consumptionRate = 0.03; break;
-            }
-            Log.d(TAG, "📊 Fallback auf Standardrate: " + consumptionRate);
+            return;
         }
         
-        double diff = currentVolume - targetVolume;
-        double minutesDouble = diff / consumptionRate;
-        
-        // Zufälliger Faktor zwischen 0,70 und 1,30 für menschliche Varianz
-        double randomFactor = 0.70 + (random.nextDouble() * 0.60);
-        minutesDouble = minutesDouble * randomFactor;
-        
-        // Begrenzung auf min/max Bereich
-        long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
-        long waitTime = minutes * 60000;
-        
-        // Zusätzlicher zufälliger Offset für mehr Varianz (±30 Sekunden)
-        waitTime += (long)((random.nextDouble() - 0.5) * 60000);
-        waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
+        // ===== WARTEZEIT BERECHNEN =====
+        long waitTime = calculateWaitTime(volume, threshold);
         
         // Wartezeit in lesbare Form umwandeln
-        String timeStr;
+        long minutes = waitTime / 60000;
+        long seconds = (waitTime % 60000) / 1000;
+        String timeStr = minutes + " Min " + seconds + " Sek";
         if (minutes >= 60) {
             long hours = minutes / 60;
             long mins = minutes % 60;
             timeStr = hours + "h " + mins + "min";
-        } else {
-            timeStr = minutes + " Min";
         }
         
-        updateStatus("♻️ Adaptiv: " + timeStr + " (Rate: " + 
-            String.format("%.3f", consumptionRate) + " GB/Min)");
+        updateStatus("♻️ Nächster Check in " + timeStr + " (Rate: " + 
+            String.format("%.3f", averageConsumptionRate) + " GB/Min)");
         Toast.makeText(this, 
-            "♻️ Bis " + targetVolume + " GB: " + timeStr + " (aktuell " + currentVolume + " GB)", 
+            "♻️ Nächster Check in " + timeStr + " (aktuell " + volume + " GB)", 
             Toast.LENGTH_SHORT).show();
         
         currentPhase = Phase.WAIT_AFTER_OCR;
@@ -996,6 +889,43 @@ public class OverlayService extends AccessibilityService {
                 performSwipeGesture();
             }
         });
+    }
+    
+    // ===== EINFACHE WARTEZEIT-BERECHNUNG =====
+    private long calculateWaitTime(double currentVolume, double threshold) {
+        // 1. Verbrauchsrate (falls zu niedrig, Fallback verwenden)
+        double rate = averageConsumptionRate;
+        if (rate <= 0.001 || rate > 0.2) {
+            switch (currentModeIndex) {
+                case 0: rate = 0.025; break;  // Surfen
+                case 1: rate = 0.04; break;   // FullHD
+                case 2: rate = 0.06; break;   // 4K
+                case 3: 
+                default: rate = 0.03; break;  // Auto
+            }
+            Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
+        }
+        
+        // 2. Wartezeit = (aktuelles Volumen - Puffer) / Verbrauchsrate
+        double diff = currentVolume - threshold;
+        double minutesDouble = diff / rate;
+        
+        // 3. Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
+        double randomFactor = 0.70 + (random.nextDouble() * 0.60);
+        minutesDouble = minutesDouble * randomFactor;
+        
+        // 4. Begrenzung auf sinnvolle Werte (min 5 Min, max 6 Stunden)
+        long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
+        long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
+        long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
+        long waitTime = minutes * 60000;
+        
+        // 5. Zusätzlicher zufälliger Offset (±30 Sekunden)
+        waitTime += (long)((random.nextDouble() - 0.5) * 60000);
+        waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
+        
+        Log.d(TAG, "📊 Berechnete Wartezeit: " + (waitTime / 60000) + " Minuten");
+        return waitTime;
     }
     
     private void startAutoRefill() {
