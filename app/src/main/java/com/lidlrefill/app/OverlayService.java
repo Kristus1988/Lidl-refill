@@ -155,11 +155,11 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
     // ============ OPTIMIERTE STUFEN ============
-    // Surfen (≤ 0,015 GB/Min) → Puffer 0,30 GB (langsamer Verbrauch, später nachladen)
-    // Streaming (> 0,015 GB/Min) → Puffer 0,50 GB (schneller Verbrauch, früher nachladen)
-    private static final double USAGE_THRESHOLD = 0.015;
-    private static final double REFILL_THRESHOLD_SURFING = 0.30;
-    private static final double REFILL_THRESHOLD_STREAMING = 0.50;
+    // SURFEN (≤ 0,010 GB/Min) → Puffer 0,30 GB
+    // STREAMING (> 0,010 GB/Min) → Puffer 0,50 GB
+    private static final double USAGE_THRESHOLD = 0.010;
+    private static final double REFILL_THRESHOLD_LOW_USAGE = 0.30;   // Surfen
+    private static final double REFILL_THRESHOLD_HIGH_USAGE = 0.50;  // Streaming
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -834,18 +834,18 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ OPTIMIERTE LOGIK: KORREKT VERTAUSCHT ============
+    // ============ KORREKTE LOGIK: Surfen → 0,30 GB, Streaming → 0,50 GB ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== KORREKT: =====
-        // Surfen (≤ 0,015 GB/Min) → Puffer 0,30 GB (langsamer Verbrauch = später nachladen)
-        // Streaming (> 0,015 GB/Min) → Puffer 0,50 GB (schneller Verbrauch = früher nachladen)
+        // ===== KORREKTE LOGIK =====
+        // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB (später nachladen)
+        // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB (früher nachladen)
         boolean isLowUsage = averageConsumptionRate <= USAGE_THRESHOLD;
-        double threshold = isLowUsage ? REFILL_THRESHOLD_SURFING : REFILL_THRESHOLD_STREAMING;
+        double threshold = isLowUsage ? REFILL_THRESHOLD_LOW_USAGE : REFILL_THRESHOLD_HIGH_USAGE;
         
         Log.d(TAG, "📊 Verbrauch: " + (isLowUsage ? "Niedrig (Surfen)" : "Hoch (Streaming)") + 
             " → Puffer: " + threshold + " GB");
@@ -874,18 +874,18 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== STUFE 4: 1-2 GB → Häufiger prüfen (15-45 Minuten) =====
+        // ===== STUFE 4: 1-2 GB → Häufiger prüfen =====
         if (volume > 1.00) {
             long minWait, maxWait;
             
             if (isLowUsage) {
-                // Surfen: entspannter (langsamer Verbrauch)
-                minWait = 20 * 60 * 1000;        // 20 Minuten
-                maxWait = 45 * 60 * 1000;        // 45 Minuten
+                // Surfen: entspannter (20-45 Minuten)
+                minWait = 20 * 60 * 1000;
+                maxWait = 45 * 60 * 1000;
             } else {
-                // Streaming: etwas häufiger (schneller Verbrauch)
-                minWait = 15 * 60 * 1000;        // 15 Minuten
-                maxWait = 30 * 60 * 1000;        // 30 Minuten
+                // Streaming: häufiger (15-30 Minuten)
+                minWait = 15 * 60 * 1000;
+                maxWait = 30 * 60 * 1000;
             }
             
             if (volume > threshold) {
@@ -904,7 +904,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // ===== UNTER 1 GB → Nur hier wirklich aktiv prüfen =====
+        // ===== UNTER 1 GB =====
         if (volume <= threshold) {
             // Kritisch → Sofort Refill
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
@@ -916,7 +916,7 @@ public class OverlayService extends AccessibilityService {
                 }
             }, 1000);
         } else {
-            // Unter 1 GB aber noch über Schwelle → Sanft prüfen
+            // Unter 1 GB aber noch über Schwelle
             long minWait, maxWait;
             
             if (isLowUsage) {
