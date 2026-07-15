@@ -1678,6 +1678,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
+        // ===== REFILL-KREIS VERGRÖSSERT (150x150 statt 100x100) =====
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -1703,8 +1704,10 @@ public class OverlayService extends AccessibilityService {
         hideVisuals();
     }
     
+    // ===== REFILL-KREIS: 150x150 Pixel (vorher 100x100) =====
+    private void showRefillVisual() { addVisual(refillVisual, 150, 150); }
+    
     private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); }
-    private void showRefillVisual() { addVisual(refillVisual, 100, 100); }
     
     private void addVisual(View visual, int width, int height) {
         if (visual == swipeVisual) { removeVisual(refillVisual); }
@@ -1752,7 +1755,7 @@ public class OverlayService extends AccessibilityService {
                                 Toast.makeText(OverlayService.this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
                                 break;
                             case REFILL_PLACE:
-                                refillButton.set(params.x + 50, params.y + 50);
+                                refillButton.set(params.x + 75, params.y + 75);
                                 refillPlaced = true;
                                 currentMode = Mode.NONE;
                                 activeVisual = null;
