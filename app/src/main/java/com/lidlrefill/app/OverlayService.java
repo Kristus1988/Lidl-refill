@@ -82,12 +82,11 @@ public class OverlayService extends AccessibilityService {
     private double averageConsumptionRate = 0.03;
     
     // ============ REFILL STATE ============
-    private enum RefillState { IDLE, AFTER_REFILL_WAIT, CHECK_VOLUME, WAITING, REFILL }
+    private enum RefillState { IDLE, AFTER_REFILL_WAIT, AFTER_SWIPE_WAIT, CHECK_VOLUME, WAITING, REFILL }
     private RefillState refillState = RefillState.IDLE;
     private boolean justRefilled = false;
     private long lastRefillTime = 0;
     private int refillCycleCount = 0;
-    private boolean isSwipeTestRunning = false;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -160,19 +159,19 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     
-    // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
-    private static final double REFILL_THRESHOLD = 0.50;
+    // NACH REFILL: 10-15 Sekunden warten (menschlich)
+    private static final long WAIT_AFTER_REFILL_SHORT_MIN = 10 * 1000;   // 10 Sekunden
+    private static final long WAIT_AFTER_REFILL_SHORT_MAX = 15 * 1000;   // 15 Sekunden
     
-    // Nach Refill: 10-15 Sekunden warten (für OCR-Aktualisierung)
-    private static final long WAIT_AFTER_REFILL_CHECK_MIN = 10 * 1000;   // 10 Sekunden
-    private static final long WAIT_AFTER_REFILL_CHECK_MAX = 15 * 1000;   // 15 Sekunden
-    
-    // Nach Refill: 4-7 Minuten warten (menschlich)
-    private static final long WAIT_AFTER_REFILL_MIN = 4 * 60 * 1000;   // 4 Minuten
-    private static final long WAIT_AFTER_REFILL_MAX = 7 * 60 * 1000;   // 7 Minuten
+    // ZWISCHEN SWIPE UND OCR: 10-15 Sekunden warten
+    private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MIN = 10 * 1000;   // 10 Sekunden
+    private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MAX = 15 * 1000;   // 15 Sekunden
     
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
+    
+    // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
+    private static final double REFILL_THRESHOLD = 0.50;
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -882,10 +881,17 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case AFTER_REFILL_WAIT:
-                // Nach dem Refill: 10-15 Sekunden gewartet, jetzt aktualisieren
-                Log.d(TAG, "📸 Nach Refill-Warte: Swipe + OCR zum Aktualisieren");
+                // Nach dem Refill: 10-15 Sekunden gewartet, jetzt Swipe ausführen
+                Log.d(TAG, "📸 Nach Refill-Warte: Swipe ausführen");
+                refillState = RefillState.AFTER_SWIPE_WAIT;
+                performSwipeOnly();
+                break;
+                
+            case AFTER_SWIPE_WAIT:
+                // Nach Swipe: 10-15 Sekunden warten, dann OCR
+                Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
                 refillState = RefillState.CHECK_VOLUME;
-                performSwipeAndOcr();
+                performScreenshotAndOcr();
                 break;
                 
             case CHECK_VOLUME:
@@ -911,6 +917,64 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
+    // ===== SWIPE NUR AUSFÜHREN (OHNE OCR) =====
+    private void performSwipeOnly() {
+        if (!swipePlaced) {
+            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        totalSwipes++;
+        
+        int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
+        int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
+        long randomDuration = 400 + (long)(random.nextDouble() * 400);
+        long randomDelay = (long)(random.nextDouble() * 500);
+        
+        int startX = swipeStart.x + randomOffsetX;
+        int startY = swipeStart.y + randomOffsetY;
+        int endX = swipeEnd.x + randomOffsetX;
+        int endY = swipeEnd.y + randomOffsetY;
+        
+        Path path = new Path();
+        path.moveTo(startX, startY);
+        path.quadTo(
+            (startX + endX) / 2 + (int)((random.nextDouble() - 0.5) * 100),
+            (startY + endY) / 2 + (int)((random.nextDouble() - 0.5) * 50),
+            endX,
+            endY
+        );
+        
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(new GestureDescription.StrokeDescription(path, 0, randomDuration));
+        
+        handler.postDelayed(() -> {
+            dispatchGesture(gestureBuilder.build(), new GestureResultCallback() {
+                @Override
+                public void onCompleted(GestureDescription gestureDescription) {
+                    super.onCompleted(gestureDescription);
+                    updateStatus("✅ Swipe #" + totalSwipes);
+                    updateCycle();
+                    
+                    if (!isRunning) return;
+                    
+                    // Nach Swipe: 10-15 Sekunden warten, dann OCR
+                    long waitTime = WAIT_BETWEEN_SWIPE_AND_OCR_MIN + 
+                        (long)(random.nextDouble() * (WAIT_BETWEEN_SWIPE_AND_OCR_MAX - WAIT_BETWEEN_SWIPE_AND_OCR_MIN));
+                    updateStatus("⏳ Warte vor OCR (" + (waitTime/1000) + "s)");
+                    
+                    handler.postDelayed(() -> {
+                        if (isRunning) {
+                            Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
+                            refillState = RefillState.CHECK_VOLUME;
+                            performScreenshotAndOcr();
+                        }
+                    }, waitTime);
+                }
+            }, null);
+        }, randomDelay);
+    }
+    
     // ===== REFILL AUSLÖSEN =====
     private void performRefill() {
         if (refillState == RefillState.REFILL) return;
@@ -927,26 +991,18 @@ public class OverlayService extends AccessibilityService {
         // Refill-Button klicken
         clickRefillButton();
         
-        // Nach Refill: 10-15 Sekunden warten (für OCR-Aktualisierung)
-        long waitTime = WAIT_AFTER_REFILL_CHECK_MIN + (long)(random.nextDouble() * (WAIT_AFTER_REFILL_CHECK_MAX - WAIT_AFTER_REFILL_CHECK_MIN));
-        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime / 1000) + " Sekunden warten (OCR-Check)");
+        // Nach Refill: 10-15 Sekunden warten (menschlich)
+        long waitTime = WAIT_AFTER_REFILL_SHORT_MIN + 
+            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_SHORT_MAX - WAIT_AFTER_REFILL_SHORT_MIN));
+        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/1000) + " Sekunden warten");
         
         handler.postDelayed(() -> {
             if (isRunning) {
-                Log.d(TAG, "⏱️ Nach Refill-Warte vorbei → Swipe + OCR zum Aktualisieren");
+                Log.d(TAG, "⏱️ Nach Refill-Warte vorbei → Swipe ausführen");
                 refillState = RefillState.AFTER_REFILL_WAIT;
-                performSwipeAndOcr();
+                performSwipeOnly();
             }
         }, waitTime);
-    }
-    
-    // ===== SWIPE + OCR AUSFÜHREN =====
-    private void performSwipeAndOcr() {
-        if (!isRunning) return;
-        
-        Log.d(TAG, "🔄 Swipe + OCR wird ausgeführt");
-        currentPhase = Phase.SWIPE;
-        performSwipeGesture();
     }
     
     // ===== WARTEZEIT BERECHNEN (NUR BIS 0,50 GB) =====
@@ -1019,6 +1075,15 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
+    // ============ SWIPE + OCR AUSFÜHREN ============
+    private void performSwipeAndOcr() {
+        if (!isRunning) return;
+        
+        Log.d(TAG, "🔄 Swipe + OCR wird ausgeführt");
+        currentPhase = Phase.SWIPE;
+        performSwipeGesture();
+    }
+    
     // ============ START AUTOREFILL ============
     private void startAutoRefill() {
         if (isRunning) {
@@ -1048,7 +1113,6 @@ public class OverlayService extends AccessibilityService {
         justRefilled = false;
         refillState = RefillState.IDLE;
         refillCycleCount = 0;
-        isSwipeTestRunning = false;
         
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
@@ -1080,22 +1144,20 @@ public class OverlayService extends AccessibilityService {
             .apply();
     }
     
-    // ============ SWIPE GESTURES ============
+    // ============ SWIPE TEST ============
     private void performSwipeTestGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
             return;
         }
         
-        // Wenn Automatik läuft, SwipeTest als normalen Swipe ausführen
+        // Wenn Automatik läuft, einfach normalen Swipe ausführen
         if (isRunning) {
-            isSwipeTestRunning = true;
-            updateStatus("🔄 Swipe Test (Automatik)...");
+            updateStatus("🔄 Automatik-Swipe Test...");
             performSwipeGesture();
             return;
         }
         
-        // Manueller Test
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
         int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
         long randomDuration = 400 + (long)(random.nextDouble() * 400);
@@ -1127,6 +1189,7 @@ public class OverlayService extends AccessibilityService {
         }, null);
     }
     
+    // ============ SWIPE GESTURE ============
     private void performSwipeGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1166,14 +1229,6 @@ public class OverlayService extends AccessibilityService {
                     updateCycle();
                     
                     if (!isRunning) return;
-                    
-                    // Wenn SwipeTest ausgeführt wurde, direkt zum OCR
-                    if (isSwipeTestRunning) {
-                        isSwipeTestRunning = false;
-                        currentPhase = Phase.OCR;
-                        performScreenshotAndOcr();
-                        return;
-                    }
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         currentPhase = Phase.WAIT_AFTER_SWIPE;
@@ -1229,8 +1284,8 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         currentPhase = Phase.WAIT_AFTER_REFILL;
-                        long waitTime = WAIT_AFTER_REFILL_MIN + 
-                            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
+                        long waitTime = WAIT_AFTER_SWIPE_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
                         updateStatus("⏳ Warte nach Refill");
                         startCountdown(waitTime, () -> {
                             if (isRunning) {
@@ -1296,7 +1351,6 @@ public class OverlayService extends AccessibilityService {
         cycleCount = 0;
         totalSwipes = 0;
         refillState = RefillState.IDLE;
-        isSwipeTestRunning = false;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setEnabled(false);
         btnStopAuto.setEnabled(true);
@@ -1327,7 +1381,6 @@ public class OverlayService extends AccessibilityService {
         isWaiting = false;
         isAutoRefillMode = false;
         refillState = RefillState.IDLE;
-        isSwipeTestRunning = false;
         currentPhase = Phase.IDLE;
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
