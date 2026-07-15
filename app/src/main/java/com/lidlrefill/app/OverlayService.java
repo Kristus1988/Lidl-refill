@@ -80,8 +80,13 @@ public class OverlayService extends AccessibilityService {
     private ArrayList<Long> timeHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10;
     private double averageConsumptionRate = 0.03;
+    
+    // ============ REFILL STATE ============
+    private enum RefillState { IDLE, AFTER_REFILL_WAIT, CHECK_VOLUME, WAITING, REFILL }
+    private RefillState refillState = RefillState.IDLE;
     private boolean justRefilled = false;
     private long lastRefillTime = 0;
+    private int refillCycleCount = 0;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -156,19 +161,22 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
-    // ============ KORREKTE SCHWELLWERTE ============
-    // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
-    // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
-    private static final double USAGE_THRESHOLD = 0.008;
-    private static final double REFILL_THRESHOLD_SURF = 0.30;
-    private static final double REFILL_THRESHOLD_STREAM = 0.50;
+    // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
+    private static final double REFILL_THRESHOLD = 0.50;
+    
+    // Nach Refill: 4-7 Minuten warten (menschlich)
+    private static final long WAIT_AFTER_REFILL_MIN = 4 * 60 * 1000;   // 4 Minuten
+    private static final long WAIT_AFTER_REFILL_MAX = 7 * 60 * 1000;   // 7 Minuten
+    
+    // Max Wartezeit bei niedrigem Volumen
+    private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL (0,30 GB)"
+        "♻️ AUTOREFILL (0,50 GB)"
     };
     private int currentModeIndex = 0;
     
@@ -689,7 +697,7 @@ public class OverlayService extends AccessibilityService {
                     Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
-                        handleAutoRefillLogic(currentVolume);
+                        handleVolumeCheck(currentVolume);
                     }
                 } else {
                     lastDetectedVolume = 0.0;
@@ -702,7 +710,7 @@ public class OverlayService extends AccessibilityService {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
                         handler.postDelayed(() -> {
                             if (isRunning) {
-                                clickRefillButton();
+                                performRefill();
                             }
                         }, 1000);
                     }
@@ -720,6 +728,7 @@ public class OverlayService extends AccessibilityService {
             });
     }
     
+    // ============ VERBRAUCHS-HISTORIE ============
     private void updateConsumptionHistory(double currentVolume) {
         long currentTime = System.currentTimeMillis();
         
@@ -730,6 +739,7 @@ public class OverlayService extends AccessibilityService {
                 // Volumen-Sprung → Refill erkannt
                 justRefilled = true;
                 lastRefillTime = currentTime;
+                refillCycleCount++;
                 Log.d(TAG, "🔄 Refill erkannt! Volumen: " + lastVolume + " → " + currentVolume);
             }
         }
@@ -847,118 +857,131 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ KORREKTE LOGIK: Surfen ≤ 0,008 → 0,30 GB, Streaming > 0,008 → 0,50 GB ============
-    private void handleAutoRefillLogic(double volume) {
+    // ============ KERNLOGIK: VOLUMEN PRÜFEN UND REAGIEREN ============
+    private void handleVolumeCheck(double volume) {
         if (!isRunning) return;
         
-        Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
-        Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+        Log.d(TAG, "📊 Volume Check: " + volume + " GB, State: " + refillState);
+        Log.d(TAG, "📊 Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== SCHWELLWERT: 0,008 GB/Min =====
-        // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
-        // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
-        boolean isSurfing = averageConsumptionRate <= USAGE_THRESHOLD;
-        double threshold = isSurfing ? REFILL_THRESHOLD_SURF : REFILL_THRESHOLD_STREAM;
-        
-        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,008)" : "Streaming (> 0,008)") + 
-            " → Puffer: " + threshold + " GB");
-        
-        // ===== WENN VOLUMEN UNTER PUFFER → SOFORT REFILL =====
-        if (volume <= threshold) {
-            updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
-            Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
-            currentPhase = Phase.REFILL;
-            justRefilled = false;
-            handler.postDelayed(() -> {
-                if (isRunning) {
-                    clickRefillButton();
+        switch (refillState) {
+            case IDLE:
+                // Normaler Betrieb - Wartezeit berechnen
+                if (volume <= REFILL_THRESHOLD) {
+                    // Sofort Refill
+                    Log.d(TAG, "⚡ Volumen ≤ 0,50 GB → Refill");
+                    performRefill();
+                } else {
+                    // Wartezeit berechnen bis 0,50 GB
+                    long waitTime = calculateWaitTime(volume);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,50 GB", RefillState.WAITING);
                 }
-            }, 1000);
-            return;
-        }
-        
-        // ===== WENN KÜRZLICH REFILLT (unter 1,50 GB) → FESTE WARTEZEIT 15-30 MIN =====
-        if (volume <= 1.50 && justRefilled) {
-            long minWait = 15 * 60 * 1000;  // 15 Minuten
-            long maxWait = 30 * 60 * 1000;  // 30 Minuten
-            long waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
-            
-            // Zusätzlicher zufälliger Offset (±5 Minuten)
-            waitTime += (long)((random.nextDouble() - 0.5) * 10 * 60 * 1000);
-            waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
-            
-            String timeStr = (waitTime / 60000) + " Minuten";
-            updateStatus("♻️ Nach Refill: " + timeStr + " warten (menschlich)");
-            Toast.makeText(this, "♻️ Nach Refill: " + timeStr + " warten", Toast.LENGTH_SHORT).show();
-            
-            currentPhase = Phase.WAIT_AFTER_OCR;
-            startCountdown(waitTime, () -> {
-                if (isRunning) {
-                    currentPhase = Phase.SWIPE;
-                    performSwipeGesture();
+                break;
+                
+            case AFTER_REFILL_WAIT:
+                // Nach dem Refill: 5 Minuten gewartet, jetzt aktualisieren
+                Log.d(TAG, "📸 Nach Refill-Warte: Swipe + OCR zum Aktualisieren");
+                refillState = RefillState.CHECK_VOLUME;
+                performSwipeAndOcr();
+                break;
+                
+            case CHECK_VOLUME:
+                // Volumen wurde gerade gecheckt
+                if (volume <= REFILL_THRESHOLD) {
+                    Log.d(TAG, "⚡ Volumen ≤ 0,50 GB → Refill");
+                    performRefill();
+                } else {
+                    // Wartezeit berechnen
+                    long waitTime = calculateWaitTime(volume);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,50 GB", RefillState.WAITING);
                 }
-            });
-            return;
+                break;
+                
+            case WAITING:
+                // Warten bis zur nächsten Prüfung
+                // Wird durch den Countdown-Callback fortgesetzt
+                break;
+                
+            case REFILL:
+                // Refill wird gerade durchgeführt
+                break;
         }
-        
-        // ===== NORMALE WARTEZEIT-BERECHNUNG =====
-        long waitTime = calculateWaitTime(volume, threshold);
-        
-        // Wartezeit in lesbare Form umwandeln
-        long minutes = waitTime / 60000;
-        String timeStr = minutes + " Minuten";
-        if (minutes >= 60) {
-            long hours = minutes / 60;
-            long mins = minutes % 60;
-            timeStr = hours + "h " + mins + "min";
-        }
-        
-        updateStatus("♻️ Nächster Check in " + timeStr + " (Rate: " + 
-            String.format("%.3f", averageConsumptionRate) + " GB/Min)");
-        Toast.makeText(this, 
-            "♻️ Nächster Check in " + timeStr + " (aktuell " + volume + " GB)", 
-            Toast.LENGTH_SHORT).show();
-        
-        currentPhase = Phase.WAIT_AFTER_OCR;
-        startCountdown(waitTime, () -> {
-            if (isRunning) {
-                currentPhase = Phase.SWIPE;
-                performSwipeGesture();
-            }
-        });
     }
     
-    // ===== WARTEZEIT-BERECHNUNG =====
-    private long calculateWaitTime(double currentVolume, double threshold) {
-        // 1. Verbrauchsrate (falls zu niedrig, Fallback verwenden)
+    // ===== REFILL AUSLÖSEN =====
+    private void performRefill() {
+        if (refillState == RefillState.REFILL) return;
+        
+        Log.d(TAG, "🔄 Refill wird ausgelöst");
+        refillState = RefillState.REFILL;
+        justRefilled = true;
+        lastRefillTime = System.currentTimeMillis();
+        refillCycleCount++;
+        
+        updateStatus("♻️ Refill wird durchgeführt...");
+        Toast.makeText(this, "♻️ Refill wird gedrückt!", Toast.LENGTH_SHORT).show();
+        
+        // Refill-Button klicken
+        clickRefillButton();
+        
+        // Nach Refill: 4-7 Minuten warten (menschlich)
+        long waitTime = WAIT_AFTER_REFILL_MIN + (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
+        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime / 60000) + " Minuten warten");
+        
+        handler.postDelayed(() -> {
+            if (isRunning) {
+                Log.d(TAG, "⏱️ Nach Refill-Warte vorbei → Swipe + OCR");
+                refillState = RefillState.AFTER_REFILL_WAIT;
+                performSwipeAndOcr();
+            }
+        }, waitTime);
+    }
+    
+    // ===== SWIPE + OCR AUSFÜHREN =====
+    private void performSwipeAndOcr() {
+        if (!isRunning) return;
+        
+        Log.d(TAG, "🔄 Swipe + OCR wird ausgeführt");
+        currentPhase = Phase.SWIPE;
+        performSwipeGesture();
+    }
+    
+    // ===== WARTEZEIT BERECHNEN (NUR BIS 0,50 GB) =====
+    private long calculateWaitTime(double currentVolume) {
+        // Verbrauchsrate
         double rate = averageConsumptionRate;
         if (rate <= 0.001 || rate > 0.2) {
             switch (currentModeIndex) {
-                case 0: rate = 0.025; break;  // Surfen
-                case 1: rate = 0.04; break;   // FullHD
-                case 2: rate = 0.06; break;   // 4K
+                case 0: rate = 0.025; break;
+                case 1: rate = 0.04; break;
+                case 2: rate = 0.06; break;
                 case 3: 
-                default: rate = 0.03; break;  // Auto
+                default: rate = 0.03; break;
             }
             Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
         }
         
-        // 2. Wartezeit = (aktuelles Volumen - Puffer) / Verbrauchsrate
-        double diff = currentVolume - threshold;
+        // Wartezeit = (aktuelles Volumen - 0,50) / Verbrauchsrate
+        double diff = currentVolume - REFILL_THRESHOLD;
         double minutesDouble = diff / rate;
         
-        // 3. Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
+        // Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // 4. Begrenzung: min 5 Min, max 6 Stunden
+        // Begrenzung: min 5 Min, max 6 Stunden
         long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
         long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
+        
+        // Bei niedrigem Volumen: max 30 Minuten
+        if (currentVolume <= 5.00) {
+            maxWait = Math.min(maxWait, MAX_WAIT_LOW_VOLUME);
+        }
         
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
-        // 5. Zusätzlicher zufälliger Offset (±30 Sekunden)
+        // Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -966,6 +989,34 @@ public class OverlayService extends AccessibilityService {
         return waitTime;
     }
     
+    // ===== COUNTDOWN MIT STATE =====
+    private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
+        refillState = nextState;
+        
+        // Wartezeit in lesbare Form umwandeln
+        long minutes = waitTime / 60000;
+        long seconds = (waitTime % 60000) / 1000;
+        String timeStr = minutes + " Min " + seconds + " Sek";
+        if (minutes >= 60) {
+            long hours = minutes / 60;
+            long mins = minutes % 60;
+            timeStr = hours + "h " + mins + "min";
+        }
+        
+        updateStatus(statusText + " (" + timeStr + ")");
+        Toast.makeText(this, statusText + " (" + timeStr + ")", Toast.LENGTH_SHORT).show();
+        
+        currentPhase = Phase.WAIT_AFTER_OCR;
+        startCountdown(waitTime, () -> {
+            if (isRunning) {
+                Log.d(TAG, "⏱️ Countdown vorbei → Swipe + OCR");
+                refillState = RefillState.CHECK_VOLUME;
+                performSwipeAndOcr();
+            }
+        });
+    }
+    
+    // ============ START AUTOREFILL ============
     private void startAutoRefill() {
         if (isRunning) {
             Toast.makeText(this, "⚠️ Läuft bereits", Toast.LENGTH_SHORT).show();
@@ -992,11 +1043,14 @@ public class OverlayService extends AccessibilityService {
         timeHistory.clear();
         averageConsumptionRate = 0.03;
         justRefilled = false;
+        refillState = RefillState.IDLE;
+        refillCycleCount = 0;
         
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
+    // ============ POSITIONEN ============
     private void loadPositions() {
         swipeStart.x = prefs.getInt(PREF_SWIPE_START_X, screenWidth / 2);
         swipeStart.y = prefs.getInt(PREF_SWIPE_START_Y, 10);
@@ -1022,6 +1076,7 @@ public class OverlayService extends AccessibilityService {
             .apply();
     }
     
+    // ============ SWIPE GESTURES ============
     private void performSwipeTestGesture() {
         if (!swipePlaced) {
             Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1113,7 +1168,7 @@ public class OverlayService extends AccessibilityService {
                         startCountdown(waitTime, () -> {
                             if (isRunning) {
                                 currentPhase = Phase.OCR;
-                                updateStatus("♻️ OCR wird ausgeführt...");
+                                updateStatus("📸 OCR wird ausgeführt...");
                                 performScreenshotAndOcr();
                             }
                         });
@@ -1126,6 +1181,7 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
+    // ============ CLICK REFILL BUTTON ============
     private void clickRefillButton() {
         if (!refillPlaced) {
             Toast.makeText(this, "❌ Refill nicht platziert!", Toast.LENGTH_SHORT).show();
@@ -1154,10 +1210,6 @@ public class OverlayService extends AccessibilityService {
                     updateStatus("✅ Refill geklickt!");
                     Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
                     
-                    // Refill-Status setzen
-                    justRefilled = true;
-                    lastRefillTime = System.currentTimeMillis();
-                    
                     if (!isRunning) return;
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
@@ -1181,6 +1233,7 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
+    // ============ COUNTDOWN ============
     private void startCountdown(long waitTime, Runnable onFinish) {
         isWaiting = true;
         countdownStartTime = System.currentTimeMillis();
@@ -1222,10 +1275,12 @@ public class OverlayService extends AccessibilityService {
         startCountdown(waitTime, null);
     }
     
+    // ============ AUTOMATIK START/STOP ============
     private void startAutomation() {
         isRunning = true;
         cycleCount = 0;
         totalSwipes = 0;
+        refillState = RefillState.IDLE;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setEnabled(false);
         btnStopAuto.setEnabled(true);
@@ -1255,6 +1310,7 @@ public class OverlayService extends AccessibilityService {
         isRunning = false;
         isWaiting = false;
         isAutoRefillMode = false;
+        refillState = RefillState.IDLE;
         currentPhase = Phase.IDLE;
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
@@ -1264,11 +1320,13 @@ public class OverlayService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
     }
     
+    // ============ UI HELPERS ============
     private void updateStatus(String text) { if (tvStatus != null) tvStatus.setText(text); }
     private void updateCountdown(String text) { if (tvCountdown != null) tvCountdown.setText(text); }
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
+    // ============ OVERLAY ============
     private void createOverlay() {
         if (floatingView != null) {
             try { windowManager.removeView(floatingView); } catch (Exception e) {}
@@ -1521,6 +1579,7 @@ public class OverlayService extends AccessibilityService {
         windowManager.addView(floatingView, params);
     }
     
+    // ============ VISUAL HELPERS ============
     private void createVisualHelpers() {
         swipeVisual = new View(this) {
             @Override
