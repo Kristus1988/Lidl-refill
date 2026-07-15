@@ -158,15 +158,17 @@ public class OverlayService extends AccessibilityService {
     // ============ ZEITEN ============
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
-    private static final long WAIT_AFTER_REFILL_MIN = 8000;
-    private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
     // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
     private static final double REFILL_THRESHOLD = 0.50;
     
-    // Nach Refill: 4-7 Minuten warten (menschlich)
-    private static final long WAIT_AFTER_REFILL_MIN = 4 * 60 * 1000;   // 4 Minuten
-    private static final long WAIT_AFTER_REFILL_MAX = 7 * 60 * 1000;   // 7 Minuten
+    // Nach Refill: 10-15 Sekunden warten (für OCR-Check ob 1,00 GB da ist)
+    private static final long WAIT_AFTER_REFILL_CHECK_MIN = 10 * 1000;   // 10 Sekunden
+    private static final long WAIT_AFTER_REFILL_CHECK_MAX = 15 * 1000;   // 15 Sekunden
+    
+    // Danach: 4-7 Minuten warten (menschlich)
+    private static final long WAIT_AFTER_REFILL_HUMAN_MIN = 4 * 60 * 1000;   // 4 Minuten
+    private static final long WAIT_AFTER_REFILL_HUMAN_MAX = 7 * 60 * 1000;   // 7 Minuten
     
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
@@ -879,8 +881,8 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case AFTER_REFILL_WAIT:
-                // Nach dem Refill: 5 Minuten gewartet, jetzt aktualisieren
-                Log.d(TAG, "📸 Nach Refill-Warte: Swipe + OCR zum Aktualisieren");
+                // Nach dem Refill-Check: 10-15 Sekunden gewartet, jetzt aktualisieren
+                Log.d(TAG, "📸 Nach Refill-Check: Swipe + OCR zum Aktualisieren");
                 refillState = RefillState.CHECK_VOLUME;
                 performSwipeAndOcr();
                 break;
@@ -924,17 +926,18 @@ public class OverlayService extends AccessibilityService {
         // Refill-Button klicken
         clickRefillButton();
         
-        // Nach Refill: 4-7 Minuten warten (menschlich)
-        long waitTime = WAIT_AFTER_REFILL_MIN + (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
-        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime / 60000) + " Minuten warten");
+        // Nach Refill: 10-15 Sekunden warten (für OCR-Check ob 1,00 GB da ist)
+        long checkWaitTime = WAIT_AFTER_REFILL_CHECK_MIN + 
+            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_CHECK_MAX - WAIT_AFTER_REFILL_CHECK_MIN));
+        Log.d(TAG, "⏱️ Nach Refill: " + (checkWaitTime / 1000) + " Sekunden warten (OCR-Check)");
         
         handler.postDelayed(() -> {
             if (isRunning) {
-                Log.d(TAG, "⏱️ Nach Refill-Warte vorbei → Swipe + OCR");
+                Log.d(TAG, "⏱️ Nach Refill-Check vorbei → Swipe + OCR (prüfe 1,00 GB)");
                 refillState = RefillState.AFTER_REFILL_WAIT;
                 performSwipeAndOcr();
             }
-        }, waitTime);
+        }, checkWaitTime);
     }
     
     // ===== SWIPE + OCR AUSFÜHREN =====
@@ -1214,9 +1217,10 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         currentPhase = Phase.WAIT_AFTER_REFILL;
-                        long waitTime = WAIT_AFTER_REFILL_MIN + 
-                            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
-                        updateStatus("⏳ Warte nach Refill");
+                        // Nach Refill: 4-7 Minuten warten (menschlich)
+                        long waitTime = WAIT_AFTER_REFILL_HUMAN_MIN + 
+                            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_HUMAN_MAX - WAIT_AFTER_REFILL_HUMAN_MIN));
+                        updateStatus("⏳ Warte nach Refill (menschlich)");
                         startCountdown(waitTime, () -> {
                             if (isRunning) {
                                 currentPhase = Phase.SWIPE;
