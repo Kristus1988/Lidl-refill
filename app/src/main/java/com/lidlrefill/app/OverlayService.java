@@ -82,6 +82,7 @@ public class OverlayService extends AccessibilityService {
     private double averageConsumptionRate = 0.03;
     private boolean justRefilled = false;
     private long lastRefillTime = 0;
+    private double lastRefillVolume = 0;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -156,16 +157,17 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MIN = 8000;
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
-    // ============ KORREKTE SCHWELLWERTE ============
-    // NEUER SCHWELLWERT: 0,010 GB/Min
-    // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB
-    // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB
-    private static final double USAGE_THRESHOLD = 0.010;
+    // ============ SCHWELLWERTE ============
+    // Schwellwert: 0,008 GB/Min
+    // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
+    // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
+    private static final double USAGE_THRESHOLD = 0.008;
     private static final double REFILL_THRESHOLD_SURF = 0.30;
     private static final double REFILL_THRESHOLD_STREAM = 0.50;
     
-    // MAXIMALE WARTEZEIT NACH REFILL (bei 1,00 GB)
-    private static final long MAX_WAIT_AFTER_REFILL = 30 * 60 * 1000; // 30 Minuten
+    // NACH REFILL (bei 1,00 GB): 15-20 Minuten zufällig warten
+    private static final long REFILL_WAIT_MIN = 15 * 60 * 1000; // 15 Minuten
+    private static final long REFILL_WAIT_MAX = 20 * 60 * 1000; // 20 Minuten
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -734,6 +736,7 @@ public class OverlayService extends AccessibilityService {
                 // Volumen-Sprung → Refill erkannt
                 justRefilled = true;
                 lastRefillTime = currentTime;
+                lastRefillVolume = currentVolume;
                 Log.d(TAG, "🔄 Refill erkannt! Volumen: " + lastVolume + " → " + currentVolume);
             }
         }
@@ -851,20 +854,18 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ KORREKTE LOGIK: Surfen ≤ 0,010 → 0,30 GB, Streaming > 0,010 → 0,50 GB ============
+    // ============ KORREKTE LOGIK: Schwellwert 0,008 GB/Min ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== SCHWELLWERT: 0,010 GB/Min =====
-        // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB
-        // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB
+        // ===== SCHWELLWERT: 0,008 GB/Min =====
         boolean isSurfing = averageConsumptionRate <= USAGE_THRESHOLD;
         double threshold = isSurfing ? REFILL_THRESHOLD_SURF : REFILL_THRESHOLD_STREAM;
         
-        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,010)" : "Streaming (> 0,010)") + 
+        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,008)" : "Streaming (> 0,008)") + 
             " → Puffer: " + threshold + " GB");
         
         // ===== WENN VOLUMEN UNTER PUFFER → SOFORT REFILL =====
@@ -909,52 +910,61 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ===== EINFACHE WARTEZEIT-BERECHNUNG MIT MAX. 30 MIN NACH REFILL =====
+    // ===== WARTEZEIT-BERECHNUNG: NACH REFILL 15-20 MINUTEN =====
     private long calculateWaitTime(double currentVolume, double threshold) {
-        // 1. Verbrauchsrate (falls zu niedrig, Fallback verwenden)
+        long waitTime;
+        
+        // ===== WENN KÜRZLICH REFILLT (bei 1,00 GB) → 15-20 Minuten zufällig =====
+        if (justRefilled && currentVolume <= 1.50) {
+            // Zufällige Wartezeit zwischen 15 und 20 Minuten
+            long minWait = REFILL_WAIT_MIN;
+            long maxWait = REFILL_WAIT_MAX;
+            waitTime = minWait + (long)(random.nextDouble() * (maxWait - minWait));
+            
+            // Zusätzliche zufällige Sekunden für mehr Varianz
+            waitTime += (long)((random.nextDouble() - 0.5) * 30000);
+            waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
+            
+            Log.d(TAG, "⏱️ Nach Refill: " + (waitTime / 60000) + " Minuten (15-20 Min)");
+            
+            // Refill-Status nach 30 Minuten zurücksetzen
+            if (System.currentTimeMillis() - lastRefillTime > 30 * 60 * 1000) {
+                justRefilled = false;
+                Log.d(TAG, "⏱️ Refill-Status zurückgesetzt (nach 30 Min)");
+            }
+            
+            return waitTime;
+        }
+        
+        // ===== NORMALE BERECHNUNG (wenn nicht gerade refillt wurde) =====
         double rate = averageConsumptionRate;
         if (rate <= 0.001 || rate > 0.2) {
             switch (currentModeIndex) {
-                case 0: rate = 0.025; break;  // Surfen
-                case 1: rate = 0.04; break;   // FullHD
-                case 2: rate = 0.06; break;   // 4K
+                case 0: rate = 0.025; break;
+                case 1: rate = 0.04; break;
+                case 2: rate = 0.06; break;
                 case 3: 
-                default: rate = 0.03; break;  // Auto
+                default: rate = 0.03; break;
             }
             Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
         }
         
-        // 2. Wartezeit = (aktuelles Volumen - Puffer) / Verbrauchsrate
         double diff = currentVolume - threshold;
         double minutesDouble = diff / rate;
         
-        // 3. Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
+        // Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // 4. Begrenzung: min 5 Min, max 6 Stunden
-        long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
-        long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
-        
-        // 5. WENN KÜRZLICH REFILLT (unter 1,50 GB) → max 30 Minuten!
-        //    Das verhindert zu lange Wartezeiten nach dem Aufladen
-        if (currentVolume <= 1.50 && justRefilled) {
-            maxWait = MAX_WAIT_AFTER_REFILL;   // 30 Minuten
-            Log.d(TAG, "⏱️ Nach Refill: Max 30 Minuten Wartezeit");
-        }
-        
+        // Begrenzung: min 5 Min, max 6 Stunden
+        long minWait = 5 * 60 * 1000;
+        long maxWait = 6 * 60 * 60 * 1000;
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
-        long waitTime = minutes * 60000;
+        waitTime = minutes * 60000;
         
-        // 6. Zusätzlicher zufälliger Offset (±30 Sekunden)
+        // Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
-        
-        // 7. Nach 30 Minuten den "justRefilled" Status zurücksetzen
-        if (justRefilled && System.currentTimeMillis() - lastRefillTime > 30 * 60 * 1000) {
-            justRefilled = false;
-            Log.d(TAG, "⏱️ Refill-Status zurückgesetzt (nach 30 Min)");
-        }
         
         Log.d(TAG, "📊 Berechnete Wartezeit: " + (waitTime / 60000) + " Minuten");
         return waitTime;
