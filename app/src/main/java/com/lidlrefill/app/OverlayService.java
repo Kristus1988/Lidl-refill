@@ -173,6 +173,9 @@ public class OverlayService extends AccessibilityService {
     // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
     private static final double REFILL_THRESHOLD = 0.50;
     
+    // ============ MINDEST-VERBRAUCHSRATE ============
+    private static final double MIN_CONSUMPTION_RATE = 0.008; // 0,008 GB/Min
+    
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
@@ -779,8 +782,10 @@ public class OverlayService extends AccessibilityService {
         
         if (totalTimeMinutes > 0 && totalConsumption > 0) {
             averageConsumptionRate = totalConsumption / totalTimeMinutes;
-            averageConsumptionRate = Math.max(0.005, Math.min(0.15, averageConsumptionRate));
-            Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+            // Mindest-Verbrauchsrate von 0,008 GB/Min
+            averageConsumptionRate = Math.max(MIN_CONSUMPTION_RATE, averageConsumptionRate);
+            averageConsumptionRate = Math.min(0.15, averageConsumptionRate);
+            Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min (min " + MIN_CONSUMPTION_RATE + ")");
         }
     }
     
@@ -1007,7 +1012,7 @@ public class OverlayService extends AccessibilityService {
     
     // ===== WARTEZEIT BERECHNEN (NUR BIS 0,50 GB) =====
     private long calculateWaitTime(double currentVolume) {
-        // Verbrauchsrate
+        // Verbrauchsrate - mit Mindestwert 0,008 GB/Min
         double rate = averageConsumptionRate;
         if (rate <= 0.001 || rate > 0.2) {
             switch (currentModeIndex) {
@@ -1018,6 +1023,12 @@ public class OverlayService extends AccessibilityService {
                 default: rate = 0.03; break;
             }
             Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
+        }
+        
+        // Mindest-Verbrauchsrate sicherstellen
+        if (rate < MIN_CONSUMPTION_RATE) {
+            rate = MIN_CONSUMPTION_RATE;
+            Log.d(TAG, "📊 Verwende Mindestrate: " + rate + " GB/Min");
         }
         
         // Wartezeit = (aktuelles Volumen - 0,50) / Verbrauchsrate
@@ -1678,7 +1689,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // ===== REFILL-KREIS VERGRÖSSERT (150x150 statt 100x100) =====
+        // ===== REFILL KREIS - GRÖSSER (150x150) =====
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -1704,10 +1715,8 @@ public class OverlayService extends AccessibilityService {
         hideVisuals();
     }
     
-    // ===== REFILL-KREIS: 150x150 Pixel (vorher 100x100) =====
-    private void showRefillVisual() { addVisual(refillVisual, 150, 150); }
-    
     private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); }
+    private void showRefillVisual() { addVisual(refillVisual, 150, 150); } // GRÖSSER: 150x150
     
     private void addVisual(View visual, int width, int height) {
         if (visual == swipeVisual) { removeVisual(refillVisual); }
@@ -1755,6 +1764,7 @@ public class OverlayService extends AccessibilityService {
                                 Toast.makeText(OverlayService.this, "✅ Swipe platziert!", Toast.LENGTH_SHORT).show();
                                 break;
                             case REFILL_PLACE:
+                                // Bei größerem Kreis (150x150) ist der Mittelpunkt bei 75,75
                                 refillButton.set(params.x + 75, params.y + 75);
                                 refillPlaced = true;
                                 currentMode = Mode.NONE;
