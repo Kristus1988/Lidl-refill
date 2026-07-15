@@ -80,6 +80,8 @@ public class OverlayService extends AccessibilityService {
     private ArrayList<Long> timeHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10;
     private double averageConsumptionRate = 0.03;
+    private boolean justRefilled = false;
+    private long lastRefillTime = 0;
     
     // ============ SCREEN ============
     private int screenWidth, screenHeight;
@@ -155,11 +157,15 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_REFILL_MAX = 14000;
     
     // ============ KORREKTE SCHWELLWERTE ============
-    // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
-    // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
-    private static final double USAGE_THRESHOLD = 0.008;
+    // NEUER SCHWELLWERT: 0,010 GB/Min
+    // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB
+    // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB
+    private static final double USAGE_THRESHOLD = 0.010;
     private static final double REFILL_THRESHOLD_SURF = 0.30;
     private static final double REFILL_THRESHOLD_STREAM = 0.50;
+    
+    // MAXIMALE WARTEZEIT NACH REFILL (bei 1,00 GB)
+    private static final long MAX_WAIT_AFTER_REFILL = 30 * 60 * 1000; // 30 Minuten
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
@@ -721,6 +727,17 @@ public class OverlayService extends AccessibilityService {
     private void updateConsumptionHistory(double currentVolume) {
         long currentTime = System.currentTimeMillis();
         
+        // Prüfen ob gerade refillt wurde (Volumen-Sprung nach oben)
+        if (volumeHistory.size() > 0) {
+            double lastVolume = volumeHistory.get(volumeHistory.size() - 1);
+            if (currentVolume > lastVolume + 0.5) {
+                // Volumen-Sprung → Refill erkannt
+                justRefilled = true;
+                lastRefillTime = currentTime;
+                Log.d(TAG, "🔄 Refill erkannt! Volumen: " + lastVolume + " → " + currentVolume);
+            }
+        }
+        
         volumeHistory.add(currentVolume);
         timeHistory.add(currentTime);
         
@@ -834,20 +851,20 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ KORREKTE LOGIK: Surfen ≤ 0,008 → 0,30 GB, Streaming > 0,008 → 0,50 GB ============
+    // ============ KORREKTE LOGIK: Surfen ≤ 0,010 → 0,30 GB, Streaming > 0,010 → 0,50 GB ============
     private void handleAutoRefillLogic(double volume) {
         if (!isRunning) return;
         
         Log.d(TAG, "♻️ AUTOREFILL: Erkanntes Volumen = " + volume + " GB");
         Log.d(TAG, "📊 Aktuelle Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
         
-        // ===== KORREKTER SCHWELLWERT: 0,008 GB/Min =====
-        // Surfen (≤ 0,008 GB/Min) → Puffer 0,30 GB
-        // Streaming (> 0,008 GB/Min) → Puffer 0,50 GB
+        // ===== SCHWELLWERT: 0,010 GB/Min =====
+        // Surfen (≤ 0,010 GB/Min) → Puffer 0,30 GB
+        // Streaming (> 0,010 GB/Min) → Puffer 0,50 GB
         boolean isSurfing = averageConsumptionRate <= USAGE_THRESHOLD;
         double threshold = isSurfing ? REFILL_THRESHOLD_SURF : REFILL_THRESHOLD_STREAM;
         
-        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,008)" : "Streaming (> 0,008)") + 
+        Log.d(TAG, "📊 Modus: " + (isSurfing ? "Surfen (≤ 0,010)" : "Streaming (> 0,010)") + 
             " → Puffer: " + threshold + " GB");
         
         // ===== WENN VOLUMEN UNTER PUFFER → SOFORT REFILL =====
@@ -855,6 +872,7 @@ public class OverlayService extends AccessibilityService {
             updateStatus("♻️ Volumen ≤ " + threshold + " → Refill");
             Toast.makeText(this, "♻️ Volumen ≤ " + threshold + " → Refill wird gedrückt", Toast.LENGTH_SHORT).show();
             currentPhase = Phase.REFILL;
+            justRefilled = false;
             handler.postDelayed(() -> {
                 if (isRunning) {
                     clickRefillButton();
@@ -891,7 +909,7 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ===== EINFACHE WARTEZEIT-BERECHNUNG =====
+    // ===== EINFACHE WARTEZEIT-BERECHNUNG MIT MAX. 30 MIN NACH REFILL =====
     private long calculateWaitTime(double currentVolume, double threshold) {
         // 1. Verbrauchsrate (falls zu niedrig, Fallback verwenden)
         double rate = averageConsumptionRate;
@@ -914,15 +932,29 @@ public class OverlayService extends AccessibilityService {
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // 4. Begrenzung auf sinnvolle Werte (min 5 Min, max 6 Stunden)
+        // 4. Begrenzung: min 5 Min, max 6 Stunden
         long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
         long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
+        
+        // 5. WENN KÜRZLICH REFILLT (unter 1,50 GB) → max 30 Minuten!
+        //    Das verhindert zu lange Wartezeiten nach dem Aufladen
+        if (currentVolume <= 1.50 && justRefilled) {
+            maxWait = MAX_WAIT_AFTER_REFILL;   // 30 Minuten
+            Log.d(TAG, "⏱️ Nach Refill: Max 30 Minuten Wartezeit");
+        }
+        
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
-        // 5. Zusätzlicher zufälliger Offset (±30 Sekunden)
+        // 6. Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
+        
+        // 7. Nach 30 Minuten den "justRefilled" Status zurücksetzen
+        if (justRefilled && System.currentTimeMillis() - lastRefillTime > 30 * 60 * 1000) {
+            justRefilled = false;
+            Log.d(TAG, "⏱️ Refill-Status zurückgesetzt (nach 30 Min)");
+        }
         
         Log.d(TAG, "📊 Berechnete Wartezeit: " + (waitTime / 60000) + " Minuten");
         return waitTime;
@@ -953,6 +985,7 @@ public class OverlayService extends AccessibilityService {
         volumeHistory.clear();
         timeHistory.clear();
         averageConsumptionRate = 0.03;
+        justRefilled = false;
         
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
@@ -1114,6 +1147,10 @@ public class OverlayService extends AccessibilityService {
                     super.onCompleted(gestureDescription);
                     updateStatus("✅ Refill geklickt!");
                     Toast.makeText(OverlayService.this, "✅ Refill-Button geklickt!", Toast.LENGTH_SHORT).show();
+                    
+                    // Refill-Status setzen
+                    justRefilled = true;
+                    lastRefillTime = System.currentTimeMillis();
                     
                     if (!isRunning) return;
                     
