@@ -170,8 +170,8 @@ public class OverlayService extends AccessibilityService {
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
     
-    // ============ EINFACHE LOGIK: IMMER 0,50 GB PUFFER ============
-    private static final double REFILL_THRESHOLD = 0.50;
+    // ============ NEUER REFILL-SCHWELLWERT: 0,40 GB ============
+    private static final double REFILL_THRESHOLD = 0.40;
     
     // ============ MINDEST-VERBRAUCHSRATE ============
     private static final double MIN_CONSUMPTION_RATE = 0.008; // 0,008 GB/Min
@@ -181,7 +181,7 @@ public class OverlayService extends AccessibilityService {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL (0,50 GB)"
+        "♻️ AUTOREFILL (0,40 GB)"
     };
     private int currentModeIndex = 0;
     
@@ -237,7 +237,7 @@ public class OverlayService extends AccessibilityService {
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
-        updateRate();  // Initial anzeigen
+        updateRate();
     }
     
     // ============ CROP ============
@@ -790,7 +790,6 @@ public class OverlayService extends AccessibilityService {
             averageConsumptionRate = Math.max(MIN_CONSUMPTION_RATE, Math.min(0.15, averageConsumptionRate));
             Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
             
-            // ===== RATE IM OVERLAY ANZEIGEN =====
             updateRate();
         }
     }
@@ -881,49 +880,42 @@ public class OverlayService extends AccessibilityService {
             case IDLE:
                 // Normaler Betrieb - Wartezeit berechnen
                 if (volume <= REFILL_THRESHOLD) {
-                    // Sofort Refill
-                    Log.d(TAG, "⚡ Volumen ≤ 0,50 GB → Refill");
+                    // Sofort Refill bei ≤ 0,40 GB
+                    Log.d(TAG, "⚡ Volumen ≤ 0,40 GB → Refill");
                     performRefill();
                 } else {
-                    // Wartezeit berechnen bis 0,50 GB
+                    // Wartezeit berechnen bis 0,40 GB
                     long waitTime = calculateWaitTime(volume);
-                    startCountdownWithState(waitTime, "⏳ Warte bis 0,50 GB", RefillState.WAITING);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,40 GB", RefillState.WAITING);
                 }
                 break;
                 
             case AFTER_REFILL_WAIT:
-                // Nach dem Refill: 10-15 Sekunden gewartet, jetzt Swipe ausführen
                 Log.d(TAG, "📸 Nach Refill-Warte: Swipe ausführen");
                 refillState = RefillState.AFTER_SWIPE_WAIT;
                 performSwipeOnly();
                 break;
                 
             case AFTER_SWIPE_WAIT:
-                // Nach Swipe: 10-15 Sekunden warten, dann OCR
                 Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
                 refillState = RefillState.CHECK_VOLUME;
                 performScreenshotAndOcr();
                 break;
                 
             case CHECK_VOLUME:
-                // Volumen wurde gerade gecheckt
                 if (volume <= REFILL_THRESHOLD) {
-                    Log.d(TAG, "⚡ Volumen ≤ 0,50 GB → Refill");
+                    Log.d(TAG, "⚡ Volumen ≤ 0,40 GB → Refill");
                     performRefill();
                 } else {
-                    // Wartezeit berechnen
                     long waitTime = calculateWaitTime(volume);
-                    startCountdownWithState(waitTime, "⏳ Warte bis 0,50 GB", RefillState.WAITING);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,40 GB", RefillState.WAITING);
                 }
                 break;
                 
             case WAITING:
-                // Warten bis zur nächsten Prüfung
-                // Wird durch den Countdown-Callback fortgesetzt
                 break;
                 
             case REFILL:
-                // Refill wird gerade durchgeführt
                 break;
         }
     }
@@ -969,7 +961,6 @@ public class OverlayService extends AccessibilityService {
                     
                     if (!isRunning) return;
                     
-                    // Nach Swipe: 10-15 Sekunden warten, dann OCR
                     long waitTime = WAIT_BETWEEN_SWIPE_AND_OCR_MIN + 
                         (long)(random.nextDouble() * (WAIT_BETWEEN_SWIPE_AND_OCR_MAX - WAIT_BETWEEN_SWIPE_AND_OCR_MIN));
                     updateStatus("⏳ Warte vor OCR (" + (waitTime/1000) + "s)");
@@ -990,7 +981,7 @@ public class OverlayService extends AccessibilityService {
     private void performRefill() {
         if (refillState == RefillState.REFILL) return;
         
-        Log.d(TAG, "🔄 Refill wird ausgelöst");
+        Log.d(TAG, "🔄 Refill wird ausgelöst (≤ 0,40 GB)");
         refillState = RefillState.REFILL;
         justRefilled = true;
         lastRefillTime = System.currentTimeMillis();
@@ -999,10 +990,8 @@ public class OverlayService extends AccessibilityService {
         updateStatus("♻️ Refill wird durchgeführt...");
         Toast.makeText(this, "♻️ Refill wird gedrückt!", Toast.LENGTH_SHORT).show();
         
-        // Refill-Button klicken
         clickRefillButton();
         
-        // Nach Refill: 10-15 Sekunden warten (menschlich)
         long waitTime = WAIT_AFTER_REFILL_SHORT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_REFILL_SHORT_MAX - WAIT_AFTER_REFILL_SHORT_MIN));
         Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/1000) + " Sekunden warten");
@@ -1016,9 +1005,8 @@ public class OverlayService extends AccessibilityService {
         }, waitTime);
     }
     
-    // ===== WARTEZEIT BERECHNEN (NUR BIS 0,50 GB) =====
+    // ===== WARTEZEIT BERECHNEN (BIS 0,40 GB) =====
     private long calculateWaitTime(double currentVolume) {
-        // Verbrauchsrate (mindestens 0,008 GB/Min)
         double rate = Math.max(averageConsumptionRate, MIN_CONSUMPTION_RATE);
         
         if (rate <= 0.001 || rate > 0.2) {
@@ -1032,19 +1020,15 @@ public class OverlayService extends AccessibilityService {
             Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
         }
         
-        // Wartezeit = (aktuelles Volumen - 0,50) / Verbrauchsrate
         double diff = currentVolume - REFILL_THRESHOLD;
         double minutesDouble = diff / rate;
         
-        // Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // Begrenzung: min 5 Min, max 6 Stunden
-        long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
-        long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
+        long minWait = 5 * 60 * 1000;
+        long maxWait = 6 * 60 * 60 * 1000;
         
-        // Bei niedrigem Volumen: max 30 Minuten
         if (currentVolume <= 5.00) {
             maxWait = Math.min(maxWait, MAX_WAIT_LOW_VOLUME);
         }
@@ -1052,7 +1036,6 @@ public class OverlayService extends AccessibilityService {
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
-        // Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -1064,7 +1047,6 @@ public class OverlayService extends AccessibilityService {
     private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
         refillState = nextState;
         
-        // Wartezeit in lesbare Form umwandeln
         long minutes = waitTime / 60000;
         long seconds = (waitTime % 60000) / 1000;
         String timeStr = minutes + " Min " + seconds + " Sek";
@@ -1126,10 +1108,9 @@ public class OverlayService extends AccessibilityService {
         refillState = RefillState.IDLE;
         refillCycleCount = 0;
         
-        // Rate initial anzeigen
         updateRate();
         
-        Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet! (Refill bei ≤ 0,40 GB)", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
@@ -1166,18 +1147,15 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Wenn Automatik läuft: Swipe + OCR ausführen und Wartezeit berechnen
         if (isRunning) {
             updateStatus("🔄 Manueller Check: Swipe + OCR...");
             Toast.makeText(this, "🔄 Manueller Check wird ausgeführt", Toast.LENGTH_SHORT).show();
             
-            // RefillState auf CHECK_VOLUME setzen, damit nach OCR die Wartezeit berechnet wird
             refillState = RefillState.CHECK_VOLUME;
             performSwipeAndOcr();
             return;
         }
         
-        // Wenn Automatik NICHT läuft: nur Test-Swipe
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
         int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
         long randomDuration = 400 + (long)(random.nextDouble() * 400);
@@ -1416,7 +1394,6 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ===== RATE ANZEIGEN =====
     private void updateRate() {
         if (tvRate != null) {
             String rateStr = String.format("%.3f", averageConsumptionRate);
@@ -1507,7 +1484,7 @@ public class OverlayService extends AccessibilityService {
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
                 if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Refill bei ≤ 0,40 GB)", Toast.LENGTH_LONG).show();
                 }
             }
             @Override
@@ -1707,7 +1684,6 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // ===== REFILL-KREIS GRÖSSER (150x150) =====
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
@@ -1734,8 +1710,6 @@ public class OverlayService extends AccessibilityService {
     }
     
     private void showSwipeVisual() { addVisual(swipeVisual, 100, 250); }
-    
-    // ===== REFILL-KREIS GRÖSSER: 150x150 =====
     private void showRefillVisual() { addVisual(refillVisual, 150, 150); }
     
     private void addVisual(View visual, int width, int height) {
