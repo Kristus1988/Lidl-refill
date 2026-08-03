@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="340dp"
     android:layout_height="wrap_content"
-    android:background="@drawable/overlay_background"
+    android:background="#DD000000"
     android:orientation="vertical"
     android:padding="12dp"
     android:elevation="10dp">
@@ -91,10 +90,10 @@
         android:id="@+id/spinnerConsumption"
         android:layout_width="match_parent"
         android:layout_height="32dp"
-        android:background="@drawable/spinner_border"
+        android:background="#333333"
         android:padding="4dp"
         android:textColor="@android:color/white"
-        android:popupBackground="@color/black"
+        android:popupBackground="#333333"
         android:layout_marginBottom="4dp"/>
 
     <!-- ===== BUTTONS ROW 1: SWIPE PLACE + REFILL PLACE + CROP ===== -->
@@ -111,7 +110,7 @@
             android:layout_weight="1"
             android:text="⬇ Swipe"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"/>
 
@@ -122,7 +121,7 @@
             android:layout_weight="1"
             android:text="🔴 Refill"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"/>
 
@@ -133,7 +132,7 @@
             android:layout_weight="1"
             android:text="✂️ Crop"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"/>
     </LinearLayout>
 
@@ -152,7 +151,7 @@
             android:layout_weight="1"
             android:text="S Test"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"/>
 
@@ -163,7 +162,7 @@
             android:layout_weight="1"
             android:text="R Test"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"/>
 
@@ -174,7 +173,7 @@
             android:layout_weight="1"
             android:text="📸 OCR"
             android:textSize="11sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"/>
     </LinearLayout>
 
@@ -193,7 +192,7 @@
             android:layout_weight="1"
             android:text="▶ Start"
             android:textSize="12sp"
-            android:background="@drawable/btn_green"
+            android:background="#2E7D32"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"/>
 
@@ -204,7 +203,7 @@
             android:layout_weight="1"
             android:text="⏹ Stop"
             android:textSize="12sp"
-            android:background="@drawable/btn_red"
+            android:background="#B71C1C"
             android:textColor="@android:color/white"
             android:layout_marginEnd="3dp"
             android:enabled="false"/>
@@ -216,7 +215,7 @@
             android:layout_weight="1"
             android:text="✕"
             android:textSize="14sp"
-            android:background="@drawable/btn_black"
+            android:background="#333333"
             android:textColor="@android:color/white"/>
     </LinearLayout>
 
