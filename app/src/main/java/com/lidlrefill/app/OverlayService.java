@@ -54,7 +54,7 @@ public class OverlayService extends AccessibilityService {
     // ============ UI ============
     private WindowManager windowManager;
     private FrameLayout floatingView;
-    private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult;
+    private TextView tvStatus, tvCountdown, tvCycle, tvOcrResult, tvRate;
     private Spinner spinnerConsumption;
     private Button btnSwipePlace, btnRefillPlace, btnOcrNow;
     private Button btnSwipeTest, btnRefillTest, btnStopAuto, btnStartAuto;
@@ -237,6 +237,7 @@ public class OverlayService extends AccessibilityService {
         updateCountdown("⏱ Warte: --:--");
         updateCycle();
         updateOcrResult("📸 OCR: --");
+        updateRate();  // Initial anzeigen
     }
     
     // ============ CROP ============
@@ -782,13 +783,15 @@ public class OverlayService extends AccessibilityService {
         
         if (totalTimeMinutes > 0 && totalConsumption > 0) {
             averageConsumptionRate = totalConsumption / totalTimeMinutes;
-            // Mindest-Verbrauchsrate: 0,008 GB/Min
             if (averageConsumptionRate < MIN_CONSUMPTION_RATE) {
                 averageConsumptionRate = MIN_CONSUMPTION_RATE;
                 Log.d(TAG, "📊 Verbrauchsrate auf Minimum 0,008 GB/Min gesetzt");
             }
             averageConsumptionRate = Math.max(MIN_CONSUMPTION_RATE, Math.min(0.15, averageConsumptionRate));
             Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
+            
+            // ===== RATE IM OVERLAY ANZEIGEN =====
+            updateRate();
         }
     }
     
@@ -1123,6 +1126,9 @@ public class OverlayService extends AccessibilityService {
         refillState = RefillState.IDLE;
         refillCycleCount = 0;
         
+        // Rate initial anzeigen
+        updateRate();
+        
         Toast.makeText(this, "♻️ AUTOREFILL gestartet!", Toast.LENGTH_LONG).show();
         startAutomation();
     }
@@ -1410,6 +1416,14 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
+    // ===== NEU: RATE ANZEIGEN =====
+    private void updateRate() {
+        if (tvRate != null) {
+            String rateStr = String.format("%.3f", averageConsumptionRate);
+            tvRate.setText("📊 " + rateStr + " GB/Min");
+        }
+    }
+    
     // ============ OVERLAY ============
     private void createOverlay() {
         if (floatingView != null) {
@@ -1430,6 +1444,7 @@ public class OverlayService extends AccessibilityService {
         tvCountdown = controlView.findViewById(R.id.tvCountdown);
         tvCycle = controlView.findViewById(R.id.tvCycle);
         tvOcrResult = controlView.findViewById(R.id.tvOcrResult);
+        tvRate = controlView.findViewById(R.id.tvRate);  // <-- NEU
         spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
