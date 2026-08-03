@@ -1416,7 +1416,7 @@ public class OverlayService extends AccessibilityService {
     private void updateCycle() { if (tvCycle != null) tvCycle.setText("🔄 " + cycleCount + " Zyklen | ⬇ " + totalSwipes); }
     private void updateOcrResult(String text) { if (tvOcrResult != null) tvOcrResult.setText(text); }
     
-    // ===== NEU: RATE ANZEIGEN =====
+    // ===== RATE ANZEIGEN =====
     private void updateRate() {
         if (tvRate != null) {
             String rateStr = String.format("%.3f", averageConsumptionRate);
@@ -1444,7 +1444,7 @@ public class OverlayService extends AccessibilityService {
         tvCountdown = controlView.findViewById(R.id.tvCountdown);
         tvCycle = controlView.findViewById(R.id.tvCycle);
         tvOcrResult = controlView.findViewById(R.id.tvOcrResult);
-        tvRate = controlView.findViewById(R.id.tvRate);  // <-- NEU
+        tvRate = controlView.findViewById(R.id.tvRate);
         spinnerConsumption = controlView.findViewById(R.id.spinnerConsumption);
         btnSwipePlace = controlView.findViewById(R.id.btnSwipePlace);
         btnRefillPlace = controlView.findViewById(R.id.btnRefillPlace);
@@ -1707,7 +1707,7 @@ public class OverlayService extends AccessibilityService {
             }
         };
         
-        // ===== REFILL-KREIS GRÖSSER (150x150 statt 100x100) =====
+        // ===== REFILL-KREIS GRÖSSER (150x150) =====
         refillVisual = new View(this) {
             @Override
             protected void onDraw(Canvas canvas) {
