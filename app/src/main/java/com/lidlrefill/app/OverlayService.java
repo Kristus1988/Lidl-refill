@@ -159,9 +159,9 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     
-    // NACH REFILL: 10-15 Sekunden warten (menschlich)
-    private static final long WAIT_AFTER_REFILL_SHORT_MIN = 10 * 1000;   // 10 Sekunden
-    private static final long WAIT_AFTER_REFILL_SHORT_MAX = 15 * 1000;   // 15 Sekunden
+    // NACH REFILL: 15-20 Minuten warten (menschlich)
+    private static final long WAIT_AFTER_REFILL_MIN = 15 * 60 * 1000;   // 15 Minuten
+    private static final long WAIT_AFTER_REFILL_MAX = 20 * 60 * 1000;   // 20 Minuten
     
     // ZWISCHEN SWIPE UND OCR: 10-15 Sekunden warten
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MIN = 10 * 1000;   // 10 Sekunden
@@ -170,18 +170,18 @@ public class OverlayService extends AccessibilityService {
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
     
-    // ============ NEUER REFILL-SCHWELLWERT: 0,40 GB ============
-    private static final double REFILL_THRESHOLD = 0.40;
+    // ============ REFILL-SCHWELLWERT: 0,30 GB ============
+    private static final double REFILL_THRESHOLD = 0.30;
     
-    // ============ MINDEST-VERBRAUCHSRATE ============
-    private static final double MIN_CONSUMPTION_RATE = 0.008; // 0,008 GB/Min
+    // ============ MINDEST-VERBRAUCHSRATE (Streaming) ============
+    private static final double MIN_CONSUMPTION_RATE = 0.04; // 0,04 GB/Min (Streaming)
     
     // ============ CONSUMPTION OPTIONS ============
     private static final String[] CONSUMPTION_LABELS = {
         "📱 Surfen (18-22 Min)",
         "📺 FullHD (11-14 Min)",
         "🎬 4K (6-9 Min)",
-        "♻️ AUTOREFILL (0,40 GB)"
+        "♻️ AUTOREFILL (0,30 GB)"
     };
     private int currentModeIndex = 0;
     
@@ -783,9 +783,10 @@ public class OverlayService extends AccessibilityService {
         
         if (totalTimeMinutes > 0 && totalConsumption > 0) {
             averageConsumptionRate = totalConsumption / totalTimeMinutes;
+            // Mindestens Streaming-Rate (0,04 GB/Min)
             if (averageConsumptionRate < MIN_CONSUMPTION_RATE) {
                 averageConsumptionRate = MIN_CONSUMPTION_RATE;
-                Log.d(TAG, "📊 Verbrauchsrate auf Minimum 0,008 GB/Min gesetzt");
+                Log.d(TAG, "📊 Verbrauchsrate auf Streaming-Minimum 0,04 GB/Min gesetzt");
             }
             averageConsumptionRate = Math.max(MIN_CONSUMPTION_RATE, Math.min(0.15, averageConsumptionRate));
             Log.d(TAG, "📊 Neue Verbrauchsrate: " + averageConsumptionRate + " GB/Min");
@@ -880,18 +881,18 @@ public class OverlayService extends AccessibilityService {
             case IDLE:
                 // Normaler Betrieb - Wartezeit berechnen
                 if (volume <= REFILL_THRESHOLD) {
-                    // Sofort Refill bei ≤ 0,40 GB
-                    Log.d(TAG, "⚡ Volumen ≤ 0,40 GB → Refill");
+                    // Sofort Refill bei ≤ 0,30 GB
+                    Log.d(TAG, "⚡ Volumen ≤ 0,30 GB → Refill");
                     performRefill();
                 } else {
-                    // Wartezeit berechnen bis 0,40 GB
+                    // Wartezeit berechnen bis 0,30 GB
                     long waitTime = calculateWaitTime(volume);
-                    startCountdownWithState(waitTime, "⏳ Warte bis 0,40 GB", RefillState.WAITING);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,30 GB", RefillState.WAITING);
                 }
                 break;
                 
             case AFTER_REFILL_WAIT:
-                Log.d(TAG, "📸 Nach Refill-Warte: Swipe ausführen");
+                Log.d(TAG, "📸 Nach Refill-Warte (15-20 Min): Swipe ausführen");
                 refillState = RefillState.AFTER_SWIPE_WAIT;
                 performSwipeOnly();
                 break;
@@ -904,11 +905,11 @@ public class OverlayService extends AccessibilityService {
                 
             case CHECK_VOLUME:
                 if (volume <= REFILL_THRESHOLD) {
-                    Log.d(TAG, "⚡ Volumen ≤ 0,40 GB → Refill");
+                    Log.d(TAG, "⚡ Volumen ≤ 0,30 GB → Refill");
                     performRefill();
                 } else {
                     long waitTime = calculateWaitTime(volume);
-                    startCountdownWithState(waitTime, "⏳ Warte bis 0,40 GB", RefillState.WAITING);
+                    startCountdownWithState(waitTime, "⏳ Warte bis 0,30 GB", RefillState.WAITING);
                 }
                 break;
                 
@@ -981,20 +982,21 @@ public class OverlayService extends AccessibilityService {
     private void performRefill() {
         if (refillState == RefillState.REFILL) return;
         
-        Log.d(TAG, "🔄 Refill wird ausgelöst (≤ 0,40 GB)");
+        Log.d(TAG, "🔄 Refill wird ausgelöst (≤ 0,30 GB)");
         refillState = RefillState.REFILL;
         justRefilled = true;
         lastRefillTime = System.currentTimeMillis();
         refillCycleCount++;
         
-        updateStatus("♻️ Refill wird durchgeführt...");
+        updateStatus("♻️ Refill wird durchgeführt (≤ 0,30 GB)...");
         Toast.makeText(this, "♻️ Refill wird gedrückt!", Toast.LENGTH_SHORT).show();
         
         clickRefillButton();
         
-        long waitTime = WAIT_AFTER_REFILL_SHORT_MIN + 
-            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_SHORT_MAX - WAIT_AFTER_REFILL_SHORT_MIN));
-        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/1000) + " Sekunden warten");
+        // Nach Refill: 15-20 Minuten warten (menschlich)
+        long waitTime = WAIT_AFTER_REFILL_MIN + 
+            (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
+        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/60000) + " Minuten warten");
         
         handler.postDelayed(() -> {
             if (isRunning) {
@@ -1005,8 +1007,9 @@ public class OverlayService extends AccessibilityService {
         }, waitTime);
     }
     
-    // ===== WARTEZEIT BERECHNEN (BIS 0,40 GB) =====
+    // ===== WARTEZEIT BERECHNEN (BIS 0,30 GB) =====
     private long calculateWaitTime(double currentVolume) {
+        // Immer Streaming-Rate (0,04 GB/Min) für sichere Berechnung
         double rate = Math.max(averageConsumptionRate, MIN_CONSUMPTION_RATE);
         
         if (rate <= 0.001 || rate > 0.2) {
@@ -1015,20 +1018,23 @@ public class OverlayService extends AccessibilityService {
                 case 1: rate = 0.04; break;
                 case 2: rate = 0.06; break;
                 case 3: 
-                default: rate = 0.03; break;
+                default: rate = MIN_CONSUMPTION_RATE; break;
             }
-            Log.d(TAG, "📊 Fallback auf Standardrate: " + rate);
+            Log.d(TAG, "📊 Fallback auf Streaming-Rate: " + rate);
         }
         
         double diff = currentVolume - REFILL_THRESHOLD;
         double minutesDouble = diff / rate;
         
+        // Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        long minWait = 5 * 60 * 1000;
-        long maxWait = 6 * 60 * 60 * 1000;
+        // Begrenzung: min 5 Min, max 6 Stunden
+        long minWait = 5 * 60 * 1000;          // 5 Minuten Minimum
+        long maxWait = 6 * 60 * 60 * 1000;     // 6 Stunden Maximum
         
+        // Bei niedrigem Volumen: max 30 Minuten
         if (currentVolume <= 5.00) {
             maxWait = Math.min(maxWait, MAX_WAIT_LOW_VOLUME);
         }
@@ -1036,6 +1042,7 @@ public class OverlayService extends AccessibilityService {
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
+        // Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -1103,14 +1110,14 @@ public class OverlayService extends AccessibilityService {
         
         volumeHistory.clear();
         timeHistory.clear();
-        averageConsumptionRate = 0.03;
+        averageConsumptionRate = MIN_CONSUMPTION_RATE;
         justRefilled = false;
         refillState = RefillState.IDLE;
         refillCycleCount = 0;
         
         updateRate();
         
-        Toast.makeText(this, "♻️ AUTOREFILL gestartet! (Refill bei ≤ 0,40 GB)", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "♻️ AUTOREFILL gestartet! (Refill bei ≤ 0,30 GB, Streaming-Rate)", Toast.LENGTH_LONG).show();
         startAutomation();
     }
     
@@ -1484,7 +1491,7 @@ public class OverlayService extends AccessibilityService {
                     "📊 " + CONSUMPTION_LABELS[position], 
                     Toast.LENGTH_SHORT).show();
                 if (isAutoRefillSelected) {
-                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Refill bei ≤ 0,40 GB)", Toast.LENGTH_LONG).show();
+                    Toast.makeText(OverlayService.this, "♻️ AUTOREFILL-Modus aktiviert! (Refill bei ≤ 0,30 GB)", Toast.LENGTH_LONG).show();
                 }
             }
             @Override
@@ -1685,8 +1692,7 @@ public class OverlayService extends AccessibilityService {
         };
         
         refillVisual = new View(this) {
-            @Override
-            protected void onDraw(Canvas canvas) {
+            @Override            protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
                 int size = Math.min(getWidth(), getHeight());
                 Paint paint = new Paint();
