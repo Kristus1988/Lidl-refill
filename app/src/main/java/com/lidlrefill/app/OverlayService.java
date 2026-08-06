@@ -144,11 +144,6 @@ public class OverlayService extends AccessibilityService {
     private Handler handler = new Handler(Looper.getMainLooper());
     private Random random = new Random();
     
-    // ============ COUNTDOWN THREAD ============
-    private Thread countdownThread = null;
-    private volatile boolean countdownRunning = false;
-    private Runnable countdownCallback = null;
-    
     // ============ OCR ============
     private TextRecognizer textRecognizer;
     private String ocrResult = "📸 OCR: --";
@@ -540,7 +535,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR - MIT STATUSMELDUNGEN ============
+    // ============ SCREENSHOT & OCR - VEREINFACHT ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -570,25 +565,60 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Schritt 1/5: Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
         Log.d(TAG, "📸 Schritt 1/5: Screenshot wird ausgelöst");
-        Toast.makeText(this, "📸 Screenshot wird ausgelöst", Toast.LENGTH_SHORT).show();
         
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // STEP 2: Warten auf Screenshot (5-10 Sekunden im Countdown)
+        // STEP 2: Warten auf Screenshot (5-10 Sekunden) - EINFACHER HANDLER
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
         updateStatus("📸 Schritt 2/5: Warte auf Screenshot (" + (waitTime/1000) + "s)...");
         Log.d(TAG, "⏳ Schritt 2/5: Warte " + (waitTime/1000) + "s auf Screenshot");
         
-        startCountdownThread(waitTime, () -> {
+        // Countdown im UI-Thread anzeigen
+        startSimpleCountdown(waitTime, () -> {
             if (isRunning) {
                 Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot...");
                 updateStatus("📸 Schritt 3/5: Suche Screenshot...");
                 findScreenshotInAllFolders(1);
             } else {
                 isProcessing = false;
-                Log.d(TAG, "⚠️ App nicht mehr im Running-Status, Screenshot-Suche abgebrochen");
+                Log.d(TAG, "⚠️ App nicht mehr im Running-Status");
+            }
+        });
+    }
+    
+    // ===== EINFACHER COUNTDOWN (OHNE THREAD) =====
+    private void startSimpleCountdown(long waitTime, Runnable onFinish) {
+        countdownActive = true;
+        countdownStartTime = System.currentTimeMillis();
+        currentWaitTime = waitTime;
+        
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!countdownActive || !isRunning) {
+                    countdownActive = false;
+                    return;
+                }
+                
+                long elapsed = System.currentTimeMillis() - countdownStartTime;
+                long remaining = Math.max(0, waitTime - elapsed);
+                
+                if (remaining <= 0) {
+                    updateCountdown("⏱ Warte: 00:00");
+                    countdownActive = false;
+                    if (onFinish != null && isRunning) {
+                        onFinish.run();
+                    }
+                    return;
+                }
+                
+                long seconds = remaining / 1000;
+                long minutes = seconds / 60;
+                seconds = seconds % 60;
+                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
+                handler.postDelayed(this, 1000);
             }
         });
     }
@@ -773,11 +803,11 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
-                        startCountdownThread(1000, () -> {
+                        handler.postDelayed(() -> {
                             if (isRunning) {
                                 performRefill();
                             }
-                        });
+                        }, 1000);
                     }
                 }
                 scaledBitmap.recycle();
@@ -1105,7 +1135,7 @@ public class OverlayService extends AccessibilityService {
         return waitTime;
     }
     
-    // ===== COUNTDOWN =====
+    // ===== COUNTDOWN MIT STATE (EINFACHER HANDLER) =====
     private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
         refillState = nextState;
         
@@ -1123,91 +1153,40 @@ public class OverlayService extends AccessibilityService {
         
         currentPhase = Phase.WAIT_AFTER_OCR;
         
-        startCountdownThread(waitTime, () -> {
-            Log.d(TAG, "⏱️ Countdown abgelaufen! Führe nächsten Schritt aus...");
-            if (isRunning) {
-                refillState = RefillState.CHECK_VOLUME;
-                performSwipeAndOcr();
-            } else {
-                Log.d(TAG, "⚠️ App nicht mehr im Running-Status, Countdown wird ignoriert");
-            }
-        });
-    }
-    
-    // ===== COUNTDOWN THREAD (MIT STATUS) =====
-    private void startCountdownThread(long waitTime, Runnable onFinish) {
-        // Alten Thread beenden
-        stopCountdownThread();
-        
-        if (waitTime <= 0) {
-            if (onFinish != null && isRunning) {
-                handler.post(onFinish);
-            }
-            return;
-        }
-        
-        countdownRunning = true;
+        // Einfacher Countdown mit Handler
         countdownActive = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
-        countdownCallback = onFinish;
         
-        countdownThread = new Thread(() -> {
-            try {
-                long remaining = waitTime;
-                while (countdownRunning && remaining > 0 && isRunning) {
-                    Thread.sleep(100);
-                    remaining = waitTime - (System.currentTimeMillis() - countdownStartTime);
-                    
-                    if (countdownRunning && isRunning) {
-                        final long finalRemaining = Math.max(0, remaining);
-                        handler.post(() -> {
-                            if (countdownActive && isRunning) {
-                                long seconds = finalRemaining / 1000;
-                                long minutes = seconds / 60;
-                                seconds = seconds % 60;
-                                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
-                            }
-                        });
-                    }
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!countdownActive || !isRunning) {
+                    countdownActive = false;
+                    return;
                 }
                 
-                if (countdownRunning && isRunning && remaining <= 0) {
-                    handler.post(() -> {
-                        countdownActive = false;
-                        updateCountdown("⏱ Warte: 00:00");
-                        if (countdownCallback != null && isRunning) {
-                            Log.d(TAG, "⏱️ Countdown beendet, führe Callback aus");
-                            Runnable callback = countdownCallback;
-                            countdownCallback = null;
-                            callback.run();
-                        }
-                    });
+                long elapsed = System.currentTimeMillis() - countdownStartTime;
+                long remaining = Math.max(0, waitTime - elapsed);
+                
+                if (remaining <= 0) {
+                    updateCountdown("⏱ Warte: 00:00");
+                    countdownActive = false;
+                    Log.d(TAG, "⏱️ Countdown abgelaufen! Führe nächsten Schritt aus...");
+                    if (isRunning) {
+                        refillState = RefillState.CHECK_VOLUME;
+                        performSwipeAndOcr();
+                    }
+                    return;
                 }
-            } catch (InterruptedException e) {
-                Log.d(TAG, "⏱️ Countdown Thread unterbrochen");
-            } finally {
-                countdownRunning = false;
-                countdownActive = false;
+                
+                long seconds = remaining / 1000;
+                long minutes = seconds / 60;
+                seconds = seconds % 60;
+                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
+                handler.postDelayed(this, 1000);
             }
         });
-        countdownThread.start();
-    }
-    
-    private void stopCountdownThread() {
-        countdownRunning = false;
-        countdownActive = false;
-        countdownCallback = null;
-        if (countdownThread != null) {
-            countdownThread.interrupt();
-            try {
-                countdownThread.join(500);
-            } catch (InterruptedException e) {
-                Log.d(TAG, "⏱️ Countdown Thread join unterbrochen");
-            }
-            countdownThread = null;
-        }
-        handler.post(() -> updateCountdown("⏱ Warte: --:--"));
     }
     
     // ============ SWIPE + OCR ============
@@ -1486,7 +1465,6 @@ public class OverlayService extends AccessibilityService {
         refillState = RefillState.IDLE;
         currentPhase = Phase.IDLE;
         countdownActive = false;
-        stopCountdownThread();
         handler.removeCallbacksAndMessages(null);
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
@@ -1689,7 +1667,6 @@ public class OverlayService extends AccessibilityService {
             stopAutomation();
             hideVisuals();
             removeCropFrame();
-            stopCountdownThread();
             if (isCropMode) {
                 isCropMode = false;
                 cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
@@ -1889,7 +1866,6 @@ public class OverlayService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        stopCountdownThread();
         savePositions();
         hideVisuals();
         removeCropFrame();
