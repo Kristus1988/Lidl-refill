@@ -173,6 +173,10 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MIN = 10 * 1000;   // 10 Sekunden
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MAX = 15 * 1000;   // 15 Sekunden
     
+    // NACH SCREENSHOT: 5-10 Sekunden warten (auf Screenshot-Datei)
+    private static final long WAIT_AFTER_SCREENSHOT_MIN = 5 * 1000;   // 5 Sekunden
+    private static final long WAIT_AFTER_SCREENSHOT_MAX = 10 * 1000;  // 10 Sekunden
+    
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
     
@@ -568,11 +572,15 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
+        updateStatus("⏳ Warte auf Screenshot (" + WAIT_AFTER_SCREENSHOT_MIN/1000 + "-" + WAIT_AFTER_SCREENSHOT_MAX/1000 + " Sekunden)...");
         
-        // Screenshot-Suche mit Countdown
-        startCountdownThread(5000, () -> {
+        // WARTEZEIT NACH SCREENSHOT IM COUNTDOWN!
+        long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
+            (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
+        
+        startCountdownThread(waitTime, () -> {
             if (isRunning) {
+                Log.d(TAG, "📸 Warte nach Screenshot vorbei, suche Screenshot...");
                 findScreenshotInAllFolders(1);
             }
         });
@@ -610,6 +618,7 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (latestFile == null) {
+            // RETRY IM COUNTDOWN!
             startCountdownThread(1000, () -> {
                 if (isRunning) {
                     findScreenshotInAllFolders(attempt + 1);
