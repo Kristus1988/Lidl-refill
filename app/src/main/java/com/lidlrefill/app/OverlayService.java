@@ -540,7 +540,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR - KOMPLETT ÜBERARBEITET ============
+    // ============ SCREENSHOT & OCR - KOMPLETT NEU STRUKTURIERT ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -566,30 +566,38 @@ public class OverlayService extends AccessibilityService {
         isProcessing = true;
         screenshotTime = System.currentTimeMillis();
         
-        updateStatus("📸 Native Screenshot wird ausgelöst...");
+        updateStatus("📸 Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
         
+        // Screenshot auslösen
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (" + WAIT_AFTER_SCREENSHOT_MIN/1000 + "-" + WAIT_AFTER_SCREENSHOT_MAX/1000 + " Sekunden)...");
-        
-        // WARTEZEIT NACH SCREENSHOT IM COUNTDOWN!
+        // Wartezeit nach Screenshot (5-10 Sekunden)
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
+        updateStatus("⏳ Warte auf Screenshot (" + (waitTime/1000) + "s)...");
         
+        // Countdown für Screenshot-Suche starten
         startCountdownThread(waitTime, () -> {
             if (isRunning) {
-                Log.d(TAG, "📸 Warte nach Screenshot vorbei, suche Screenshot...");
+                Log.d(TAG, "📸 Warte vorbei, suche Screenshot...");
                 findScreenshotInAllFolders(1);
             } else {
                 isProcessing = false;
-                Log.d(TAG, "⚠️ App nicht mehr im Running-Status, Screenshot-Suche abgebrochen");
+                Log.d(TAG, "⚠️ App nicht mehr im Running-Status");
             }
         });
     }
     
     private void findScreenshotInAllFolders(int attempt) {
+        // Prüfen ob noch aktiv
+        if (!isRunning || !isProcessing) {
+            isProcessing = false;
+            Log.d(TAG, "⚠️ Screenshot-Suche abgebrochen (isRunning=" + isRunning + ", isProcessing=" + isProcessing + ")");
+            return;
+        }
+        
         if (attempt > 20) {
             updateStatus("❌ Screenshot nicht gefunden (25s)");
             updateOcrResult("❌ Zeitüberschreitung");
@@ -598,15 +606,10 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        if (!isRunning) {
-            isProcessing = false;
-            Log.d(TAG, "⚠️ App nicht mehr im Running-Status, Screenshot-Suche abgebrochen");
-            return;
-        }
-        
         Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/20)");
-        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/20)...");
+        updateStatus("🔍 Suche Screenshot (" + attempt + "/20)...");
         
+        // Neueste Screenshot-Datei finden
         File latestFile = null;
         long latestTime = 0;
         
@@ -627,9 +630,9 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (latestFile == null) {
-            // RETRY IM COUNTDOWN!
+            // Nach 1 Sekunde erneut versuchen
             startCountdownThread(1000, () -> {
-                if (isRunning) {
+                if (isRunning && isProcessing) {
                     findScreenshotInAllFolders(attempt + 1);
                 } else {
                     isProcessing = false;
@@ -641,17 +644,19 @@ public class OverlayService extends AccessibilityService {
         lastScreenshotFile = latestFile;
         long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
         Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
+        updateStatus("📸 Screenshot gefunden (" + waitTime + "s)");
         
+        // Screenshot laden
         Bitmap fullBitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (fullBitmap == null) {
-            updateStatus("❌ Screenshot konnte nicht geladen werden");
+            updateStatus("❌ Screenshot laden fehlgeschlagen");
             updateOcrResult("❌ Laden fehlgeschlagen");
             Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
             isProcessing = false;
             return;
         }
         
+        // Zuschneiden
         Bitmap croppedBitmap = createPartialScreenshot(fullBitmap);
         fullBitmap.recycle();
         
@@ -663,6 +668,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // OCR ausführen
         performOcrOnBitmap(croppedBitmap);
     }
     
@@ -715,6 +721,7 @@ public class OverlayService extends AccessibilityService {
         InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
         textRecognizer.process(image)
             .addOnSuccessListener(visionText -> {
+                // OCR erfolgreich
                 if (!isRunning) {
                     isProcessing = false;
                     Log.d(TAG, "⚠️ App nicht mehr im Running-Status, OCR-Ergebnis ignoriert");
@@ -728,6 +735,7 @@ public class OverlayService extends AccessibilityService {
                 String volume = extractVolumeImproved(resultText);
                 isProcessing = false;
                 
+                // Screenshot-Datei löschen
                 if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
                     lastScreenshotFile.delete();
                     lastScreenshotFile = null;
@@ -767,6 +775,7 @@ public class OverlayService extends AccessibilityService {
                 screenshot.recycle();
             })
             .addOnFailureListener(e -> {
+                // OCR fehlgeschlagen
                 isProcessing = false;
                 updateStatus("❌ OCR Fehler: " + e.getMessage());
                 updateOcrResult("❌ OCR Fehler");
@@ -1128,13 +1137,12 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ===== COUNTDOWN THREAD (ALLE ZEITEN) =====
+    // ===== COUNTDOWN THREAD (STABILISIERT) =====
     private void startCountdownThread(long waitTime, Runnable onFinish) {
-        // Alten Thread beenden
+        // Alten Thread sauber beenden
         stopCountdownThread();
         
         if (waitTime <= 0) {
-            // Wenn keine Wartezeit, sofort ausführen
             if (onFinish != null && isRunning) {
                 handler.post(onFinish);
             }
@@ -1151,13 +1159,10 @@ public class OverlayService extends AccessibilityService {
             try {
                 long remaining = waitTime;
                 while (countdownRunning && remaining > 0 && isRunning) {
-                    // Alle 100ms prüfen
-                    for (int i = 0; i < 10 && countdownRunning && isRunning; i++) {
-                        Thread.sleep(100);
-                    }
+                    Thread.sleep(100);
                     remaining = waitTime - (System.currentTimeMillis() - countdownStartTime);
                     
-                    // UI aktualisieren (nur wenn noch aktiv)
+                    // UI aktualisieren
                     if (countdownRunning && isRunning) {
                         final long finalRemaining = Math.max(0, remaining);
                         handler.post(() -> {
@@ -1171,7 +1176,7 @@ public class OverlayService extends AccessibilityService {
                     }
                 }
                 
-                // Wenn Countdown abgelaufen ist
+                // Countdown abgelaufen
                 if (countdownRunning && isRunning && remaining <= 0) {
                     handler.post(() -> {
                         countdownActive = false;
@@ -1200,6 +1205,11 @@ public class OverlayService extends AccessibilityService {
         countdownCallback = null;
         if (countdownThread != null) {
             countdownThread.interrupt();
+            try {
+                countdownThread.join(500);
+            } catch (InterruptedException e) {
+                Log.d(TAG, "⏱️ Countdown Thread join unterbrochen");
+            }
             countdownThread = null;
         }
         handler.post(() -> updateCountdown("⏱ Warte: --:--"));
