@@ -535,7 +535,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR - ZURÜCK ZUR FUNKTIONIERENDEN VERSION ============
+    // ============ SCREENSHOT & OCR ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -570,7 +570,7 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // STEP 2: Warten auf Screenshot - mit einfachem Handler (funktionierend)
+        // STEP 2: Warten auf Screenshot
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
         updateStatus("📸 Schritt 2/5: Warte auf Screenshot (" + (waitTime/1000) + "s)...");
@@ -582,16 +582,18 @@ public class OverlayService extends AccessibilityService {
                 updateStatus("📸 Schritt 3/5: Suche Screenshot...");
                 findScreenshotInAllFolders(1);
             } else {
-                isProcessing = false;
-                Log.d(TAG, "⚠️ App nicht mehr im Running-Status");
+                // Auch wenn Auto-Modus nicht läuft, weitermachen
+                Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot (auch ohne Auto-Modus)...");
+                updateStatus("📸 Schritt 3/5: Suche Screenshot...");
+                findScreenshotInAllFolders(1);
             }
         }, waitTime);
     }
     
     private void findScreenshotInAllFolders(int attempt) {
-        if (!isRunning || !isProcessing) {
-            isProcessing = false;
-            Log.d(TAG, "⚠️ Screenshot-Suche abgebrochen");
+        // Prüfen ob noch aktiv - auch ohne isRunning weitermachen (manueller Modus)
+        if (!isProcessing) {
+            Log.d(TAG, "⚠️ Screenshot-Suche abgebrochen (isProcessing=false)");
             return;
         }
         
@@ -629,10 +631,8 @@ public class OverlayService extends AccessibilityService {
         if (latestFile == null) {
             // Nach 1 Sekunde erneut versuchen
             handler.postDelayed(() -> {
-                if (isRunning && isProcessing) {
+                if (isProcessing) {
                     findScreenshotInAllFolders(attempt + 1);
-                } else {
-                    isProcessing = false;
                 }
             }, 1000);
             return;
@@ -712,9 +712,9 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        if (!isRunning) {
-            isProcessing = false;
-            Log.d(TAG, "⚠️ App nicht mehr im Running-Status, OCR abgebrochen");
+        // Auch ohne isRunning weitermachen (manueller Modus)
+        if (!isProcessing) {
+            Log.d(TAG, "⚠️ OCR abgebrochen (isProcessing=false)");
             return;
         }
         
@@ -726,12 +726,6 @@ public class OverlayService extends AccessibilityService {
         InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
         textRecognizer.process(image)
             .addOnSuccessListener(visionText -> {
-                if (!isRunning) {
-                    isProcessing = false;
-                    Log.d(TAG, "⚠️ App nicht mehr im Running-Status, OCR-Ergebnis ignoriert");
-                    return;
-                }
-                
                 String resultText = visionText.getText();
                 lastOcrText = resultText;
                 Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
@@ -756,6 +750,7 @@ public class OverlayService extends AccessibilityService {
                     updateStatus("✅ OCR: " + volume + " GB");
                     Toast.makeText(OverlayService.this, "✅ OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
                     
+                    // Wenn Auto-Modus läuft, Volume-Check ausführen
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         handleVolumeCheck(currentVolume);
                     }
@@ -1575,6 +1570,8 @@ public class OverlayService extends AccessibilityService {
                 Toast.makeText(this, "⚠️ Crop-Modus aktiv! Beende zuerst", Toast.LENGTH_SHORT).show();
                 return;
             }
+            // Manueller OCR-Klick: setze refillState auf CHECK_VOLUME
+            refillState = RefillState.CHECK_VOLUME;
             performScreenshotAndOcr();
         });
         
