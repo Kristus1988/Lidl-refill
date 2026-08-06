@@ -535,7 +535,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR - VEREINFACHT ============
+    // ============ SCREENSHOT & OCR - ZURÜCK ZUR FUNKTIONIERENDEN VERSION ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -565,18 +565,18 @@ public class OverlayService extends AccessibilityService {
         updateStatus("📸 Schritt 1/5: Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
         Log.d(TAG, "📸 Schritt 1/5: Screenshot wird ausgelöst");
+        Toast.makeText(this, "📸 Screenshot wird ausgelöst", Toast.LENGTH_SHORT).show();
         
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // STEP 2: Warten auf Screenshot (5-10 Sekunden) - EINFACHER HANDLER
+        // STEP 2: Warten auf Screenshot - mit einfachem Handler (funktionierend)
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
         updateStatus("📸 Schritt 2/5: Warte auf Screenshot (" + (waitTime/1000) + "s)...");
         Log.d(TAG, "⏳ Schritt 2/5: Warte " + (waitTime/1000) + "s auf Screenshot");
         
-        // Countdown im UI-Thread anzeigen
-        startSimpleCountdown(waitTime, () -> {
+        handler.postDelayed(() -> {
             if (isRunning) {
                 Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot...");
                 updateStatus("📸 Schritt 3/5: Suche Screenshot...");
@@ -585,42 +585,7 @@ public class OverlayService extends AccessibilityService {
                 isProcessing = false;
                 Log.d(TAG, "⚠️ App nicht mehr im Running-Status");
             }
-        });
-    }
-    
-    // ===== EINFACHER COUNTDOWN (OHNE THREAD) =====
-    private void startSimpleCountdown(long waitTime, Runnable onFinish) {
-        countdownActive = true;
-        countdownStartTime = System.currentTimeMillis();
-        currentWaitTime = waitTime;
-        
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (!countdownActive || !isRunning) {
-                    countdownActive = false;
-                    return;
-                }
-                
-                long elapsed = System.currentTimeMillis() - countdownStartTime;
-                long remaining = Math.max(0, waitTime - elapsed);
-                
-                if (remaining <= 0) {
-                    updateCountdown("⏱ Warte: 00:00");
-                    countdownActive = false;
-                    if (onFinish != null && isRunning) {
-                        onFinish.run();
-                    }
-                    return;
-                }
-                
-                long seconds = remaining / 1000;
-                long minutes = seconds / 60;
-                seconds = seconds % 60;
-                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
-                handler.postDelayed(this, 1000);
-            }
-        });
+        }, waitTime);
     }
     
     private void findScreenshotInAllFolders(int attempt) {
@@ -676,7 +641,7 @@ public class OverlayService extends AccessibilityService {
         lastScreenshotFile = latestFile;
         long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
         Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Schritt 3/5: Screenshot gefunden (" + waitTime + "s)");
+        updateStatus("📸 Schritt 3/5: Screenshot gefunden (" + waitTime + "s) ✅");
         Toast.makeText(this, "📸 Screenshot gefunden nach " + waitTime + "s", Toast.LENGTH_SHORT).show();
         
         // STEP 4: Screenshot laden und Crop-Bereich ausschneiden
@@ -1135,7 +1100,7 @@ public class OverlayService extends AccessibilityService {
         return waitTime;
     }
     
-    // ===== COUNTDOWN MIT STATE (EINFACHER HANDLER) =====
+    // ===== COUNTDOWN MIT STATE =====
     private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
         refillState = nextState;
         
@@ -1153,7 +1118,6 @@ public class OverlayService extends AccessibilityService {
         
         currentPhase = Phase.WAIT_AFTER_OCR;
         
-        // Einfacher Countdown mit Handler
         countdownActive = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
