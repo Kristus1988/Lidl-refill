@@ -540,10 +540,10 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR ============
+    // ============ SCREENSHOT & OCR (KOMPLETT NEU UND STABIL) ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
-            Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "⏳ OCR läuft bereits, überspringe");
             return;
         }
         
@@ -565,6 +565,7 @@ public class OverlayService extends AccessibilityService {
         
         isProcessing = true;
         screenshotTime = System.currentTimeMillis();
+        lastScreenshotFile = null;
         
         updateStatus("📸 Native Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
@@ -572,21 +573,29 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (" + WAIT_AFTER_SCREENSHOT_MIN/1000 + "-" + WAIT_AFTER_SCREENSHOT_MAX/1000 + " Sekunden)...");
-        
-        // WARTEZEIT NACH SCREENSHOT IM COUNTDOWN!
+        // Wartezeit nach Screenshot im Countdown
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
+        updateStatus("⏳ Warte auf Screenshot (" + (waitTime/1000) + "s)...");
         
         startCountdownThread(waitTime, () -> {
-            if (isRunning) {
+            if (isRunning && isProcessing) {
                 Log.d(TAG, "📸 Warte nach Screenshot vorbei, suche Screenshot...");
                 findScreenshotInAllFolders(1);
+            } else {
+                isProcessing = false;
+                Log.d(TAG, "⚠️ OCR abgebrochen (isRunning=" + isRunning + ", isProcessing=" + isProcessing + ")");
             }
         });
     }
     
     private void findScreenshotInAllFolders(int attempt) {
+        if (!isRunning || !isProcessing) {
+            isProcessing = false;
+            Log.d(TAG, "⚠️ OCR abgebrochen (isRunning=" + isRunning + ", isProcessing=" + isProcessing + ")");
+            return;
+        }
+        
         if (attempt > 20) {
             updateStatus("❌ Screenshot nicht gefunden (25s)");
             updateOcrResult("❌ Zeitüberschreitung");
@@ -618,10 +627,12 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (latestFile == null) {
-            // RETRY IM COUNTDOWN!
+            // Retry im Countdown
             startCountdownThread(1000, () -> {
-                if (isRunning) {
+                if (isRunning && isProcessing) {
                     findScreenshotInAllFolders(attempt + 1);
+                } else {
+                    isProcessing = false;
                 }
             });
             return;
@@ -652,6 +663,7 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
+        // OCR ausführen
         performOcrOnBitmap(croppedBitmap);
     }
     
@@ -989,7 +1001,6 @@ public class OverlayService extends AccessibilityService {
                         (long)(random.nextDouble() * (WAIT_BETWEEN_SWIPE_AND_OCR_MAX - WAIT_BETWEEN_SWIPE_AND_OCR_MIN));
                     updateStatus("⏳ Warte vor OCR (" + (waitTime/1000) + "s)");
                     
-                    // Countdown für Swipe→OCR starten
                     startCountdownThread(waitTime, () -> {
                         if (isRunning) {
                             Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
@@ -1158,6 +1169,8 @@ public class OverlayService extends AccessibilityService {
                             Runnable callback = countdownCallback;
                             countdownCallback = null;
                             callback.run();
+                        } else {
+                            Log.d(TAG, "⚠️ Kein Callback oder App nicht mehr im Running-Status");
                         }
                     });
                 }
@@ -1432,6 +1445,7 @@ public class OverlayService extends AccessibilityService {
         totalSwipes = 0;
         refillState = RefillState.IDLE;
         countdownActive = false;
+        isProcessing = false;
         btnStartAuto.setText("▶ Läuft");
         btnStartAuto.setEnabled(false);
         btnStopAuto.setEnabled(true);
@@ -1464,6 +1478,7 @@ public class OverlayService extends AccessibilityService {
         refillState = RefillState.IDLE;
         currentPhase = Phase.IDLE;
         countdownActive = false;
+        isProcessing = false;
         stopCountdownThread();
         handler.removeCallbacksAndMessages(null);
         btnStartAuto.setText("▶ Start");
@@ -1668,6 +1683,7 @@ public class OverlayService extends AccessibilityService {
             hideVisuals();
             removeCropFrame();
             stopCountdownThread();
+            isProcessing = false;
             if (isCropMode) {
                 isCropMode = false;
                 cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
