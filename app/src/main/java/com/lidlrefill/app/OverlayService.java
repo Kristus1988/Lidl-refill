@@ -147,6 +147,7 @@ public class OverlayService extends AccessibilityService {
     // ============ COUNTDOWN THREAD ============
     private Thread countdownThread = null;
     private volatile boolean countdownRunning = false;
+    private Runnable countdownCallback = null;
     
     // ============ OCR ============
     private TextRecognizer textRecognizer;
@@ -171,6 +172,10 @@ public class OverlayService extends AccessibilityService {
     // ZWISCHEN SWIPE UND OCR: 10-15 Sekunden warten
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MIN = 10 * 1000;   // 10 Sekunden
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MAX = 15 * 1000;   // 15 Sekunden
+    
+    // NACH SCREENSHOT: 5-10 Sekunden warten (auf Screenshot-Datei)
+    private static final long WAIT_AFTER_SCREENSHOT_MIN = 5 * 1000;   // 5 Sekunden
+    private static final long WAIT_AFTER_SCREENSHOT_MAX = 10 * 1000;  // 10 Sekunden
     
     // Max Wartezeit bei niedrigem Volumen
     private static final long MAX_WAIT_LOW_VOLUME = 30 * 60 * 1000;    // 30 Minuten
@@ -535,7 +540,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR ============
+    // ============ SCREENSHOT & OCR - MIT STATUSMELDUNGEN ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -561,20 +566,40 @@ public class OverlayService extends AccessibilityService {
         isProcessing = true;
         screenshotTime = System.currentTimeMillis();
         
-        updateStatus("📸 Native Screenshot wird ausgelöst...");
+        // STEP 1: Screenshot auslösen
+        updateStatus("📸 Schritt 1/5: Screenshot wird ausgelöst...");
         updateOcrResult("📸 Screenshot...");
+        Log.d(TAG, "📸 Schritt 1/5: Screenshot wird ausgelöst");
+        Toast.makeText(this, "📸 Screenshot wird ausgelöst", Toast.LENGTH_SHORT).show();
         
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        updateStatus("⏳ Warte auf Screenshot (5-15 Sekunden)...");
+        // STEP 2: Warten auf Screenshot (5-10 Sekunden im Countdown)
+        long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
+            (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
+        updateStatus("📸 Schritt 2/5: Warte auf Screenshot (" + (waitTime/1000) + "s)...");
+        Log.d(TAG, "⏳ Schritt 2/5: Warte " + (waitTime/1000) + "s auf Screenshot");
         
-        handler.postDelayed(() -> {
-            findScreenshotInAllFolders(1);
-        }, 5000);
+        startCountdownThread(waitTime, () -> {
+            if (isRunning) {
+                Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot...");
+                updateStatus("📸 Schritt 3/5: Suche Screenshot...");
+                findScreenshotInAllFolders(1);
+            } else {
+                isProcessing = false;
+                Log.d(TAG, "⚠️ App nicht mehr im Running-Status, Screenshot-Suche abgebrochen");
+            }
+        });
     }
     
     private void findScreenshotInAllFolders(int attempt) {
+        if (!isRunning || !isProcessing) {
+            isProcessing = false;
+            Log.d(TAG, "⚠️ Screenshot-Suche abgebrochen");
+            return;
+        }
+        
         if (attempt > 20) {
             updateStatus("❌ Screenshot nicht gefunden (25s)");
             updateOcrResult("❌ Zeitüberschreitung");
@@ -583,9 +608,10 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        Log.d(TAG, "🔍 Suche nach Screenshot (Versuch " + attempt + "/20)");
-        updateStatus("🔍 Suche nach Screenshot (" + attempt + "/20)...");
+        Log.d(TAG, "🔍 Suche Screenshot (Versuch " + attempt + "/20)");
+        updateStatus("📸 Schritt 3/5: Suche Screenshot (" + attempt + "/20)...");
         
+        // Neueste Screenshot-Datei finden
         File latestFile = null;
         long latestTime = 0;
         
@@ -606,8 +632,13 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (latestFile == null) {
+            // Nach 1 Sekunde erneut versuchen
             handler.postDelayed(() -> {
-                findScreenshotInAllFolders(attempt + 1);
+                if (isRunning && isProcessing) {
+                    findScreenshotInAllFolders(attempt + 1);
+                } else {
+                    isProcessing = false;
+                }
             }, 1000);
             return;
         }
@@ -615,11 +646,16 @@ public class OverlayService extends AccessibilityService {
         lastScreenshotFile = latestFile;
         long waitTime = (System.currentTimeMillis() - screenshotTime) / 1000;
         Log.d(TAG, "📸 Screenshot gefunden nach " + waitTime + "s: " + latestFile.getAbsolutePath());
-        updateStatus("📸 Screenshot gefunden nach " + waitTime + "s");
+        updateStatus("📸 Schritt 3/5: Screenshot gefunden (" + waitTime + "s)");
+        Toast.makeText(this, "📸 Screenshot gefunden nach " + waitTime + "s", Toast.LENGTH_SHORT).show();
+        
+        // STEP 4: Screenshot laden und Crop-Bereich ausschneiden
+        updateStatus("📸 Schritt 4/5: Lade Screenshot & Crop-Bereich...");
+        Log.d(TAG, "📸 Schritt 4/5: Lade Screenshot & Crop-Bereich");
         
         Bitmap fullBitmap = BitmapFactory.decodeFile(latestFile.getAbsolutePath());
         if (fullBitmap == null) {
-            updateStatus("❌ Screenshot konnte nicht geladen werden");
+            updateStatus("❌ Screenshot laden fehlgeschlagen");
             updateOcrResult("❌ Laden fehlgeschlagen");
             Toast.makeText(this, "❌ Screenshot konnte nicht geladen werden!", Toast.LENGTH_LONG).show();
             isProcessing = false;
@@ -636,6 +672,11 @@ public class OverlayService extends AccessibilityService {
             isProcessing = false;
             return;
         }
+        
+        // STEP 5: OCR ausführen
+        updateStatus("📸 Schritt 5/5: OCR wird ausgeführt...");
+        Log.d(TAG, "📸 Schritt 5/5: OCR wird ausgeführt");
+        Toast.makeText(this, "📸 OCR wird ausgeführt...", Toast.LENGTH_SHORT).show();
         
         performOcrOnBitmap(croppedBitmap);
     }
@@ -660,6 +701,7 @@ public class OverlayService extends AccessibilityService {
                 return null;
             }
             
+            Log.d(TAG, "✂️ Crop-Bereich: " + left + "," + top + " - " + right + "," + bottom);
             return Bitmap.createBitmap(fullScreenshot, left, top, right - left, bottom - top);
         } catch (Exception e) {
             Log.e(TAG, "❌ Teilscreenshot Fehler: " + e.getMessage());
@@ -675,7 +717,13 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        updateStatus("📸 OCR wird ausgeführt...");
+        if (!isRunning) {
+            isProcessing = false;
+            Log.d(TAG, "⚠️ App nicht mehr im Running-Status, OCR abgebrochen");
+            return;
+        }
+        
+        updateStatus("📸 Schritt 5/5: OCR wird verarbeitet...");
         updateOcrResult("📸 OCR...");
         
         Bitmap scaledBitmap = Bitmap.createScaledBitmap(screenshot, screenshot.getWidth() * 2, screenshot.getHeight() * 2, true);
@@ -683,6 +731,12 @@ public class OverlayService extends AccessibilityService {
         InputImage image = InputImage.fromBitmap(scaledBitmap, 0);
         textRecognizer.process(image)
             .addOnSuccessListener(visionText -> {
+                if (!isRunning) {
+                    isProcessing = false;
+                    Log.d(TAG, "⚠️ App nicht mehr im Running-Status, OCR-Ergebnis ignoriert");
+                    return;
+                }
+                
                 String resultText = visionText.getText();
                 lastOcrText = resultText;
                 Log.d(TAG, "📝 OCR Rohergebnis:\n" + resultText);
@@ -690,6 +744,7 @@ public class OverlayService extends AccessibilityService {
                 String volume = extractVolumeImproved(resultText);
                 isProcessing = false;
                 
+                // Screenshot-Datei löschen
                 if (lastScreenshotFile != null && lastScreenshotFile.exists()) {
                     lastScreenshotFile.delete();
                     lastScreenshotFile = null;
@@ -703,8 +758,8 @@ public class OverlayService extends AccessibilityService {
                     
                     ocrResult = "📸 " + volume + " GB";
                     updateOcrResult(ocrResult);
-                    updateStatus("📸 OCR: " + volume + " GB");
-                    Toast.makeText(OverlayService.this, "📸 OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
+                    updateStatus("✅ OCR: " + volume + " GB");
+                    Toast.makeText(OverlayService.this, "✅ OCR: " + volume + " GB", Toast.LENGTH_LONG).show();
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         handleVolumeCheck(currentVolume);
@@ -713,16 +768,16 @@ public class OverlayService extends AccessibilityService {
                     lastDetectedVolume = 0.0;
                     ocrResult = "📸 Kein GB-Wert";
                     updateOcrResult(ocrResult);
-                    updateStatus("📸 Kein GB-Wert");
+                    updateStatus("⚠️ Kein GB-Wert gefunden");
                     Toast.makeText(OverlayService.this, "⚠️ Kein GB-Wert gefunden", Toast.LENGTH_LONG).show();
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
-                        handler.postDelayed(() -> {
+                        startCountdownThread(1000, () -> {
                             if (isRunning) {
                                 performRefill();
                             }
-                        }, 1000);
+                        });
                     }
                 }
                 scaledBitmap.recycle();
@@ -746,7 +801,6 @@ public class OverlayService extends AccessibilityService {
         if (volumeHistory.size() > 0) {
             double lastVolume = volumeHistory.get(volumeHistory.size() - 1);
             if (currentVolume > lastVolume + 0.5) {
-                // Volumen-Sprung → Refill erkannt
                 justRefilled = true;
                 lastRefillTime = currentTime;
                 refillCycleCount++;
@@ -787,7 +841,6 @@ public class OverlayService extends AccessibilityService {
         
         if (totalTimeMinutes > 0 && totalConsumption > 0) {
             averageConsumptionRate = totalConsumption / totalTimeMinutes;
-            // Mindestens Streaming-Rate (0,04 GB/Min)
             if (averageConsumptionRate < MIN_CONSUMPTION_RATE) {
                 averageConsumptionRate = MIN_CONSUMPTION_RATE;
                 Log.d(TAG, "📊 Verbrauchsrate auf Streaming-Minimum 0,04 GB/Min gesetzt");
@@ -874,7 +927,7 @@ public class OverlayService extends AccessibilityService {
         return null;
     }
     
-    // ============ KERNLOGIK: VOLUMEN PRÜFEN UND REAGIEREN ============
+    // ============ KERNLOGIK ============
     private void handleVolumeCheck(double volume) {
         if (!isRunning) return;
         
@@ -893,7 +946,7 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case AFTER_REFILL_WAIT:
-                Log.d(TAG, "📸 Nach Refill-Warte (15-20 Min): Swipe ausführen");
+                Log.d(TAG, "📸 Nach Refill-Warte: Swipe ausführen");
                 refillState = RefillState.AFTER_SWIPE_WAIT;
                 performSwipeOnly();
                 break;
@@ -915,7 +968,6 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case WAITING:
-                // Wird vom Countdown fortgesetzt
                 break;
                 
             case REFILL:
@@ -923,18 +975,16 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ===== SWIPE NUR AUSFÜHREN (OHNE OCR) =====
+    // ===== SWIPE NUR AUSFÜHREN =====
     private void performSwipeOnly() {
-        if (!swipePlaced) {
-            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+        if (!swipePlaced || !isRunning) {
             return;
         }
-        
-        if (!isRunning) return;
         
         totalSwipes++;
         cycleCount++;
         updateCycle();
+        updateStatus("🔄 Swipe wird ausgeführt...");
         
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
         int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
@@ -967,7 +1017,7 @@ public class OverlayService extends AccessibilityService {
                     super.onCompleted(gestureDescription);
                     if (!isRunning) return;
                     
-                    updateStatus("✅ Swipe #" + totalSwipes);
+                    updateStatus("✅ Swipe #" + totalSwipes + " abgeschlossen");
                     updateCycle();
                     
                     long waitTime = WAIT_BETWEEN_SWIPE_AND_OCR_MIN + 
@@ -986,10 +1036,9 @@ public class OverlayService extends AccessibilityService {
         }, randomDelay);
     }
     
-    // ===== REFILL AUSLÖSEN =====
+    // ===== REFILL =====
     private void performRefill() {
-        if (refillState == RefillState.REFILL) return;
-        if (!isRunning) return;
+        if (refillState == RefillState.REFILL || !isRunning) return;
         
         Log.d(TAG, "🔄 Refill wird ausgelöst (≤ 0,30 GB)");
         refillState = RefillState.REFILL;
@@ -1002,10 +1051,10 @@ public class OverlayService extends AccessibilityService {
         
         clickRefillButton();
         
-        // Nach Refill: 15-20 Minuten warten
         long waitTime = WAIT_AFTER_REFILL_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
         Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/60000) + " Minuten warten");
+        updateStatus("⏳ Nach Refill: " + (waitTime/60000) + " Min warten");
         
         handler.postDelayed(() -> {
             if (isRunning) {
@@ -1016,7 +1065,7 @@ public class OverlayService extends AccessibilityService {
         }, waitTime);
     }
     
-    // ===== WARTEZEIT BERECHNEN (BIS 0,30 GB) =====
+    // ===== WARTEZEIT BERECHNEN =====
     private long calculateWaitTime(double currentVolume) {
         double rate = Math.max(averageConsumptionRate, MIN_CONSUMPTION_RATE);
         
@@ -1036,15 +1085,12 @@ public class OverlayService extends AccessibilityService {
         
         double minutesDouble = diff / rate;
         
-        // Zufälliger Faktor für Menschlichkeit (0,7 - 1,3)
         double randomFactor = 0.70 + (random.nextDouble() * 0.60);
         minutesDouble = minutesDouble * randomFactor;
         
-        // Begrenzung: min 5 Min, max 6 Stunden
         long minWait = 5 * 60 * 1000;
         long maxWait = 6 * 60 * 60 * 1000;
         
-        // Bei niedrigem Volumen: max 30 Minuten
         if (currentVolume <= 5.00) {
             maxWait = Math.min(maxWait, MAX_WAIT_LOW_VOLUME);
         }
@@ -1052,7 +1098,6 @@ public class OverlayService extends AccessibilityService {
         long minutes = Math.round(Math.max(minWait / 60000, Math.min(maxWait / 60000, minutesDouble)));
         long waitTime = minutes * 60000;
         
-        // Zusätzlicher zufälliger Offset (±30 Sekunden)
         waitTime += (long)((random.nextDouble() - 0.5) * 60000);
         waitTime = Math.max(minWait, Math.min(maxWait, waitTime));
         
@@ -1060,7 +1105,7 @@ public class OverlayService extends AccessibilityService {
         return waitTime;
     }
     
-    // ===== COUNTDOWN MIT STATE (STABILISIERT) =====
+    // ===== COUNTDOWN =====
     private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
         refillState = nextState;
         
@@ -1078,7 +1123,6 @@ public class OverlayService extends AccessibilityService {
         
         currentPhase = Phase.WAIT_AFTER_OCR;
         
-        // Countdown in einem separaten Thread starten
         startCountdownThread(waitTime, () -> {
             Log.d(TAG, "⏱️ Countdown abgelaufen! Führe nächsten Schritt aus...");
             if (isRunning) {
@@ -1090,27 +1134,31 @@ public class OverlayService extends AccessibilityService {
         });
     }
     
-    // ===== COUNTDOWN THREAD (STABIL) =====
+    // ===== COUNTDOWN THREAD (MIT STATUS) =====
     private void startCountdownThread(long waitTime, Runnable onFinish) {
         // Alten Thread beenden
         stopCountdownThread();
+        
+        if (waitTime <= 0) {
+            if (onFinish != null && isRunning) {
+                handler.post(onFinish);
+            }
+            return;
+        }
         
         countdownRunning = true;
         countdownActive = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
+        countdownCallback = onFinish;
         
         countdownThread = new Thread(() -> {
             try {
                 long remaining = waitTime;
                 while (countdownRunning && remaining > 0 && isRunning) {
-                    // Alle 100ms prüfen, ob abgebrochen wurde
-                    for (int i = 0; i < 10 && countdownRunning && isRunning; i++) {
-                        Thread.sleep(100);
-                    }
+                    Thread.sleep(100);
                     remaining = waitTime - (System.currentTimeMillis() - countdownStartTime);
                     
-                    // UI aktualisieren (nur wenn noch aktiv)
                     if (countdownRunning && isRunning) {
                         final long finalRemaining = Math.max(0, remaining);
                         handler.post(() -> {
@@ -1124,14 +1172,15 @@ public class OverlayService extends AccessibilityService {
                     }
                 }
                 
-                // Wenn Countdown abgelaufen ist
                 if (countdownRunning && isRunning && remaining <= 0) {
                     handler.post(() -> {
                         countdownActive = false;
                         updateCountdown("⏱ Warte: 00:00");
-                        if (onFinish != null && isRunning) {
+                        if (countdownCallback != null && isRunning) {
                             Log.d(TAG, "⏱️ Countdown beendet, führe Callback aus");
-                            onFinish.run();
+                            Runnable callback = countdownCallback;
+                            countdownCallback = null;
+                            callback.run();
                         }
                     });
                 }
@@ -1148,14 +1197,20 @@ public class OverlayService extends AccessibilityService {
     private void stopCountdownThread() {
         countdownRunning = false;
         countdownActive = false;
+        countdownCallback = null;
         if (countdownThread != null) {
             countdownThread.interrupt();
+            try {
+                countdownThread.join(500);
+            } catch (InterruptedException e) {
+                Log.d(TAG, "⏱️ Countdown Thread join unterbrochen");
+            }
             countdownThread = null;
         }
         handler.post(() -> updateCountdown("⏱ Warte: --:--"));
     }
     
-    // ============ SWIPE + OCR AUSFÜHREN ============
+    // ============ SWIPE + OCR ============
     private void performSwipeAndOcr() {
         if (!isRunning) return;
         
@@ -1278,14 +1333,14 @@ public class OverlayService extends AccessibilityService {
     
     // ============ SWIPE GESTURE ============
     private void performSwipeGesture() {
-        if (!swipePlaced) {
-            Toast.makeText(this, "❌ Swipe nicht platziert!", Toast.LENGTH_SHORT).show();
+        if (!swipePlaced || !isRunning) {
             return;
         }
         
         totalSwipes++;
         cycleCount++;
         updateCycle();
+        updateStatus("🔄 Swipe wird ausgeführt...");
         
         int randomOffsetX = (int)((random.nextDouble() - 0.5) * 40);
         int randomOffsetY = (int)((random.nextDouble() - 0.5) * 40);
@@ -1318,14 +1373,14 @@ public class OverlayService extends AccessibilityService {
                     super.onCompleted(gestureDescription);
                     if (!isRunning) return;
                     
-                    updateStatus("✅ Swipe #" + totalSwipes);
+                    updateStatus("✅ Swipe #" + totalSwipes + " abgeschlossen");
                     updateCycle();
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         currentPhase = Phase.WAIT_AFTER_SWIPE;
                         long waitTime = WAIT_AFTER_SWIPE_MIN + 
                             (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
-                        updateStatus("⏳ Warte nach Swipe");
+                        updateStatus("⏳ Warte nach Swipe (" + (waitTime/1000) + "s)");
                         
                         handler.postDelayed(() -> {
                             if (isRunning) {
@@ -1380,7 +1435,7 @@ public class OverlayService extends AccessibilityService {
                         currentPhase = Phase.WAIT_AFTER_REFILL;
                         long waitTime = WAIT_AFTER_SWIPE_MIN + 
                             (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
-                        updateStatus("⏳ Warte nach Refill");
+                        updateStatus("⏳ Warte nach Refill (" + (waitTime/1000) + "s)");
                         
                         handler.postDelayed(() -> {
                             if (isRunning) {
@@ -1411,23 +1466,17 @@ public class OverlayService extends AccessibilityService {
         updateStatus("🟢 Automatik läuft" + (isAutoRefillMode ? " ♻️" : ""));
         updateCycle();
         
-        if (isAutoRefillSelected || isAutoRefillMode) {
-            currentPhase = Phase.SWIPE;
-            handler.postDelayed(() -> {
-                if (isRunning) {
+        handler.postDelayed(() -> {
+            if (isRunning) {
+                if (isAutoRefillSelected || isAutoRefillMode) {
                     updateStatus("🔄 Starte mit Swipe...");
                     performSwipeGesture();
-                }
-            }, 2000);
-        } else {
-            currentPhase = Phase.SWIPE;
-            handler.postDelayed(() -> {
-                if (isRunning) {
+                } else {
                     updateStatus("🔄 Swipe...");
                     performSwipeGesture();
                 }
-            }, 2000);
-        }
+            }
+        }, 2000);
     }
     
     private void stopAutomation() {
