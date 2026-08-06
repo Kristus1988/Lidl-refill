@@ -535,7 +535,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ============ SCREENSHOT & OCR ============
+    // ============ SCREENSHOT & OCR - ALLE WARTEZEITEN IM COUNTDOWN ============
     private void performScreenshotAndOcr() {
         if (isProcessing) {
             Toast.makeText(this, "⏳ Bitte warten, OCR läuft noch...", Toast.LENGTH_SHORT).show();
@@ -570,28 +570,20 @@ public class OverlayService extends AccessibilityService {
         performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT);
         Log.d(TAG, "✅ Native Screenshot wurde ausgelöst");
         
-        // STEP 2: Warten auf Screenshot
+        // STEP 2: Warten auf Screenshot (im Countdown!)
         long waitTime = WAIT_AFTER_SCREENSHOT_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_SCREENSHOT_MAX - WAIT_AFTER_SCREENSHOT_MIN));
         updateStatus("📸 Schritt 2/5: Warte auf Screenshot (" + (waitTime/1000) + "s)...");
         Log.d(TAG, "⏳ Schritt 2/5: Warte " + (waitTime/1000) + "s auf Screenshot");
         
-        handler.postDelayed(() -> {
-            if (isRunning) {
-                Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot...");
-                updateStatus("📸 Schritt 3/5: Suche Screenshot...");
-                findScreenshotInAllFolders(1);
-            } else {
-                // Auch wenn Auto-Modus nicht läuft, weitermachen
-                Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot (auch ohne Auto-Modus)...");
-                updateStatus("📸 Schritt 3/5: Suche Screenshot...");
-                findScreenshotInAllFolders(1);
-            }
-        }, waitTime);
+        startCountdownThread(waitTime, () -> {
+            Log.d(TAG, "📸 Schritt 2/5: Warte vorbei, suche Screenshot...");
+            updateStatus("📸 Schritt 3/5: Suche Screenshot...");
+            findScreenshotInAllFolders(1);
+        });
     }
     
     private void findScreenshotInAllFolders(int attempt) {
-        // Prüfen ob noch aktiv - auch ohne isRunning weitermachen (manueller Modus)
         if (!isProcessing) {
             Log.d(TAG, "⚠️ Screenshot-Suche abgebrochen (isProcessing=false)");
             return;
@@ -629,12 +621,12 @@ public class OverlayService extends AccessibilityService {
         }
         
         if (latestFile == null) {
-            // Nach 1 Sekunde erneut versuchen
-            handler.postDelayed(() -> {
+            // Nach 1 Sekunde erneut versuchen (im Countdown!)
+            startCountdownThread(1000, () -> {
                 if (isProcessing) {
                     findScreenshotInAllFolders(attempt + 1);
                 }
-            }, 1000);
+            });
             return;
         }
         
@@ -712,7 +704,6 @@ public class OverlayService extends AccessibilityService {
             return;
         }
         
-        // Auch ohne isRunning weitermachen (manueller Modus)
         if (!isProcessing) {
             Log.d(TAG, "⚠️ OCR abgebrochen (isProcessing=false)");
             return;
@@ -763,11 +754,11 @@ public class OverlayService extends AccessibilityService {
                     
                     if (isAutoRefillSelected || isAutoRefillMode) {
                         Toast.makeText(OverlayService.this, "♻️ Kein Wert erkannt → Refill", Toast.LENGTH_SHORT).show();
-                        handler.postDelayed(() -> {
+                        startCountdownThread(1000, () -> {
                             if (isRunning) {
                                 performRefill();
                             }
-                        }, 1000);
+                        });
                     }
                 }
                 scaledBitmap.recycle();
@@ -965,7 +956,7 @@ public class OverlayService extends AccessibilityService {
         }
     }
     
-    // ===== SWIPE NUR AUSFÜHREN =====
+    // ===== SWIPE NUR AUSFÜHREN (IM COUNTDOWN) =====
     private void performSwipeOnly() {
         if (!swipePlaced || !isRunning) {
             return;
@@ -1010,23 +1001,24 @@ public class OverlayService extends AccessibilityService {
                     updateStatus("✅ Swipe #" + totalSwipes + " abgeschlossen");
                     updateCycle();
                     
+                    // Wartezeit zwischen Swipe und OCR (im Countdown!)
                     long waitTime = WAIT_BETWEEN_SWIPE_AND_OCR_MIN + 
                         (long)(random.nextDouble() * (WAIT_BETWEEN_SWIPE_AND_OCR_MAX - WAIT_BETWEEN_SWIPE_AND_OCR_MIN));
                     updateStatus("⏳ Warte vor OCR (" + (waitTime/1000) + "s)");
                     
-                    handler.postDelayed(() -> {
+                    startCountdownThread(waitTime, () -> {
                         if (isRunning) {
                             Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
                             refillState = RefillState.CHECK_VOLUME;
                             performScreenshotAndOcr();
                         }
-                    }, waitTime);
+                    });
                 }
             }, null);
         }, randomDelay);
     }
     
-    // ===== REFILL =====
+    // ===== REFILL (IM COUNTDOWN) =====
     private void performRefill() {
         if (refillState == RefillState.REFILL || !isRunning) return;
         
@@ -1041,18 +1033,19 @@ public class OverlayService extends AccessibilityService {
         
         clickRefillButton();
         
+        // Wartezeit nach Refill (im Countdown!)
         long waitTime = WAIT_AFTER_REFILL_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
         Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/60000) + " Minuten warten");
         updateStatus("⏳ Nach Refill: " + (waitTime/60000) + " Min warten");
         
-        handler.postDelayed(() -> {
+        startCountdownThread(waitTime, () -> {
             if (isRunning) {
                 Log.d(TAG, "⏱️ Nach Refill-Warte vorbei → Swipe ausführen");
                 refillState = RefillState.AFTER_REFILL_WAIT;
                 performSwipeOnly();
             }
-        }, waitTime);
+        });
     }
     
     // ===== WARTEZEIT BERECHNEN =====
@@ -1095,7 +1088,7 @@ public class OverlayService extends AccessibilityService {
         return waitTime;
     }
     
-    // ===== COUNTDOWN MIT STATE =====
+    // ===== COUNTDOWN MIT STATE (IM COUNTDOWN!) =====
     private void startCountdownWithState(long waitTime, String statusText, RefillState nextState) {
         refillState = nextState;
         
@@ -1113,39 +1106,91 @@ public class OverlayService extends AccessibilityService {
         
         currentPhase = Phase.WAIT_AFTER_OCR;
         
+        startCountdownThread(waitTime, () -> {
+            Log.d(TAG, "⏱️ Countdown abgelaufen! Führe nächsten Schritt aus...");
+            if (isRunning) {
+                refillState = RefillState.CHECK_VOLUME;
+                performSwipeAndOcr();
+            }
+        });
+    }
+    
+    // ===== ZENTRALER COUNTDOWN-THREAD (FÜR ALLE WARTEZEITEN!) =====
+    private void startCountdownThread(long waitTime, Runnable onFinish) {
+        // Alten Countdown beenden
+        stopCountdownThread();
+        
+        if (waitTime <= 0) {
+            if (onFinish != null) {
+                handler.post(onFinish);
+            }
+            return;
+        }
+        
+        countdownRunning = true;
         countdownActive = true;
         countdownStartTime = System.currentTimeMillis();
         currentWaitTime = waitTime;
+        countdownCallback = onFinish;
         
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (!countdownActive || !isRunning) {
-                    countdownActive = false;
-                    return;
-                }
-                
-                long elapsed = System.currentTimeMillis() - countdownStartTime;
-                long remaining = Math.max(0, waitTime - elapsed);
-                
-                if (remaining <= 0) {
-                    updateCountdown("⏱ Warte: 00:00");
-                    countdownActive = false;
-                    Log.d(TAG, "⏱️ Countdown abgelaufen! Führe nächsten Schritt aus...");
-                    if (isRunning) {
-                        refillState = RefillState.CHECK_VOLUME;
-                        performSwipeAndOcr();
+        countdownThread = new Thread(() -> {
+            try {
+                long remaining = waitTime;
+                while (countdownRunning && remaining > 0) {
+                    Thread.sleep(100);
+                    remaining = waitTime - (System.currentTimeMillis() - countdownStartTime);
+                    
+                    // UI aktualisieren
+                    if (countdownRunning) {
+                        final long finalRemaining = Math.max(0, remaining);
+                        handler.post(() -> {
+                            if (countdownActive) {
+                                long seconds = finalRemaining / 1000;
+                                long minutes = seconds / 60;
+                                seconds = seconds % 60;
+                                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
+                            }
+                        });
                     }
-                    return;
                 }
                 
-                long seconds = remaining / 1000;
-                long minutes = seconds / 60;
-                seconds = seconds % 60;
-                updateCountdown(String.format("⏱ Warte: %02d:%02d", minutes, seconds));
-                handler.postDelayed(this, 1000);
+                // Countdown abgelaufen
+                if (countdownRunning && remaining <= 0) {
+                    handler.post(() -> {
+                        countdownActive = false;
+                        updateCountdown("⏱ Warte: 00:00");
+                        if (countdownCallback != null) {
+                            Log.d(TAG, "⏱️ Countdown beendet, führe Callback aus");
+                            Runnable callback = countdownCallback;
+                            countdownCallback = null;
+                            callback.run();
+                        }
+                    });
+                }
+            } catch (InterruptedException e) {
+                Log.d(TAG, "⏱️ Countdown Thread unterbrochen");
+            } finally {
+                countdownRunning = false;
+                countdownActive = false;
             }
         });
+        countdownThread.start();
+    }
+    
+    private void stopCountdownThread() {
+        countdownRunning = false;
+        countdownActive = false;
+        countdownCallback = null;
+        if (countdownThread != null) {
+            countdownThread.interrupt();
+            try {
+                countdownThread.join(500);
+            } catch (InterruptedException e) {
+                Log.d(TAG, "⏱️ Countdown Thread join unterbrochen");
+            }
+            countdownThread = null;
+        }
+        handler.post(() -> updateCountdown("⏱ Warte: --:--"));
     }
     
     // ============ SWIPE + OCR ============
@@ -1320,13 +1365,13 @@ public class OverlayService extends AccessibilityService {
                             (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
                         updateStatus("⏳ Warte nach Swipe (" + (waitTime/1000) + "s)");
                         
-                        handler.postDelayed(() -> {
+                        startCountdownThread(waitTime, () -> {
                             if (isRunning) {
                                 currentPhase = Phase.OCR;
                                 updateStatus("📸 OCR wird ausgeführt...");
                                 performScreenshotAndOcr();
                             }
-                        }, waitTime);
+                        });
                     } else {
                         currentPhase = Phase.OCR;
                         performScreenshotAndOcr();
@@ -1375,13 +1420,13 @@ public class OverlayService extends AccessibilityService {
                             (long)(random.nextDouble() * (WAIT_AFTER_SWIPE_MAX - WAIT_AFTER_SWIPE_MIN));
                         updateStatus("⏳ Warte nach Refill (" + (waitTime/1000) + "s)");
                         
-                        handler.postDelayed(() -> {
+                        startCountdownThread(waitTime, () -> {
                             if (isRunning) {
                                 currentPhase = Phase.SWIPE;
                                 updateStatus("🔄 Swipe...");
                                 performSwipeGesture();
                             }
-                        }, waitTime);
+                        });
                     } else {
                         currentPhase = Phase.SWIPE;
                         performSwipeGesture();
@@ -1404,7 +1449,7 @@ public class OverlayService extends AccessibilityService {
         updateStatus("🟢 Automatik läuft" + (isAutoRefillMode ? " ♻️" : ""));
         updateCycle();
         
-        handler.postDelayed(() -> {
+        startCountdownThread(2000, () -> {
             if (isRunning) {
                 if (isAutoRefillSelected || isAutoRefillMode) {
                     updateStatus("🔄 Starte mit Swipe...");
@@ -1414,7 +1459,7 @@ public class OverlayService extends AccessibilityService {
                     performSwipeGesture();
                 }
             }
-        }, 2000);
+        });
     }
     
     private void stopAutomation() {
@@ -1424,6 +1469,7 @@ public class OverlayService extends AccessibilityService {
         refillState = RefillState.IDLE;
         currentPhase = Phase.IDLE;
         countdownActive = false;
+        stopCountdownThread();
         handler.removeCallbacksAndMessages(null);
         btnStartAuto.setText("▶ Start");
         btnStartAuto.setEnabled(true);
@@ -1628,6 +1674,7 @@ public class OverlayService extends AccessibilityService {
             stopAutomation();
             hideVisuals();
             removeCropFrame();
+            stopCountdownThread();
             if (isCropMode) {
                 isCropMode = false;
                 cropAutoCloseHandler.removeCallbacks(cropAutoCloseRunnable);
@@ -1824,9 +1871,15 @@ public class OverlayService extends AccessibilityService {
     private void hideVisuals() { removeVisual(swipeVisual); removeVisual(refillVisual); activeVisual = null; }
     private void removeVisual(View visual) { if (visual != null && visual.getParent() != null) { try { windowManager.removeView(visual); } catch (Exception e) {} } }
     
+    // ============ COUNTDOWN THREAD VARIABLEN ============
+    private Thread countdownThread = null;
+    private volatile boolean countdownRunning = false;
+    private Runnable countdownCallback = null;
+    
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopCountdownThread();
         savePositions();
         hideVisuals();
         removeCropFrame();
