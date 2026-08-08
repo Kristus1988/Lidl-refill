@@ -160,9 +160,13 @@ public class OverlayService extends AccessibilityService {
     private static final long WAIT_AFTER_SWIPE_MIN = 8000;
     private static final long WAIT_AFTER_SWIPE_MAX = 14000;
     
-    // NACH REFILL: 15-20 Minuten warten (menschlich)
-    private static final long WAIT_AFTER_REFILL_MIN = 15 * 60 * 1000;   // 15 Minuten
-    private static final long WAIT_AFTER_REFILL_MAX = 20 * 60 * 1000;   // 20 Minuten
+    // NACH REFILL: 20-35 Sekunden warten (menschlich, mindestens 20 Sekunden)
+    private static final long WAIT_AFTER_REFILL_MIN = 20 * 1000;   // 20 Sekunden
+    private static final long WAIT_AFTER_REFILL_MAX = 35 * 1000;   // 35 Sekunden
+    
+    // NACH REFILL (LANGE WARTE): 15-20 Minuten (nachdem 1,00 GB bestätigt wurde)
+    private static final long WAIT_AFTER_REFILL_LONG_MIN = 15 * 60 * 1000;   // 15 Minuten
+    private static final long WAIT_AFTER_REFILL_LONG_MAX = 20 * 60 * 1000;   // 20 Minuten
     
     // ZWISCHEN SWIPE UND OCR: 10-15 Sekunden warten
     private static final long WAIT_BETWEEN_SWIPE_AND_OCR_MIN = 10 * 1000;   // 10 Sekunden
@@ -927,18 +931,21 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case AFTER_REFILL_WAIT:
+                // Nach dem Refill wurde gewartet, jetzt Swipe ausführen
                 Log.d(TAG, "📸 Nach Refill-Warte: Swipe ausführen");
                 refillState = RefillState.AFTER_SWIPE_WAIT;
                 performSwipeOnly();
                 break;
                 
             case AFTER_SWIPE_WAIT:
+                // Nach Swipe wurde gewartet, jetzt OCR ausführen
                 Log.d(TAG, "📸 Nach Swipe-Warte: OCR ausführen");
                 refillState = RefillState.CHECK_VOLUME;
                 performScreenshotAndOcr();
                 break;
                 
             case CHECK_VOLUME:
+                // Volumen wurde gerade gecheckt
                 if (volume <= REFILL_THRESHOLD) {
                     Log.d(TAG, "⚡ Volumen ≤ 0,30 GB → Refill");
                     performRefill();
@@ -949,6 +956,7 @@ public class OverlayService extends AccessibilityService {
                 break;
                 
             case WAITING:
+                // Wird vom Countdown fortgesetzt
                 break;
                 
             case REFILL:
@@ -1033,11 +1041,11 @@ public class OverlayService extends AccessibilityService {
         
         clickRefillButton();
         
-        // Wartezeit nach Refill (15-20 Minuten)
+        // Wartezeit nach Refill: 20-35 Sekunden (mindestens 20 Sekunden!)
         long waitTime = WAIT_AFTER_REFILL_MIN + 
             (long)(random.nextDouble() * (WAIT_AFTER_REFILL_MAX - WAIT_AFTER_REFILL_MIN));
-        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/60000) + " Minuten warten");
-        updateStatus("⏳ Nach Refill: " + (waitTime/60000) + " Min warten");
+        Log.d(TAG, "⏱️ Nach Refill: " + (waitTime/1000) + " Sekunden warten (mind. 20s)");
+        updateStatus("⏳ Nach Refill: " + (waitTime/1000) + "s warten");
         
         // State auf AFTER_REFILL_WAIT setzen, damit nach der Wartezeit der nächste Schritt kommt
         refillState = RefillState.AFTER_REFILL_WAIT;
